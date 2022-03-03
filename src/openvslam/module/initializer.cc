@@ -22,7 +22,7 @@ initializer::initializer(data::map_database* map_db, data::bow_database* bow_db,
       reproj_err_thr_(yaml_node["reprojection_error_threshold"].as<float>(4.0)),
       num_ba_iters_(yaml_node["num_ba_iterations"].as<unsigned int>(20)),
       scaling_factor_(yaml_node["scaling_factor"].as<float>(1.0)),
-      use_fixed_seed_(yaml_node["use_fixed_seed"].as<bool>(false)) {
+      use_fixed_seed_(yaml_node["use_fixed_seed"].as<bool>(true)) {
     spdlog::debug("CONSTRUCT: module::initializer");
 }
 
@@ -56,6 +56,10 @@ unsigned int initializer::get_initial_frame_id() const {
 
 double initializer::get_initial_frame_timestamp() const {
     return init_frm_stamp_;
+}
+
+bool initializer::get_use_fixed_seed() const {
+    return use_fixed_seed_;
 }
 
 bool initializer::initialize(const camera::setup_type_t setup_type,
