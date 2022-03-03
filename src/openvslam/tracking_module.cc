@@ -170,6 +170,16 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
         succeeded = track(relocalization_is_needed);
     }
 
+    // make sure the mapper has processed any new keyframes before doing anything else
+    // (this kinda defeats the point of threading but placing the wait before the initialize()/
+    // track() calls above doesn't produce deterministic behaviour; it would probably be better
+    // to add more fine-grained checks just before keyframes/landmarks are used)
+    std::unique_lock<std::mutex> mapping_lock(mapper_->mtx_processing_);
+    mapper_->processing_cv_.wait(
+        mapping_lock, [this]{ return mapper_->is_idle() && !mapper_->keyframe_is_queued(); }
+    );
+    mapping_lock.unlock();
+
     // state transition
     if (succeeded) {
         tracking_state_ = tracker_state_t::Tracking;
@@ -248,16 +258,16 @@ bool tracking_module::track(bool relocalization_is_needed) {
         update_motion_model();
     }
 
-    // check to insert the new keyframe derived from the current frame
-    if (succeeded && new_keyframe_is_needed(num_tracked_lms)) {
-        insert_new_keyframe();
-    }
-
     // tidy up observations
     for (unsigned int idx = 0; idx < curr_frm_.frm_obs_.num_keypts_; ++idx) {
         if (curr_frm_.landmarks_.at(idx) && curr_frm_.outlier_flags_.at(idx)) {
             curr_frm_.landmarks_.at(idx) = nullptr;
         }
+    }
+
+    // check to insert the new keyframe derived from the current frame
+    if (succeeded && new_keyframe_is_needed(num_tracked_lms)) {
+        insert_new_keyframe();
     }
 
     // update the frame statistics
