@@ -4,7 +4,6 @@
 #include "openvslam/data/landmark.h"
 
 #include <vector>
-#include <unordered_set>
 
 namespace openvslam {
 namespace match {
@@ -266,7 +265,7 @@ unsigned int fuse::replace_duplication(const std::shared_ptr<data::keyframe>& ke
 }
 
 template unsigned int fuse::replace_duplication(const std::shared_ptr<data::keyframe>&, const std::vector<std::shared_ptr<data::landmark>>&, const float);
-template unsigned int fuse::replace_duplication(const std::shared_ptr<data::keyframe>&, const std::unordered_set<std::shared_ptr<data::landmark>>&, const float);
+template unsigned int fuse::replace_duplication(const std::shared_ptr<data::keyframe>&, const id_ordered_set<data::landmark>&, const float);
 
 } // namespace match
 } // namespace openvslam
