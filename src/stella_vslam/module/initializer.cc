@@ -37,6 +37,7 @@ void initializer::reset() {
     state_ = initializer_state_t::NotReady;
     init_frm_id_ = 0;
     init_frm_stamp_ = 0.0;
+    init_matches_.clear();
 }
 
 initializer_state_t initializer::get_state() const {
