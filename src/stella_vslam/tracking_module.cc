@@ -49,7 +49,7 @@ tracking_module::tracking_module(const std::shared_ptr<config>& cfg, data::map_d
       use_robust_matcher_for_relocalization_request_(get_use_robust_matcher_for_relocalization_request(cfg->settings_)),
       map_db_(map_db), bow_vocab_(bow_vocab), bow_db_(bow_db),
       initializer_(map_db, bow_db, cfg->settings_),
-      frame_tracker_(camera_, 10),
+      frame_tracker_(camera_, 10, initializer_.get_use_fixed_seed()),
       relocalizer_(cfg->settings_),
       pose_optimizer_(),
       keyfrm_inserter_(cfg->settings_) {

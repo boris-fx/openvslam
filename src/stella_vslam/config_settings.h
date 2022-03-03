@@ -176,7 +176,7 @@ public:
     double lms_ratio_thr_view_changed_ = 0.8;
 
     // Solve/initializer settings
-    bool use_fixed_seed_ = false;
+    bool use_fixed_seed_ = true;
     unsigned num_ransac_iterations_ = 100;
     unsigned min_num_triangulated_pts_ = 50;
     unsigned num_ba_iterations_ = 20;
@@ -186,6 +186,7 @@ public:
 
     // Loop detector settings
     bool loop_detector_is_enabled_ = true;
+    bool loop_detector_use_fixed_seed_ = true;
     bool reject_by_graph_distance_ = false;
     unsigned num_final_matches_threshold_ = 40;
     unsigned min_continuity_ = 3;
@@ -196,6 +197,7 @@ public:
     unsigned top_n_covisibilities_to_search_ = 0;
 
     // Relocalizer settings
+    bool relocalizer_use_fixed_seed_ = true;
     unsigned min_num_bow_matches_ = 20;
     unsigned min_num_valid_obs_ = 50;
     double bow_match_lowe_ratio_ = 0.75;

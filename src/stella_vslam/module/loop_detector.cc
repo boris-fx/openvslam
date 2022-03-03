@@ -27,7 +27,8 @@ loop_detector::loop_detector(data::bow_database* bow_db, data::bow_vocabulary* b
       num_matches_thr_(settings.num_matches_thr_),
       num_matches_thr_brute_force_(settings.num_matches_thr_robust_matcher_),
       num_optimized_inliers_thr_(settings.num_optimized_inliers_thr_),
-      top_n_covisibilities_to_search_(settings.top_n_covisibilities_to_search_) {
+      top_n_covisibilities_to_search_(settings.top_n_covisibilities_to_search_),
+      use_fixed_seed_(settings.loop_detector_use_fixed_seed_) {
     spdlog::debug("CONSTRUCT: loop_detector");
 }
 
@@ -374,7 +375,7 @@ bool loop_detector::select_loop_candidate_via_Sim3(const std::unordered_set<std:
 
         if (num_matches_thr_brute_force_ > 0) {
             // Look for more correspondence over more time
-            const auto num_matches_brute_force = robust_matcher.match_keyframes(cur_keyfrm_, candidate, curr_match_lms_observed_in_cand, false);
+            const auto num_matches_brute_force = robust_matcher.match_keyframes(cur_keyfrm_, candidate, curr_match_lms_observed_in_cand, false, true);
 
             spdlog::debug("num_matches_brute_force: {}", num_matches_brute_force);
 
@@ -406,7 +407,8 @@ bool loop_detector::select_loop_candidate_via_Sim3(const std::unordered_set<std:
         }
         // Setup PnP solver
         auto pnp_solver = std::unique_ptr<solve::pnp_solver>(new solve::pnp_solver(valid_bearings, valid_keypts, valid_landmarks,
-                                                                                   cur_keyfrm_->orb_params_->scale_factors_));
+                                                                                   cur_keyfrm_->orb_params_->scale_factors_,
+                                                                                   use_fixed_seed_));
 
         pnp_solver->find_via_ransac(30);
         if (!pnp_solver->solution_is_valid()) {

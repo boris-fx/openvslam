@@ -238,6 +238,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     const auto loop_node = yaml_optional_ref(yaml_node, "LoopDetector");
     if ( loop_node.size() ) {
         settings->loop_detector_is_enabled_= loop_node["enabled"].as<bool>(true);
+        settings->loop_detector_use_fixed_seed_ = loop_node["use_fixed_seed_"].as<bool>(true);
         settings->reject_by_graph_distance_ = loop_node["reject_by_graph_distance"].as<bool>(false);
         settings->num_final_matches_threshold_= loop_node["num_final_matches_threshold"].as<unsigned int>(40);
         settings->min_continuity_= loop_node["min_continuity"].as<unsigned int>(3);
@@ -251,6 +252,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     // Relocalizer
     const auto reloc_node = yaml_optional_ref(yaml_node, "Relocalizer");
     if ( reloc_node.size() ) {
+        settings->relocalizer_use_fixed_seed_ = reloc_node["use_fixed_seed_"].as<bool>(true);
         settings->min_num_bow_matches_ = reloc_node["min_num_bow_matches"].as<unsigned int>(20);
         settings->min_num_valid_obs_=  reloc_node["min_num_valid_obs"].as<unsigned int>(50);
         settings->bow_match_lowe_ratio_ = reloc_node["bow_match_lowe_ratio"].as<double>(0.75);

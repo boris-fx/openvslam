@@ -199,6 +199,7 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
 
     os << "LoopDetector\n";
     os << "\tLoop detector is enabled: " << settings.loop_detector_is_enabled_ << std::endl;
+    os << "\tUse fixed seed: " << settings.loop_detector_use_fixed_seed_ << std::endl;
     os << "\tReject by graph distance: " << settings.reject_by_graph_distance_ << std::endl;
     os << "\tNum final matches threshold: " << settings.num_final_matches_threshold_ << std::endl;
     os << "\tMin continuity: " << settings.min_continuity_ << std::endl;    
@@ -209,6 +210,7 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     os << "\tTop n covisibilities to search: " << settings.top_n_covisibilities_to_search_ << std::endl;
 
     os << "Relocalizer\n";
+    os << "\tUse fixed seed: " << settings.relocalizer_use_fixed_seed_ << std::endl;
     os << "\tMin num bow matches: " << settings.min_num_bow_matches_ << std::endl;
     os << "\tMin num valid obs: " << settings.min_num_valid_obs_ << std::endl;
     os << "\tBow match lowe ratio: " << settings.bow_match_lowe_ratio_ << std::endl;
