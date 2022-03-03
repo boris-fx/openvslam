@@ -170,8 +170,8 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
         tracking_state_ = tracker_state_t::Lost;
 
         spdlog::info("tracking lost: frame {}", curr_frm_.id_);
-        // if tracking is failed within 5.0 sec after initialization, reset the system
-        constexpr float init_retry_thr = 5.0;
+        // if tracking is failed within 60.0 sec after initialization, reset the system
+        constexpr float init_retry_thr = 60.0;
         if (mapping_is_enabled_ && curr_frm_.timestamp_ - initializer_.get_initial_frame_timestamp() < init_retry_thr) {
             spdlog::info("tracking lost within {} sec after initialization", init_retry_thr);
             reset();
