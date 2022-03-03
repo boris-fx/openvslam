@@ -52,6 +52,9 @@ public:
     //! Queue a keyframe to process the mapping
     void queue_keyframe(const std::shared_ptr<data::keyframe>& keyfrm);
 
+    //! Check if keyframe is queued
+    bool keyframe_is_queued() const;
+
     //! Get the number of queued keyframes
     unsigned int get_num_queued_keyframes() const;
 
@@ -103,6 +106,15 @@ public:
     //! Abort the local BA externally
     //! (NOTE: this function does not wait for abort)
     void abort_local_BA();
+
+    //-----------------------------------------
+    // management for synchronization with tracking
+
+    //! Signal that processing is done
+    std::condition_variable processing_cv_;
+
+    //! Mutex for blocking tracking until we're done
+    std::mutex mtx_processing_;
 
 private:
     //-----------------------------------------
@@ -222,9 +234,6 @@ private:
 
     //! mutex for access to keyframe queue
     mutable std::mutex mtx_keyfrm_queue_;
-
-    //! Check if keyframe is queued
-    bool keyframe_is_queued() const;
 
     //! queue for keyframes
     std::list<std::shared_ptr<data::keyframe>> keyfrms_queue_;

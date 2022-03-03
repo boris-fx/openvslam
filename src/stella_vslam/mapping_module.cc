@@ -130,6 +130,10 @@ bool mapping_module::is_idle() const {
 
 void mapping_module::set_is_idle(const bool is_idle) {
     is_idle_ = is_idle;
+
+    // alert the tracker that it can carry on
+    if (is_idle_)
+        processing_cv_.notify_one();
 }
 
 bool mapping_module::is_skipping_localBA() const {
@@ -152,6 +156,9 @@ void mapping_module::mapping_with_new_keyframe() {
 
     // set the origin keyframe
     local_map_cleaner_->set_origin_keyframe_id(map_db_->origin_keyfrm_->id_);
+
+    // prevent the tracker running on unprocessed data
+    std::lock_guard<std::mutex> tracking_lock(mtx_processing_);
 
     // store the new keyframe to the database
     store_new_keyframe();
