@@ -4,7 +4,6 @@
 #include "stella_vslam/data/landmark.h"
 
 #include <vector>
-#include <unordered_set>
 
 namespace stella_vslam {
 namespace match {
@@ -267,7 +266,7 @@ unsigned int fuse::replace_duplication(data::map_database* map_db,
 }
 
 template unsigned int fuse::replace_duplication(data::map_database*, const std::shared_ptr<data::keyframe>&, const std::vector<std::shared_ptr<data::landmark>>&, const float);
-template unsigned int fuse::replace_duplication(data::map_database*, const std::shared_ptr<data::keyframe>&, const std::unordered_set<std::shared_ptr<data::landmark>>&, const float);
+template unsigned int fuse::replace_duplication(data::map_database*, const std::shared_ptr<data::keyframe>&, const id_ordered_set<data::landmark>&, const float);
 
 } // namespace match
 } // namespace stella_vslam
