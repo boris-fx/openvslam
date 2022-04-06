@@ -30,24 +30,16 @@ perspective::perspective(const std::string& name, const setup_type_t& setup_type
     inv_cell_height_ = static_cast<double>(num_grid_rows_) / (img_bounds_.max_y_ - img_bounds_.min_y_);
 }
 
-perspective::perspective(const YAML::Node& yaml_node)
-    : perspective(yaml_node["name"].as<std::string>(),
-                  load_setup_type(yaml_node),
-                  load_color_order(yaml_node),
-                  yaml_node["cols"].as<unsigned int>(),
-                  yaml_node["rows"].as<unsigned int>(),
-                  yaml_node["fps"].as<double>(),
-                  yaml_node["fx"].as<double>(),
-                  yaml_node["fy"].as<double>(),
-                  yaml_node["cx"].as<double>(),
-                  yaml_node["cy"].as<double>(),
-                  yaml_node["k1"].as<double>(),
-                  yaml_node["k2"].as<double>(),
-                  yaml_node["p1"].as<double>(),
-                  yaml_node["p2"].as<double>(),
-                  yaml_node["k3"].as<double>(),
-                  yaml_node["focal_x_baseline"].as<double>(0.0),
-                  yaml_node["depth_threshold"].as<double>(40.0)) {}
+perspective::perspective(const stella_vslam_bfx::config_settings& settings)
+    : perspective("", load_setup_type(settings), load_color_order(settings),
+                  settings.cols_, settings.rows_, settings.fps_,
+                  settings.perspective_settings_.fx_, settings.perspective_settings_.fy_,
+                  settings.perspective_settings_.cx_, settings.perspective_settings_.cy_,
+                  settings.perspective_settings_.k1_, settings.perspective_settings_.k2_,
+                  settings.perspective_settings_.p1_, settings.perspective_settings_.p2_, 
+                  settings.perspective_settings_.k3_,
+                  settings.focal_x_baseline_,
+                  settings.depth_threshold_) {}
 
 perspective::~perspective() {
     spdlog::debug("DESTRUCT: camera::perspective");

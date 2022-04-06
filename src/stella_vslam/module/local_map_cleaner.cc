@@ -5,14 +5,15 @@
 namespace stella_vslam {
 namespace module {
 
-local_map_cleaner::local_map_cleaner(const YAML::Node& yaml_node, data::map_database* map_db, data::bow_database* bow_db)
+local_map_cleaner::local_map_cleaner(const stella_vslam_bfx::config_settings& settings,
+                                    data::map_database* map_db, data::bow_database* bow_db)
     : map_db_(map_db), bow_db_(bow_db),
-      redundant_obs_ratio_thr_(yaml_node["redundant_obs_ratio_thr"].as<double>(0.9)),
-      observed_ratio_thr_(yaml_node["observed_ratio_thr"].as<double>(0.3)),
-      num_obs_thr_(yaml_node["num_obs_thr"].as<unsigned int>(2)),
-      num_reliable_keyfrms_(yaml_node["num_reliable_keyfrms"].as<unsigned int>(2)),
-      desired_valid_obs_(yaml_node["desired_valid_obs"].as<unsigned int>(0)),
-      num_obs_keyfrms_thr_(yaml_node["num_obs_keyfrms_thr"].as<unsigned int>(10)) {}
+      redundant_obs_ratio_thr_(settings.redundant_obs_ratio_thr_),
+      observed_ratio_thr_(settings.observed_ratio_thr_),
+      num_obs_thr_(settings.num_obs_thr_),
+      num_reliable_keyfrms_(settings.num_reliable_keyfrms_),
+      desired_valid_obs_(settings.desired_valid_obs_),
+      num_obs_keyfrms_thr_(settings.num_obs_keyfrms_thr_) {}
 
 void local_map_cleaner::reset() {
     fresh_landmarks_.clear();

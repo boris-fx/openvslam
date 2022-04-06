@@ -25,7 +25,7 @@ public:
                          const double robust_match_lowe_ratio = 0.8,
                          const unsigned int min_num_bow_matches = 20, const unsigned int min_num_valid_obs = 50);
 
-    explicit relocalizer(const YAML::Node& yaml_node);
+    explicit relocalizer(const stella_vslam_bfx::config_settings& settings);
 
     //! Destructor
     virtual ~relocalizer();

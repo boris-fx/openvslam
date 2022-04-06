@@ -9,7 +9,6 @@
 #include "stella_vslam/data/bow_database.h"
 #include "stella_vslam/match/projection.h"
 #include "stella_vslam/module/local_map_updater.h"
-#include "stella_vslam/util/yaml.h"
 
 #include <chrono>
 #include <unordered_map>
@@ -19,22 +18,22 @@
 namespace {
 using namespace stella_vslam;
 
-double get_reloc_distance_threshold(const YAML::Node& yaml_node) {
+double get_reloc_distance_threshold(const stella_vslam_bfx::config_settings& settings) {
     spdlog::debug("load maximum distance threshold where close keyframes could be found");
-    return yaml_node["reloc_distance_threshold"].as<double>(0.2);
+    return settings.reloc_distance_threshold_;
 }
 
-double get_reloc_angle_threshold(const YAML::Node& yaml_node) {
+double get_reloc_angle_threshold(const stella_vslam_bfx::config_settings& settings) {
     spdlog::debug("load maximum angle threshold between given pose and close keyframes");
-    return yaml_node["reloc_angle_threshold"].as<double>(0.45);
+    return settings.reloc_angle_threshold_;
 }
 
-double get_enable_auto_relocalization(const YAML::Node& yaml_node) {
-    return yaml_node["enable_auto_relocalization"].as<bool>(true);
+double get_enable_auto_relocalization(const stella_vslam_bfx::config_settings& settings) {
+    return settings.enable_auto_relocalization_;
 }
 
-double get_use_robust_matcher_for_relocalization_request(const YAML::Node& yaml_node) {
-    return yaml_node["use_robust_matcher_for_relocalization_request"].as<bool>(false);
+double get_use_robust_matcher_for_relocalization_request(const stella_vslam_bfx::config_settings& settings) {
+    return settings.use_robust_matcher_for_relocalization_request_;
 }
 
 } // unnamed namespace
@@ -44,16 +43,16 @@ namespace stella_vslam {
 tracking_module::tracking_module(const std::shared_ptr<config>& cfg, data::map_database* map_db,
                                  data::bow_vocabulary* bow_vocab, data::bow_database* bow_db)
     : camera_(cfg->camera_),
-      reloc_distance_threshold_(get_reloc_distance_threshold(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
-      reloc_angle_threshold_(get_reloc_angle_threshold(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
-      enable_auto_relocalization_(get_enable_auto_relocalization(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
-      use_robust_matcher_for_relocalization_request_(get_use_robust_matcher_for_relocalization_request(util::yaml_optional_ref(cfg->yaml_node_, "Tracking"))),
+      reloc_distance_threshold_(get_reloc_distance_threshold(cfg->settings_)),
+      reloc_angle_threshold_(get_reloc_angle_threshold(cfg->settings_)),
+      enable_auto_relocalization_(get_enable_auto_relocalization(cfg->settings_)),
+      use_robust_matcher_for_relocalization_request_(get_use_robust_matcher_for_relocalization_request(cfg->settings_)),
       map_db_(map_db), bow_vocab_(bow_vocab), bow_db_(bow_db),
-      initializer_(map_db, bow_db, util::yaml_optional_ref(cfg->yaml_node_, "Initializer")),
+      initializer_(map_db, bow_db, cfg->settings_),
       frame_tracker_(camera_, 10),
-      relocalizer_(util::yaml_optional_ref(cfg->yaml_node_, "Relocalizer")),
+      relocalizer_(cfg->settings_),
       pose_optimizer_(),
-      keyfrm_inserter_(util::yaml_optional_ref(cfg->yaml_node_, "KeyframeInserter")) {
+      keyfrm_inserter_(cfg->settings_) {
     spdlog::debug("CONSTRUCT: tracking_module");
 }
 

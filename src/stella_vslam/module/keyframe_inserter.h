@@ -26,7 +26,7 @@ public:
                                const double lms_ratio_thr_view_changed = 0.8,
                                const unsigned int enough_lms_thr = 100);
 
-    explicit keyframe_inserter(const YAML::Node& yaml_node);
+    explicit keyframe_inserter(const stella_vslam_bfx::config_settings& settings);
 
     virtual ~keyframe_inserter() = default;
 

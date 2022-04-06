@@ -19,12 +19,9 @@ orb_params::orb_params(const std::string& name, const float scale_factor, const 
     inv_level_sigma_sq_ = calc_inv_level_sigma_sq(num_levels_, scale_factor_);
 }
 
-orb_params::orb_params(const YAML::Node& yaml_node)
-    : orb_params(yaml_node["name"].as<std::string>(),
-                 yaml_node["scale_factor"].as<float>(1.2),
-                 yaml_node["num_levels"].as<unsigned int>(8),
-                 yaml_node["ini_fast_threshold"].as<unsigned int>(20),
-                 yaml_node["min_fast_threshold"].as<unsigned int>(7)) {}
+orb_params::orb_params(const stella_vslam_bfx::config_settings& settings)
+    : orb_params("", settings.scale_factor_, settings.num_levels_,
+                settings.ini_fast_threshold_, settings.min_fast_threshold_) {}
 
 nlohmann::json orb_params::to_json() const {
     return {{"name", name_},

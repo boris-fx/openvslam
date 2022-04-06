@@ -6,7 +6,6 @@
 #include <string>
 #include <limits>
 
-#include <yaml-cpp/yaml.h>
 #include <nlohmann/json_fwd.hpp>
 
 namespace stella_vslam {

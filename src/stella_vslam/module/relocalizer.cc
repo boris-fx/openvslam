@@ -20,12 +20,12 @@ relocalizer::relocalizer(const double bow_match_lowe_ratio, const double proj_ma
     spdlog::debug("CONSTRUCT: module::relocalizer");
 }
 
-relocalizer::relocalizer(const YAML::Node& yaml_node)
-    : relocalizer(yaml_node["bow_match_lowe_ratio"].as<double>(0.75),
-                  yaml_node["proj_match_lowe_ratio"].as<double>(0.9),
-                  yaml_node["robust_match_lowe_ratio"].as<double>(0.8),
-                  yaml_node["min_num_bow_matches"].as<unsigned int>(20),
-                  yaml_node["min_num_valid_obs"].as<unsigned int>(50)) {
+relocalizer::relocalizer(const stella_vslam_bfx::config_settings& settings)
+    : relocalizer(settings.bow_match_lowe_ratio_,
+                  settings.proj_match_lowe_ratio_,
+                  settings.robust_match_lowe_ratio_,
+                  settings.min_num_bow_matches_,
+                  settings.min_num_valid_obs_) {
 }
 
 relocalizer::~relocalizer() {

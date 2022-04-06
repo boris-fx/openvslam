@@ -5,6 +5,7 @@
 #include "stella_vslam/module/type.h"
 #include "stella_vslam/optimize/transform_optimizer.h"
 #include "stella_vslam/optimize/pose_optimizer.h"
+#include "stella_vslam/config_settings.h"
 
 #include <atomic>
 #include <memory>
@@ -25,7 +26,9 @@ public:
     /**
      * Constructor
      */
-    loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab, const YAML::Node& yaml_node, const bool fix_scale_in_Sim3_estimation);
+    loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab,
+                const stella_vslam_bfx::config_settings& settings,
+                const bool fix_scale_in_Sim3_estimation);
 
     /**
      * Enable loop detection

@@ -29,20 +29,14 @@ radial_division::radial_division(const std::string& name, const setup_type_t& se
     inv_cell_height_ = static_cast<double>(num_grid_rows_) / (img_bounds_.max_y_ - img_bounds_.min_y_);
 }
 
-radial_division::radial_division(const YAML::Node& yaml_node)
-    : radial_division(yaml_node["name"].as<std::string>(),
-                      load_setup_type(yaml_node),
-                      load_color_order(yaml_node),
-                      yaml_node["cols"].as<unsigned int>(),
-                      yaml_node["rows"].as<unsigned int>(),
-                      yaml_node["fps"].as<double>(),
-                      yaml_node["fx"].as<double>(),
-                      yaml_node["fy"].as<double>(),
-                      yaml_node["cx"].as<double>(),
-                      yaml_node["cy"].as<double>(),
-                      yaml_node["distortion"].as<double>(),
-                      yaml_node["focal_x_baseline"].as<double>(0.0),
-                      yaml_node["depth_threshold"].as<double>(40.0)) {}
+radial_division::radial_division(const stella_vslam_bfx::config_settings& settings)
+    : radial_division("", load_setup_type(settings), load_color_order(settings),
+                      settings.cols_, settings.rows_, settings.fps_,
+                      settings.radial_division_settings_.fx_, settings.radial_division_settings_.fy_,
+                      settings.radial_division_settings_.cx_, settings.radial_division_settings_.cy_,
+                      settings.radial_division_settings_.distortion_,
+                      settings.focal_x_baseline_,
+                      settings.depth_threshold_) {}
 
 radial_division::~radial_division() {
     spdlog::debug("DESTRUCT: camera::radial_division");

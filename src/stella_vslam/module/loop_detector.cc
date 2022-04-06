@@ -14,18 +14,20 @@
 namespace stella_vslam {
 namespace module {
 
-loop_detector::loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab, const YAML::Node& yaml_node, const bool fix_scale_in_Sim3_estimation)
+loop_detector::loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab,
+                                const stella_vslam_bfx::config_settings& settings,
+                                const bool fix_scale_in_Sim3_estimation)
     : bow_db_(bow_db), bow_vocab_(bow_vocab), transform_optimizer_(fix_scale_in_Sim3_estimation), pose_optimizer_(),
-      loop_detector_is_enabled_(yaml_node["enabled"].as<bool>(true)),
+      loop_detector_is_enabled_(settings.loop_detector_is_enabled_),
       fix_scale_in_Sim3_estimation_(fix_scale_in_Sim3_estimation),
-      num_final_matches_thr_(yaml_node["num_final_matches_threshold"].as<unsigned int>(40)),
-      min_continuity_(yaml_node["min_continuity"].as<unsigned int>(3)),
-      reject_by_graph_distance_(yaml_node["reject_by_graph_distance"].as<bool>(false)),
-      min_distance_on_graph_(yaml_node["min_distance_on_graph"].as<unsigned int>(50)),
-      num_matches_thr_(yaml_node["num_matches_thr"].as<unsigned int>(20)),
-      num_matches_thr_brute_force_(yaml_node["num_matches_thr_robust_matcher"].as<unsigned int>(0)),
-      num_optimized_inliers_thr_(yaml_node["num_optimized_inliers_thr"].as<unsigned int>(20)),
-      top_n_covisibilities_to_search_(yaml_node["top_n_covisibilities_to_search"].as<unsigned int>(0)) {
+      num_final_matches_thr_(settings.num_final_matches_threshold_),
+      min_continuity_(settings.min_continuity_),
+      reject_by_graph_distance_(settings.reject_by_graph_distance_),
+      min_distance_on_graph_(settings.min_distance_on_graph_),
+      num_matches_thr_(settings.num_matches_thr_),
+      num_matches_thr_brute_force_(settings.num_matches_thr_robust_matcher_),
+      num_optimized_inliers_thr_(settings.num_optimized_inliers_thr_),
+      top_n_covisibilities_to_search_(settings.top_n_covisibilities_to_search_) {
     spdlog::debug("CONSTRUCT: loop_detector");
 }
 

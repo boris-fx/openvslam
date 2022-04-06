@@ -22,7 +22,6 @@
 #include "stella_vslam/publish/frame_publisher.h"
 #include "stella_vslam/util/converter.h"
 #include "stella_vslam/util/image_converter.h"
-#include "stella_vslam/util/yaml.h"
 
 #include <thread>
 
@@ -31,11 +30,11 @@
 namespace {
 using namespace stella_vslam;
 
-double get_depthmap_factor(const camera::base* camera, const YAML::Node& yaml_node) {
+double get_depthmap_factor(const camera::base* camera, const stella_vslam_bfx::config_settings& settings) {
     spdlog::debug("load depthmap factor");
     double depthmap_factor = 1.0;
     if (camera->setup_type_ == camera::setup_type_t::RGBD) {
-        depthmap_factor = yaml_node["depthmap_factor"].as<double>(depthmap_factor);
+        depthmap_factor = settings.depthmap_factor_;
     }
     if (depthmap_factor < 0.) {
         throw std::runtime_error("depthmap_factor must be greater than 0");
@@ -104,32 +103,33 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     map_publisher_ = std::shared_ptr<publish::map_publisher>(new publish::map_publisher(cfg_, map_db_));
 
     // map I/O
-    auto map_format = util::yaml_optional_ref(cfg->yaml_node_, "System")["map_format"].as<std::string>("msgpack");
-    if (map_format == "sqlite3") {
+    if (cfg_->settings_.map_format_ == stella_vslam::io::map_format_t::SQLite3) {
 #ifdef USE_SQLITE
         map_database_io_ = std::make_shared<io::map_database_io_sqlite3>();
 #else
-        throw std::runtime_error("Map format: " + map_format + " is disabled");
+        throw std::runtime_error("Map format: " +
+                stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]
+                + " is disabled");
 #endif
     }
-    else if (map_format == "msgpack") {
+    else if (cfg_->settings_.map_format_ == stella_vslam::io::map_format_t::Msgpack) {
         map_database_io_ = std::make_shared<io::map_database_io_msgpack>();
     }
     else {
-        throw std::runtime_error("Invalid map format: " + map_format);
+        throw std::runtime_error("Invalid map format: " + 
+                stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]);
     }
 
     // tracking module
     tracker_ = new tracking_module(cfg_, map_db_, bow_vocab_, bow_db_);
     // mapping module
-    mapper_ = new mapping_module(cfg_->yaml_node_["Mapping"], map_db_, bow_db_, bow_vocab_);
+    mapper_ = new mapping_module(cfg_->settings_, map_db_, bow_db_, bow_vocab_);
     // global optimization module
-    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->yaml_node_, camera_->setup_type_ != camera::setup_type_t::Monocular);
+    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->settings_, camera_->setup_type_ != camera::setup_type_t::Monocular);
 
     // preprocessing modules
-    const auto preprocessing_params = util::yaml_optional_ref(cfg->yaml_node_, "Preprocessing");
-    depthmap_factor_ = get_depthmap_factor(camera_, preprocessing_params);
-    auto mask_rectangles = preprocessing_params["mask_rectangles"].as<std::vector<std::vector<float>>>(std::vector<std::vector<float>>());
+    depthmap_factor_ = get_depthmap_factor(camera_, cfg_->settings_);
+    auto mask_rectangles = cfg->settings_.mask_rectangles_;
     for (const auto& v : mask_rectangles) {
         if (v.size() != 4) {
             throw std::runtime_error("mask rectangle must contain four parameters");
@@ -144,10 +144,10 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
 
     orb_params_db_ = new data::orb_params_database(orb_params_);
 
-    const auto max_num_keypoints = preprocessing_params["max_num_keypoints"].as<unsigned int>(2000);
+    const auto max_num_keypoints = cfg->settings_.max_num_keypoints_;
     extractor_left_ = new feature::orb_extractor(orb_params_, max_num_keypoints, mask_rectangles);
     if (camera_->setup_type_ == camera::setup_type_t::Monocular) {
-        const auto ini_max_num_keypoints = preprocessing_params["ini_max_num_keypoints"].as<unsigned int>(2 * extractor_left_->get_max_num_keypoints());
+        const auto ini_max_num_keypoints = std::max(cfg->settings_.ini_max_num_keypoints_, 2 * extractor_left_->get_max_num_keypoints());
         ini_extractor_left_ = new feature::orb_extractor(orb_params_, ini_max_num_keypoints, mask_rectangles);
     }
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
