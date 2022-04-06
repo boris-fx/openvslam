@@ -30,23 +30,15 @@ fisheye::fisheye(const std::string& name, const setup_type_t& setup_type, const 
     inv_cell_height_ = static_cast<double>(num_grid_rows_) / (img_bounds_.max_y_ - img_bounds_.min_y_);
 }
 
-fisheye::fisheye(const YAML::Node& yaml_node)
-    : fisheye(yaml_node["name"].as<std::string>(),
-              load_setup_type(yaml_node),
-              load_color_order(yaml_node),
-              yaml_node["cols"].as<unsigned int>(),
-              yaml_node["rows"].as<unsigned int>(),
-              yaml_node["fps"].as<double>(),
-              yaml_node["fx"].as<double>(),
-              yaml_node["fy"].as<double>(),
-              yaml_node["cx"].as<double>(),
-              yaml_node["cy"].as<double>(),
-              yaml_node["k1"].as<double>(),
-              yaml_node["k2"].as<double>(),
-              yaml_node["k3"].as<double>(),
-              yaml_node["k4"].as<double>(),
-              yaml_node["focal_x_baseline"].as<double>(0.0),
-              yaml_node["depth_threshold"].as<double>(40.0)) {}
+fisheye::fisheye(const openvslam_bfx::config_settings& settings)
+    : fisheye("", load_setup_type(settings), load_color_order(settings),
+              settings.cols_, settings.rows_, settings.fps_,
+              settings.fisheye_settings_.fx_, settings.fisheye_settings_.fy_,
+              settings.fisheye_settings_.cx_, settings.fisheye_settings_.cy_,
+              settings.fisheye_settings_.k1_, settings.fisheye_settings_.k2_,
+              settings.fisheye_settings_.k3_, settings.fisheye_settings_.k4_,
+              settings.fisheye_settings_.focal_x_baseline_,
+              settings.fisheye_settings_.depth_threshold_) {}
 
 fisheye::~fisheye() {
     spdlog::debug("DESTRUCT: camera::fisheye");

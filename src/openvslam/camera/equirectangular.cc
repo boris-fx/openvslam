@@ -17,12 +17,8 @@ equirectangular::equirectangular(const std::string& name, const color_order_t& c
     inv_cell_height_ = static_cast<double>(num_grid_rows_) / (img_bounds_.max_y_ - img_bounds_.min_y_);
 }
 
-equirectangular::equirectangular(const YAML::Node& yaml_node)
-    : equirectangular(yaml_node["name"].as<std::string>(),
-                      load_color_order(yaml_node),
-                      yaml_node["cols"].as<unsigned int>(),
-                      yaml_node["rows"].as<unsigned int>(),
-                      yaml_node["fps"].as<double>()) {}
+equirectangular::equirectangular(const openvslam_bfx::config_settings& settings)
+    : equirectangular("", load_color_order(settings), settings.cols_, settings.rows_, settings.fps_) {}
 
 equirectangular::~equirectangular() {
     spdlog::debug("DESTRUCT: camera::equirectangular");

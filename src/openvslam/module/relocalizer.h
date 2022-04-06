@@ -26,7 +26,7 @@ public:
                          const unsigned int min_num_bow_matches = 20, const unsigned int min_num_valid_obs = 50,
                          const bool use_fixed_seed = false);
 
-    explicit relocalizer(const YAML::Node& yaml_node);
+    explicit relocalizer(const openvslam_bfx::config_settings& settings);
 
     //! Destructor
     virtual ~relocalizer();

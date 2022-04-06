@@ -19,7 +19,6 @@
 #include "openvslam/publish/frame_publisher.h"
 #include "openvslam/util/converter.h"
 #include "openvslam/util/image_converter.h"
-#include "openvslam/util/yaml.h"
 
 #include <thread>
 
@@ -28,11 +27,11 @@
 namespace {
 using namespace openvslam;
 
-double get_depthmap_factor(const camera::base* camera, const YAML::Node& yaml_node) {
+double get_depthmap_factor(const camera::base* camera, const openvslam_bfx::config_settings& settings) {
     spdlog::debug("load depthmap factor");
     double depthmap_factor = 1.0;
     if (camera->setup_type_ == camera::setup_type_t::RGBD) {
-        depthmap_factor = yaml_node["depthmap_factor"].as<double>(depthmap_factor);
+        depthmap_factor = settings.depthmap_factor_;
     }
     if (depthmap_factor < 0.) {
         throw std::runtime_error("depthmap_factor must be greater than 0");
@@ -97,9 +96,8 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     // database
     cam_db_ = new data::camera_database(camera_);
     map_db_ = new data::map_database();
-    auto bow_database_yaml_node = util::yaml_optional_ref(cfg->yaml_node_, "BowDatabase");
-    int reject_by_graph_distance = bow_database_yaml_node["reject_by_graph_distance"].as<bool>(false);
-    int loop_min_distance_on_graph = bow_database_yaml_node["loop_min_distance_on_graph"].as<int>(30);
+    int reject_by_graph_distance = cfg->settings_.reject_by_graph_distance_;
+    int loop_min_distance_on_graph = cfg->settings_.loop_min_distance_on_graph_;
     bow_db_ = new data::bow_database(bow_vocab_, reject_by_graph_distance, loop_min_distance_on_graph);
 
     // frame and map publisher
@@ -109,14 +107,13 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     // tracking module
     tracker_ = new tracking_module(cfg_, map_db_, bow_vocab_, bow_db_);
     // mapping module
-    mapper_ = new mapping_module(cfg_->yaml_node_["Mapping"], map_db_, bow_db_, bow_vocab_);
+    mapper_ = new mapping_module(cfg_->settings_, map_db_, bow_db_, bow_vocab_);
     // global optimization module
-    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->yaml_node_, camera_->setup_type_ != camera::setup_type_t::Monocular);
+    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->settings_, camera_->setup_type_ != camera::setup_type_t::Monocular);
 
     // preprocessing modules
-    const auto preprocessing_params = util::yaml_optional_ref(cfg->yaml_node_, "Preprocessing");
-    depthmap_factor_ = get_depthmap_factor(camera_, preprocessing_params);
-    auto mask_rectangles = preprocessing_params["mask_rectangles"].as<std::vector<std::vector<float>>>(std::vector<std::vector<float>>());
+    depthmap_factor_ = get_depthmap_factor(camera_, cfg_->settings_);
+    auto mask_rectangles = cfg->settings_.mask_rectangles_;
     for (const auto& v : mask_rectangles) {
         if (v.size() != 4) {
             throw std::runtime_error("mask rectangle must contain four parameters");
@@ -131,10 +128,10 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
 
     orb_params_db_ = new data::orb_params_database(orb_params_);
 
-    const auto max_num_keypoints = preprocessing_params["max_num_keypoints"].as<unsigned int>(2000);
+    const auto max_num_keypoints = cfg->settings_.max_num_keypoints_;
     extractor_left_ = new feature::orb_extractor(orb_params_, max_num_keypoints, mask_rectangles);
     if (camera_->setup_type_ == camera::setup_type_t::Monocular) {
-        const auto ini_max_num_keypoints = preprocessing_params["ini_max_num_keypoints"].as<unsigned int>(2 * extractor_left_->get_max_num_keypoints());
+        const auto ini_max_num_keypoints = std::max(cfg->settings_.ini_max_num_keypoints_, 2 * extractor_left_->get_max_num_keypoints());
         ini_extractor_left_ = new feature::orb_extractor(orb_params_, ini_max_num_keypoints, mask_rectangles);
     }
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {

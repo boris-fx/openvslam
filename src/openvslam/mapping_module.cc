@@ -15,24 +15,21 @@
 
 namespace openvslam {
 
-mapping_module::mapping_module(const YAML::Node& yaml_node, data::map_database* map_db, data::bow_database* bow_db, data::bow_vocabulary* bow_vocab)
-    : local_map_cleaner_(new module::local_map_cleaner(map_db, bow_db, yaml_node["redundant_obs_ratio_thr"].as<double>(0.9))),
+mapping_module::mapping_module(const openvslam_bfx::config_settings& settings, data::map_database* map_db, data::bow_database* bow_db, data::bow_vocabulary* bow_vocab)
+    : local_map_cleaner_(new module::local_map_cleaner(map_db, bow_db, settings.redundant_obs_ratio_thr_)),
       map_db_(map_db), bow_db_(bow_db), bow_vocab_(bow_vocab),
       local_bundle_adjuster_(new optimize::local_bundle_adjuster()) {
     spdlog::debug("CONSTRUCT: mapping_module");
     spdlog::debug("load mapping parameters");
 
     spdlog::debug("load monocular mappping parameters");
-    if (yaml_node["baseline_dist_thr"]) {
-        if (yaml_node["baseline_dist_thr_ratio"]) {
-            throw std::runtime_error("Do not set both baseline_dist_thr_ratio and baseline_dist_thr.");
-        }
-        baseline_dist_thr_ = yaml_node["baseline_dist_thr"].as<double>(1.0);
+    if (!settings.use_baseline_dist_thr_ratio_) {
+        baseline_dist_thr_ = settings.baseline_dist_thr_;
         use_baseline_dist_thr_ratio_ = false;
         spdlog::debug("Use baseline_dist_thr: {}", baseline_dist_thr_);
     }
     else {
-        baseline_dist_thr_ratio_ = yaml_node["baseline_dist_thr_ratio"].as<double>(0.02);
+        baseline_dist_thr_ratio_ = settings.baseline_dist_thr_ratio_;
         use_baseline_dist_thr_ratio_ = true;
         spdlog::debug("Use baseline_dist_thr_ratio: {}", baseline_dist_thr_ratio_);
     }

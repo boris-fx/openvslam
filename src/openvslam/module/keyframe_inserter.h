@@ -23,7 +23,7 @@ public:
                                const double lms_ratio_thr_almost_all_lms_are_tracked = 0.95,
                                const double lms_ratio_thr_view_changed = 0.9);
 
-    explicit keyframe_inserter(const YAML::Node& yaml_node);
+    explicit keyframe_inserter(const openvslam_bfx::config_settings& settings);
 
     virtual ~keyframe_inserter() = default;
 

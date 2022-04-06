@@ -15,7 +15,7 @@ public:
     explicit stereo_rectifier(const std::shared_ptr<config>& cfg);
 
     //! Constructor
-    stereo_rectifier(camera::base* camera, const YAML::Node& yaml_node);
+    stereo_rectifier(camera::base* camera, const openvslam_bfx::config_settings& settings);
 
     //! Destructor
     virtual ~stereo_rectifier();
@@ -29,7 +29,7 @@ private:
     static cv::Mat parse_vector_as_mat(const cv::Size& shape, const std::vector<double>& vec);
 
     //! Load model type before rectification from YAML
-    static camera::model_type_t load_model_type(const YAML::Node& yaml_node);
+    static camera::model_type_t load_model_type(const openvslam_bfx::config_settings& settings);
 
     //! camera model type before rectification
     const camera::model_type_t model_type_;

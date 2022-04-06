@@ -1,8 +1,9 @@
 #ifndef OPENVSLAM_FEATURE_ORB_PARAMS_H
 #define OPENVSLAM_FEATURE_ORB_PARAMS_H
 
+#include "openvslam/config_settings.h"
+
 #include <nlohmann/json_fwd.hpp>
-#include <yaml-cpp/yaml.h>
 #include <cmath>
 
 namespace openvslam {
@@ -17,7 +18,7 @@ struct orb_params {
     orb_params(const std::string& name);
 
     //! Constructor
-    explicit orb_params(const YAML::Node& yaml_node);
+    explicit orb_params(const openvslam_bfx::config_settings& settings);
 
     //! Destructor
     virtual ~orb_params() = default;

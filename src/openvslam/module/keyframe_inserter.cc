@@ -15,10 +15,10 @@ keyframe_inserter::keyframe_inserter(const double max_interval,
       lms_ratio_thr_almost_all_lms_are_tracked_(lms_ratio_thr_almost_all_lms_are_tracked),
       lms_ratio_thr_view_changed_(lms_ratio_thr_view_changed) {}
 
-keyframe_inserter::keyframe_inserter(const YAML::Node& yaml_node)
-    : keyframe_inserter(yaml_node["max_interval"].as<double>(1.0),
-                        yaml_node["lms_ratio_thr_almost_all_lms_are_tracked"].as<double>(0.95),
-                        yaml_node["lms_ratio_thr_view_changed"].as<double>(0.9)) {}
+keyframe_inserter::keyframe_inserter(const openvslam_bfx::config_settings& settings)
+    : keyframe_inserter(settings.max_keyframe_interval_,
+                        settings.lms_ratio_thr_almost_all_lms_are_tracked_,
+                        settings.lms_ratio_thr_view_changed_) {}
 
 void keyframe_inserter::set_mapping_module(mapping_module* mapper) {
     mapper_ = mapper;

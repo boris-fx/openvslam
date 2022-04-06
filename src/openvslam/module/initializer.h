@@ -33,7 +33,7 @@ public:
 
     //! Constructor
     initializer(data::map_database* map_db, data::bow_database* bow_db,
-                const YAML::Node& yaml_node);
+                const openvslam_bfx::config_settings& settings);
 
     //! Destructor
     ~initializer();

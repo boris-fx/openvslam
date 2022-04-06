@@ -1,4 +1,5 @@
 #include "openvslam/feature/orb_params.h"
+#include "openvslam/config_settings.h"
 
 #include <cmath>
 
@@ -6,17 +7,18 @@
 
 using namespace openvslam;
 
-TEST(orb_params, load_yaml_without_rectangle_mask) {
-    const std::string yaml =
-        "Feature:\n"
-        "  name: \"ORB setting for test\"\n"
-        "  scale_factor: 1.3\n"
-        "  num_levels: 12\n"
-        "  ini_fast_threshold: 25\n"
-        "  min_fast_threshold: 9\n";
+TEST(orb_params, load_orb_settings_without_rectangle_mask) {
 
-    const auto yaml_node = YAML::Load(yaml);
-    const auto params = feature::orb_params(yaml_node["Feature"]);
+    openvslam_bfx::config_settings settings(openvslam::camera::model_type_t::Equirectangular,
+                                            openvslam::camera::setup_type_t::Monocular,
+                                            openvslam::camera::color_order_t::RGB,
+                                            1024, 1024, 25.0);
+    settings.orb_scale_factor_ = 1.3;
+    settings.num_levels_ = 12;
+    settings.ini_fast_threshold_ = 25;
+    settings.min_fast_threshold_ = 9;
+
+    const auto params = feature::orb_params(settings);
 
     EXPECT_FLOAT_EQ(params.scale_factor_, 1.3);
     EXPECT_EQ(params.num_levels_, 12);

@@ -18,7 +18,7 @@ public:
             const double k1, const double k2, const double k3, const double k4,
             const double focal_x_baseline = 0.0, const double depth_thr = 0.0);
 
-    fisheye(const YAML::Node& yaml_node);
+    fisheye(const openvslam_bfx::config_settings& settings);
 
     ~fisheye() override;
 

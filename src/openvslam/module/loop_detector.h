@@ -4,6 +4,7 @@
 #include "openvslam/data/bow_vocabulary.h"
 #include "openvslam/module/type.h"
 #include "openvslam/optimize/transform_optimizer.h"
+#include "openvslam/config_settings.h"
 
 #include <atomic>
 #include <memory>
@@ -24,7 +25,9 @@ public:
     /**
      * Constructor
      */
-    loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab, const YAML::Node& yaml_node, const bool fix_scale_in_Sim3_estimation);
+    loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab,
+                const openvslam_bfx::config_settings& settings,
+                const bool fix_scale_in_Sim3_estimation);
 
     /**
      * Enable loop detection

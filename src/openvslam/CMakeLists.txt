@@ -56,12 +56,14 @@ endif()
 
 add_library(${PROJECT_NAME}
             ${CMAKE_CURRENT_SOURCE_DIR}/config.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/config_settings.h
             ${CMAKE_CURRENT_SOURCE_DIR}/type.h
             ${CMAKE_CURRENT_SOURCE_DIR}/system.h
             ${CMAKE_CURRENT_SOURCE_DIR}/tracking_module.h
             ${CMAKE_CURRENT_SOURCE_DIR}/mapping_module.h
             ${CMAKE_CURRENT_SOURCE_DIR}/global_optimization_module.h
             ${CMAKE_CURRENT_SOURCE_DIR}/config.cc
+            ${CMAKE_CURRENT_SOURCE_DIR}/config_settings.cc
             ${CMAKE_CURRENT_SOURCE_DIR}/system.cc
             ${CMAKE_CURRENT_SOURCE_DIR}/tracking_module.cc
             ${CMAKE_CURRENT_SOURCE_DIR}/mapping_module.cc
@@ -140,7 +142,6 @@ target_link_libraries(${PROJECT_NAME}
                       Threads::Threads
                       OpenMP::OpenMP_CXX
                       Eigen3::Eigen
-                      yaml-cpp
                       opencv_core
                       opencv_features2d
                       opencv_calib3d
@@ -157,6 +158,10 @@ target_link_libraries(${PROJECT_NAME}
                       ${BoW_LIBRARY}
                       PRIVATE
                       ${LAPACK_LIBRARIES})
+
+if(BUILD_EXAMPLES)
+    target_link_libraries(${PROJECT_NAME} PUBLIC yaml-cpp)
+endif()
 
 # ----- Install configuration -----
 

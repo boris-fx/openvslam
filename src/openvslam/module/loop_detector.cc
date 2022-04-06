@@ -12,13 +12,15 @@
 namespace openvslam {
 namespace module {
 
-loop_detector::loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab, const YAML::Node& yaml_node, const bool fix_scale_in_Sim3_estimation)
+loop_detector::loop_detector(data::bow_database* bow_db, data::bow_vocabulary* bow_vocab,
+                            const openvslam_bfx::config_settings& settings,
+                            const bool fix_scale_in_Sim3_estimation)
     : bow_db_(bow_db), bow_vocab_(bow_vocab), transform_optimizer_(fix_scale_in_Sim3_estimation),
-      loop_detector_is_enabled_(yaml_node["enabled"].as<bool>(true)),
+      loop_detector_is_enabled_(settings.loop_detector_is_enabled_),
       fix_scale_in_Sim3_estimation_(fix_scale_in_Sim3_estimation),
-      num_final_matches_thr_(yaml_node["num_final_matches_threshold"].as<unsigned int>(40)),
-      min_continuity_(yaml_node["min_continuity"].as<unsigned int>(3)),
-      use_fixed_seed_(yaml_node["use_fixed_seed"].as<bool>(true)) {
+      num_final_matches_thr_(settings.num_final_matches_threshold_),
+      min_continuity_(settings.min_continuity_),
+      use_fixed_seed_(settings.loop_detector_use_fixed_seed_) {
     spdlog::debug("CONSTRUCT: loop_detector");
 }
 

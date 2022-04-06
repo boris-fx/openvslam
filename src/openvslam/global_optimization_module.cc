@@ -5,16 +5,16 @@
 #include "openvslam/data/map_database.h"
 #include "openvslam/match/fuse.h"
 #include "openvslam/util/converter.h"
-#include "openvslam/util/yaml.h"
 
 #include <spdlog/spdlog.h>
 
 namespace openvslam {
 
 global_optimization_module::global_optimization_module(data::map_database* map_db, data::bow_database* bow_db,
-                                                       data::bow_vocabulary* bow_vocab, const YAML::Node& yaml_node,
+                                                       data::bow_vocabulary* bow_vocab,
+                                                       const openvslam_bfx::config_settings& settings,
                                                        const bool fix_scale)
-    : loop_detector_(new module::loop_detector(bow_db, bow_vocab, util::yaml_optional_ref(yaml_node, "LoopDetector"), fix_scale)),
+    : loop_detector_(new module::loop_detector(bow_db, bow_vocab, settings, fix_scale)),
       loop_bundle_adjuster_(new module::loop_bundle_adjuster(map_db)),
       graph_optimizer_(new optimize::graph_optimizer(map_db, fix_scale)) {
     spdlog::debug("CONSTRUCT: global_optimization_module");
