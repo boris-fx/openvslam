@@ -90,13 +90,10 @@ openvslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double k1 = camera_node["k1"].as<double>();
             double k2 = camera_node["k2"].as<double>();
             double k3 = camera_node["k3"].as<double>();
-            double focal_x_baseline = camera_node["focal_x_baseline"].as<double>(0.0);
-            double depth_threshold = camera_node["depth_threshold"].as<double>(40.0);
             
             settings = new openvslam_bfx::config_settings(camera_model, camera_setup,
                                             colour_order, cols, rows, fps,
-                                            fx, fy, cx, cy, p1, p2, k1, k2, k3,
-                                            focal_x_baseline, depth_threshold);
+                                            fx, fy, cx, cy, p1, p2, k1, k2, k3);
             break;
         }
         case openvslam::camera::model_type_t::Fisheye:
@@ -109,13 +106,10 @@ openvslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double k2 = camera_node["k2"].as<double>();
             double k3 = camera_node["k3"].as<double>();
             double k4 = camera_node["k4"].as<double>();
-            double focal_x_baseline = camera_node["focal_x_baseline"].as<double>(0.0);
-            double depth_threshold = camera_node["depth_threshold"].as<double>(40.0);
             
             settings = new openvslam_bfx::config_settings(camera_model, camera_setup,
                                             colour_order, cols, rows, fps,
-                                            fx, fy, cx, cy, k1, k2, k3, k4,
-                                            focal_x_baseline, depth_threshold);
+                                            fx, fy, cx, cy, k1, k2, k3, k4);
             break;
         }
         case openvslam::camera::model_type_t::RadialDivision:
@@ -125,13 +119,10 @@ openvslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double cx = camera_node["cx"].as<double>();
             double cy = camera_node["cy"].as<double>();
             double d = camera_node["distortion"].as<double>();
-            double focal_x_baseline = camera_node["focal_x_baseline"].as<double>(0.0);
-            double depth_threshold = camera_node["depth_threshold"].as<double>(40.0);
             
             settings = new openvslam_bfx::config_settings(camera_model, camera_setup,
                                             colour_order, cols, rows, fps,
-                                            fx, fy, cx, cy, d,
-                                            focal_x_baseline, depth_threshold);
+                                            fx, fy, cx, cy, d);
             break;
         }
         case openvslam::camera::model_type_t::Equirectangular:
@@ -146,6 +137,10 @@ openvslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     
     if (!settings)
         throw std::runtime_error("Invalid settings");
+    
+    // Stereo settings
+    settings->focal_x_baseline_ = camera_node["focal_x_baseline"].as<double>(0.0);
+    settings->depth_threshold_ = camera_node["depth_threshold"].as<double>(40.0);
 
     // Optional settings //
     using namespace openvslam::util;

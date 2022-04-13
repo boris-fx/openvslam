@@ -37,8 +37,8 @@ fisheye::fisheye(const openvslam_bfx::config_settings& settings)
               settings.fisheye_settings_.cx_, settings.fisheye_settings_.cy_,
               settings.fisheye_settings_.k1_, settings.fisheye_settings_.k2_,
               settings.fisheye_settings_.k3_, settings.fisheye_settings_.k4_,
-              settings.fisheye_settings_.focal_x_baseline_,
-              settings.fisheye_settings_.depth_threshold_) {}
+              settings.focal_x_baseline_,
+              settings.depth_threshold_) {}
 
 fisheye::~fisheye() {
     spdlog::debug("DESTRUCT: camera::fisheye");

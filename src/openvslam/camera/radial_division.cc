@@ -35,8 +35,8 @@ radial_division::radial_division(const openvslam_bfx::config_settings& settings)
                       settings.radial_division_settings_.fx_, settings.radial_division_settings_.fy_,
                       settings.radial_division_settings_.cx_, settings.radial_division_settings_.cy_,
                       settings.radial_division_settings_.distortion_,
-                      settings.radial_division_settings_.focal_x_baseline_,
-                      settings.radial_division_settings_.depth_threshold_) {}
+                      settings.focal_x_baseline_,
+                      settings.depth_threshold_) {}
 
 radial_division::~radial_division() {
     spdlog::debug("DESTRUCT: camera::radial_division");

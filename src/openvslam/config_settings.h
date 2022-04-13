@@ -45,8 +45,7 @@ public:
                     openvslam::camera::color_order_t colour_order,
                     int cols, int rows, double fps, double fx, double fy,
                     double cx, double cy, double p1, double p2,
-                    double k1, double k2, double k3,
-                    double focal_x_baseline, double depth_threshold);
+                    double k1, double k2, double k3);
     
     //! Constructor for fisheye camera
     config_settings(openvslam::camera::model_type_t camera_type,
@@ -54,8 +53,7 @@ public:
                     openvslam::camera::color_order_t colour_order,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
-                    double k1, double k2, double k3, double k4,
-                    double focal_x_baseline, double depth_threshold);
+                    double k1, double k2, double k3, double k4);
     
     //! Constructor for radial division camera
     config_settings(openvslam::camera::model_type_t camera_type,
@@ -63,8 +61,7 @@ public:
                     openvslam::camera::color_order_t colour_order,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
-                    double distortion,
-                    double focal_x_baseline, double depth_threshold);
+                    double distortion);
     
     //! Constructor for equirectangular camera
     config_settings(openvslam::camera::model_type_t camera_type,
@@ -87,29 +84,28 @@ public:
     int rows_;
     double fps_;
 
-    // Settings for specific cameras (NB equirectangular has no extra settings)
+    // Settings for specific cameras
+    // NB Equirectangular has no extra parameters
     union {
         struct {
             double fx_, fy_, cx_, cy_, p1_, p2_,
                     k1_, k2_, k3_;
-            double focal_x_baseline_;
-            double depth_threshold_;
         } perspective_settings_;
 
         struct {
             double fx_, fy_, cx_, cy_,
                     k1_, k2_, k3_, k4_;
-            double focal_x_baseline_;
-            double depth_threshold_;
         } fisheye_settings_;
 
         struct {
             double fx_, fy_, cx_, cy_;
             double distortion_;
-            double focal_x_baseline_;
-            double depth_threshold_;
-         } radial_division_settings_;
+        } radial_division_settings_;
     };
+
+    // Stereo settings
+    double focal_x_baseline_ = 0.0;
+    double depth_threshold_ = 40.0;
 
     // Preprocessing parameters
     unsigned max_num_keypoints_ = 2000;

@@ -38,8 +38,8 @@ perspective::perspective(const openvslam_bfx::config_settings& settings)
                   settings.perspective_settings_.k1_, settings.perspective_settings_.k2_,
                   settings.perspective_settings_.p1_, settings.perspective_settings_.p2_, 
                   settings.perspective_settings_.k3_,
-                  settings.perspective_settings_.focal_x_baseline_,
-                  settings.perspective_settings_.depth_threshold_) {}
+                  settings.focal_x_baseline_,
+                  settings.depth_threshold_) {}
 
 perspective::~perspective() {
     spdlog::debug("DESTRUCT: camera::perspective");

@@ -7,8 +7,7 @@ config_settings::config_settings(openvslam::camera::model_type_t camera_type,
                                     openvslam::camera::color_order_t colour_order,
                                     int cols, int rows, double fps, double fx, double fy,
                                     double cx, double cy, double p1, double p2,
-                                    double k1, double k2, double k3,
-                                    double focal_x_baseline, double depth_threshold) :
+                                    double k1, double k2, double k3) :
     camera_type_(camera_type), camera_setup_(camera_setup), colour_order_(colour_order),
     cols_(cols), rows_(rows), fps_(fps)
 {
@@ -24,8 +23,6 @@ config_settings::config_settings(openvslam::camera::model_type_t camera_type,
     perspective_settings_.k1_ = k1;
     perspective_settings_.k2_ = k2;
     perspective_settings_.k3_ = k3;
-    perspective_settings_.focal_x_baseline_ = focal_x_baseline;
-    perspective_settings_.depth_threshold_ = depth_threshold;
 }
 
 config_settings::config_settings(openvslam::camera::model_type_t camera_type,
@@ -33,8 +30,7 @@ config_settings::config_settings(openvslam::camera::model_type_t camera_type,
                                     openvslam::camera::color_order_t colour_order,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
-                                    double k1, double k2, double k3, double k4,
-                                    double focal_x_baseline, double depth_threshold) :
+                                    double k1, double k2, double k3, double k4) :
     camera_type_(camera_type), camera_setup_(camera_setup), colour_order_(colour_order),
     cols_(cols), rows_(rows), fps_(fps)
 {
@@ -49,8 +45,6 @@ config_settings::config_settings(openvslam::camera::model_type_t camera_type,
     fisheye_settings_.k2_ = k2;
     fisheye_settings_.k3_ = k3;
     fisheye_settings_.k4_ = k4;
-    fisheye_settings_.focal_x_baseline_ = focal_x_baseline;
-    fisheye_settings_.depth_threshold_ = depth_threshold;
 }
 
 config_settings::config_settings(openvslam::camera::model_type_t camera_type,
@@ -58,8 +52,7 @@ config_settings::config_settings(openvslam::camera::model_type_t camera_type,
                                     openvslam::camera::color_order_t colour_order,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
-                                    double distortion,
-                                    double focal_x_baseline, double depth_threshold) :
+                                    double distortion) :
     camera_type_(camera_type), camera_setup_(camera_setup), colour_order_(colour_order),
     cols_(cols), rows_(rows), fps_(fps)
 {
@@ -71,8 +64,6 @@ config_settings::config_settings(openvslam::camera::model_type_t camera_type,
     radial_division_settings_.cx_ = cx;
     radial_division_settings_.cy_ = cy;
     radial_division_settings_.distortion_ = distortion;
-    radial_division_settings_.focal_x_baseline_ = focal_x_baseline;
-    radial_division_settings_.depth_threshold_ = depth_threshold;
 }
 
 config_settings::config_settings(openvslam::camera::model_type_t camera_type,
@@ -116,8 +107,8 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
             os << "\tk1: " << settings.perspective_settings_.k1_ << std::endl;
             os << "\tk2: " << settings.perspective_settings_.k2_ << std::endl;
             os << "\tk3: " << settings.perspective_settings_.k3_ << std::endl;
-            os << "\tFocal X baseline: " << settings.perspective_settings_.focal_x_baseline_ << std::endl;
-            os << "\tDepth threshold: " << settings.perspective_settings_.depth_threshold_ << std::endl;
+            os << "\tFocal X baseline: " << settings.focal_x_baseline_ << std::endl;
+            os << "\tDepth threshold: " << settings.depth_threshold_ << std::endl;
             break;
         case openvslam::camera::model_type_t::Fisheye:
             os << "\tfx: " << settings.fisheye_settings_.fx_ << std::endl;
@@ -128,8 +119,8 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
             os << "\tk2: " << settings.fisheye_settings_.k2_ << std::endl;
             os << "\tk3: " << settings.fisheye_settings_.k3_ << std::endl;
             os << "\tk4: " << settings.fisheye_settings_.k4_ << std::endl;
-            os << "\tFocal X baseline: " << settings.fisheye_settings_.focal_x_baseline_ << std::endl;
-            os << "\tDepth threshold: " << settings.fisheye_settings_.depth_threshold_ << std::endl;
+            os << "\tFocal X baseline: " << settings.focal_x_baseline_ << std::endl;
+            os << "\tDepth threshold: " << settings.depth_threshold_ << std::endl;
             break;
         case openvslam::camera::model_type_t::RadialDivision:
             os << "\tfx: " << settings.radial_division_settings_.fx_ << std::endl;
@@ -137,8 +128,8 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
             os << "\tcx: " << settings.radial_division_settings_.cx_ << std::endl;
             os << "\tcy: " << settings.radial_division_settings_.cy_ << std::endl;
             os << "\tDistortion: " << settings.radial_division_settings_.distortion_ << std::endl;
-            os << "\tFocal X baseline: " << settings.radial_division_settings_.focal_x_baseline_ << std::endl;
-            os << "\tDepth threshold: " << settings.radial_division_settings_.depth_threshold_ << std::endl;
+            os << "\tFocal X baseline: " << settings.focal_x_baseline_ << std::endl;
+            os << "\tDepth threshold: " << settings.depth_threshold_ << std::endl;
             break;
         default:
             break;
