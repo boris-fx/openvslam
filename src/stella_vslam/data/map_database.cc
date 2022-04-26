@@ -12,7 +12,9 @@
 
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#ifdef USE_SQLITE
 #include <sqlite3.h>
+#endif
 
 namespace stella_vslam {
 namespace data {
@@ -439,6 +441,7 @@ void map_database::to_json(nlohmann::json& json_keyfrms, nlohmann::json& json_la
     json_landmarks = landmarks;
 }
 
+#ifdef USE_SQLITE
 bool map_database::from_db(sqlite3* db,
                            camera_database* cam_db,
                            orb_params_database* orb_params_db,
@@ -1036,6 +1039,7 @@ bool map_database::save_associations_to_db(sqlite3* db) const {
         return true;
     }
 }
+#endif  // USE_SQLITE
 
 } // namespace data
 } // namespace stella_vslam

@@ -7,7 +7,9 @@
 
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#ifdef USE_SQLITE
 #include <sqlite3.h>
+#endif
 
 namespace stella_vslam {
 namespace data {
@@ -139,6 +141,7 @@ nlohmann::json camera_database::to_json() const {
     return cameras;
 }
 
+#ifdef USE_SQLITE
 bool camera_database::from_db(sqlite3* db) {
     std::lock_guard<std::mutex> lock(mtx_database_);
 
@@ -436,6 +439,7 @@ bool camera_database::to_db(sqlite3* db) const {
         return true;
     }
 }
+#endif  // USE_SQLITE
 
 } // namespace data
 } // namespace stella_vslam

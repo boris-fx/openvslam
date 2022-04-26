@@ -6,7 +6,9 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#ifdef USE_SQLITE
 typedef struct sqlite3 sqlite3;
+#endif
 
 namespace stella_vslam {
 
@@ -28,9 +30,11 @@ public:
 
     nlohmann::json to_json() const;
 
+#ifdef USE_SQLITE
     bool from_db(sqlite3* db);
 
     bool to_db(sqlite3* db) const;
+#endif
 
 private:
     //-----------------------------------------

@@ -7,7 +7,9 @@ set(spdlog_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/spdlog/include)
 set(json_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/json/include)
 
 # sqlite3
-find_package(SQLite3 REQUIRED)
+if(USE_SQLITE)
+    find_package(SQLite3 REQUIRED)
+endif()
 
 # g2o
 find_package(g2o REQUIRED
@@ -129,6 +131,15 @@ if(USE_ARUCO)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USE_ARUCO)
 endif()
 
+# SQLite
+set(USE_SQLITE OFF CACHE BOOL "Use SQLite")
+if(USE_OPENMP)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC USE_SQLITE)
+    message(STATUS "SQLite: ENABLED")
+else()
+    message(STATUS "SQLite: DISABLED")
+endif()
+
 # ----- Configure stella_vslam library -----
 
 # Include directories
@@ -148,7 +159,6 @@ target_link_libraries(${PROJECT_NAME}
                       OpenMP::OpenMP_CXX
                       Eigen3::Eigen
                       yaml-cpp
-                      ${SQLite3_LIBRARIES}
                       opencv_core
                       opencv_features2d
                       opencv_calib3d
@@ -166,6 +176,10 @@ target_link_libraries(${PROJECT_NAME}
                       ${BoW_LIBRARY}
                       PRIVATE
                       ${LAPACK_LIBRARIES})
+
+if (USE_SQLITE)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${SQLite3_LIBRARIES})
+endif()
 
 # ----- Install configuration -----
 

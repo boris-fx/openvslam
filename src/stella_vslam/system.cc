@@ -106,7 +106,11 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     // map I/O
     auto map_format = util::yaml_optional_ref(cfg->yaml_node_, "System")["map_format"].as<std::string>("msgpack");
     if (map_format == "sqlite3") {
+#ifdef USE_SQLITE
         map_database_io_ = std::make_shared<io::map_database_io_sqlite3>();
+#else
+        throw std::runtime_error("Map format: " + map_format + " is disabled");
+#endif
     }
     else if (map_format == "msgpack") {
         map_database_io_ = std::make_shared<io::map_database_io_msgpack>();

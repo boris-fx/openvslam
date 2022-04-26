@@ -11,7 +11,9 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#ifdef USE_SQLITE
 typedef struct sqlite3 sqlite3;
+#endif
 
 namespace stella_vslam {
 
@@ -213,6 +215,7 @@ public:
      */
     void to_json(nlohmann::json& json_keyfrms, nlohmann::json& json_landmarks) const;
 
+#ifdef USE_SQLITE
     /**
      * Load keyframes and landmarks from database
      */
@@ -225,6 +228,7 @@ public:
      * Dump keyframes and landmarks to database
      */
     bool to_db(sqlite3* db) const;
+#endif
 
     //! origin keyframe
     std::shared_ptr<keyframe> origin_keyfrm_ = nullptr;
@@ -270,6 +274,7 @@ private:
      */
     void register_association(const unsigned int keyfrm_id, const nlohmann::json& json_keyfrm);
 
+#ifdef USE_SQLITE
     bool load_keyframes_from_db(sqlite3* db,
                                 camera_database* cam_db,
                                 orb_params_database* orb_params_db,
@@ -279,6 +284,7 @@ private:
     bool save_keyframes_to_db(sqlite3* db) const;
     bool save_landmarks_to_db(sqlite3* db) const;
     bool save_associations_to_db(sqlite3* db) const;
+#endif
 
     //! mutex for mutual exclusion controll between class methods
     mutable std::mutex mtx_map_access_;
