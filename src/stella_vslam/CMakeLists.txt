@@ -142,6 +142,15 @@ else()
     message(STATUS "SQLite: DISABLED")
 endif()
 
+# Determinism
+set (DETERMINISTIC ON CACHE BOOL "Use deterministic code")
+if (DETERMINISTIC)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC DETERMINISTIC)
+    message(STATUS "Determinism: ENABLED")
+else()
+    message(STATUS "Determinism: DISABLED")
+endif()
+
 # ----- Configure stella_vslam library -----
 
 # Include directories
