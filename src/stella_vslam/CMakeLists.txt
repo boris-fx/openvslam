@@ -135,7 +135,7 @@ endif()
 
 # SQLite
 set(USE_SQLITE OFF CACHE BOOL "Use SQLite")
-if(USE_OPENMP)
+if(USE_SQLITE)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USE_SQLITE)
     message(STATUS "SQLite: ENABLED")
 else()
