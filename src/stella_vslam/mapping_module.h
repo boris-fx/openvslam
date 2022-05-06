@@ -272,6 +272,9 @@ private:
 
     //! If the size of the queue exceeds this threshold, skip the localBA
     const unsigned int queue_threshold_ = 2;
+    
+    //! Use ORB features if true
+    const bool use_orb_features_;
 };
 
 } // namespace stella_vslam

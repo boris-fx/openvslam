@@ -7,6 +7,7 @@
 #include "stella_vslam/initialize/perspective.h"
 #include "stella_vslam/marker_model/base.h"
 #include "stella_vslam/match/area.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/module/initializer.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
 
@@ -24,7 +25,8 @@ initializer::initializer(data::map_database* map_db, data::bow_database* bow_db,
       reproj_err_thr_(settings.reprojection_error_threshold_),
       num_ba_iters_(settings.num_ba_iterations_),
       scaling_factor_(settings.scaling_factor_),
-      use_fixed_seed_(settings.use_fixed_seed_) {
+      use_fixed_seed_(settings.use_fixed_seed_),
+      use_orb_features_(settings.use_orb_features_) {
     spdlog::debug("CONSTRUCT: module::initializer");
 }
 
@@ -146,8 +148,12 @@ void initializer::create_initializer(data::frame& curr_frm) {
 bool initializer::try_initialize_for_monocular(data::frame& curr_frm) {
     assert(state_ == initializer_state_t::Initializing);
 
-    match::area matcher(0.9, true);
-    const auto num_matches = matcher.match_in_consistent_area(init_frm_, curr_frm, prev_matched_coords_, init_matches_, 100);
+    unsigned int num_matches = 0;
+    if (use_orb_features_) {
+        match::area matcher(0.9, true);
+        num_matches = matcher.match_in_consistent_area(init_frm_, curr_frm, prev_matched_coords_, init_matches_, 100);
+    }
+    num_matches += stella_vslam_bfx::get_frames_prematches(init_frm_, curr_frm, prev_matched_coords_, init_matches_);
 
     if (num_matches < min_num_triangulated_) {
         // rebuild the initializer with the next frame

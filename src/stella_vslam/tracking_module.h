@@ -261,6 +261,10 @@ protected:
     bool relocalize_by_pose_is_requested_ = false;
     //! Requested pose to update
     pose_request relocalize_by_pose_request_;
+    
+    //! Use ORB features if true
+    const bool use_orb_features_;
+
 };
 
 } // namespace stella_vslam

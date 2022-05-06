@@ -87,6 +87,8 @@ private:
     const float scaling_factor_;
     //! Use fixed random seed for RANSAC if true
     const bool use_fixed_seed_;
+    //! Use ORB features if true
+    const bool use_orb_features_;
 
     //-----------------------------------------
     // for monocular camera model

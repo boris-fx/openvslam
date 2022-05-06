@@ -26,6 +26,7 @@ class base;
 
 namespace data {
 class frame;
+class frame_observation;
 class camera_database;
 class orb_params_database;
 class map_database;
@@ -122,8 +123,10 @@ public:
 
     //! Feed a monocular frame to SLAM system
     //! (NOTE: distorted images are acceptable if calibrated)
-    data::frame create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{});
-    std::shared_ptr<Mat44_t> feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{});
+    data::frame create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{},
+                                                     const stella_vslam_bfx::prematched_points* extra_keypoints = nullptr);
+    std::shared_ptr<Mat44_t> feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{},
+                                                     const stella_vslam_bfx::prematched_points* extra_keypoints = nullptr);
 
     //! Feed a stereo frame to SLAM system
     //! (Note: Left and Right images must be stereo-rectified)
@@ -189,6 +192,10 @@ private:
     //! Resume the mapping module and the global optimization module
     void resume_other_threads() const;
 
+    //! Store the supplied prematched points in the given vector of keypoints
+    void store_prematched_points(const stella_vslam_bfx::prematched_points* extra_keypoints,
+                        std::vector<cv::KeyPoint>& keypts, data::frame_observation& frm_obs) const;
+
     //! config
     const std::shared_ptr<config> cfg_;
     //! camera model
@@ -224,6 +231,11 @@ private:
     global_optimization_module* global_optimizer_ = nullptr;
     //! global optimization thread
     std::unique_ptr<std::thread> global_optimization_thread_ = nullptr;
+
+    //! Use ORB features if true
+    const bool use_orb_features_;
+    //! Apply undistortion to prematched points if true
+    const bool undistort_prematches_;
 
     // ORB extractors
     //! ORB extractor for left/monocular image

@@ -46,7 +46,9 @@ double get_depthmap_factor(const camera::base* camera, const stella_vslam_bfx::c
 namespace stella_vslam {
 
 system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file_path)
-    : cfg_(cfg), camera_(cfg->camera_), orb_params_(cfg->orb_params_) {
+    : cfg_(cfg), camera_(cfg->camera_), orb_params_(cfg->orb_params_),
+      use_orb_features_(cfg->settings_.use_orb_features_),
+      undistort_prematches_(cfg->settings_.undistort_prematches_) {
     spdlog::debug("CONSTRUCT: system");
 
     std::ostringstream message_stream;
@@ -321,7 +323,44 @@ void system::abort_loop_BA() {
     global_optimizer_->abort_loop_BA();
 }
 
-data::frame system::create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask) {
+void system::store_prematched_points(const stella_vslam_bfx::prematched_points* extra_keypoints,
+                        std::vector<cv::KeyPoint>& keypts, data::frame_observation& frm_obs) const {
+    if (extra_keypoints && !extra_keypoints->first.empty() && extra_keypoints->first.size() == extra_keypoints->second.size()) {
+        unsigned num_prematched = extra_keypoints->first.size();
+        frm_obs.prematched_keypts_.first = keypts.size();
+        keypts.insert(keypts.end(), extra_keypoints->first.begin(), extra_keypoints->first.end());
+        frm_obs.prematched_keypts_.second = keypts.size();
+        assert(frm_obs.prematched_keypts_.second == frm_obs.prematched_keypts_.first + (int)num_prematched);
+
+        // Create dummy ORB descriptors - these aren't used but need to be created to
+        // keep data structures in sync
+        if (frm_obs.descriptors_.empty())
+            frm_obs.descriptors_.create(num_prematched, 32, CV_8U);
+        else if (use_orb_features_)
+            frm_obs.descriptors_.resize(keypts.size());
+        
+        if (!frm_obs.descriptors_.empty()) {
+            cv::Mat extra_descriptors = frm_obs.descriptors_.rowRange(frm_obs.prematched_keypts_.first, frm_obs.prematched_keypts_.second);
+            for (unsigned i = 0; i < num_prematched; ++i) {
+                for (unsigned j = 0; j < 32; ++j)
+                    extra_descriptors.ptr(i)[j] = static_cast<uchar>(0);
+            }
+        }
+
+        // Save prematched point IDs against indices in keypts for matching (both ways)
+        frm_obs.prematched_idx_to_id_.clear();
+        frm_obs.prematched_id_to_idx_.clear();
+
+        for (unsigned i = 0; i < num_prematched; ++i) {
+            unsigned keypt_idx = i + frm_obs.prematched_keypts_.first, id = extra_keypoints->second[i];
+            frm_obs.prematched_idx_to_id_[keypt_idx] = id;
+            frm_obs.prematched_id_to_idx_[id] = keypt_idx;
+        }
+    }
+}
+
+data::frame system::create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask,
+                                            const stella_vslam_bfx::prematched_points* extra_keypoints) {
     // color conversion
     cv::Mat img_gray = img;
     util::convert_to_grayscale(img_gray, camera_->color_order_);
@@ -330,17 +369,46 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
 
     data::frame_observation frm_obs;
 
-    // Extract ORB feature
-    auto extractor = is_init ? ini_extractor_left_ : extractor_left_;
     keypts_.clear();
-    extractor->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
-    frm_obs.num_keypts_ = keypts_.size();
-    if (keypts_.empty()) {
-        spdlog::warn("preprocess: cannot extract any keypoints");
+    if (use_orb_features_) {
+        // Extract ORB feature
+        auto extractor = is_init ? ini_extractor_left_ : extractor_left_;
+        extractor->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+    }
+
+    // Add the prematched points to the input vector for undistorting
+    if (undistort_prematches_) {
+        store_prematched_points(extra_keypoints, keypts_, frm_obs);
     }
 
     // Undistort keypoints
     camera_->undistort_keypoints(keypts_, frm_obs.undist_keypts_);
+
+    // Add already-undistorted prematched points directly
+    if (!undistort_prematches_) {
+        store_prematched_points(extra_keypoints, frm_obs.undist_keypts_, frm_obs);
+
+        // keypts_ is not used for the solve but is used for viewing (points should
+        // technically be re-distorted, but we will be using a different viewer anyway)
+        if ( 0 <= frm_obs.prematched_keypts_.first &&
+                0 <= frm_obs.prematched_keypts_.second ) {
+            if ( keypts_.empty() ) {
+                keypts_ = frm_obs.undist_keypts_;
+            }
+            else {
+                keypts_.insert(keypts_.end(),
+                    frm_obs.undist_keypts_.begin() + frm_obs.prematched_keypts_.first,
+                    frm_obs.undist_keypts_.begin() + frm_obs.prematched_keypts_.second);
+            }
+        }
+    }
+
+    if (keypts_.empty()) {
+        if (!use_orb_features_)
+            frm_obs.descriptors_.release();
+        spdlog::warn("preprocesss: cannot extract any keypoints");
+    }
+    frm_obs.num_keypts_ = keypts_.size();
 
     // Convert to bearing vector
     camera_->convert_keypoints_to_bearings(frm_obs.undist_keypts_, frm_obs.bearings_);
@@ -467,9 +535,10 @@ data::frame system::create_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& dep
     return data::frame(timestamp, camera_, orb_params_, frm_obs, std::move(markers_2d));
 }
 
-std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask) {
+std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask,
+                                                        const stella_vslam_bfx::prematched_points* extra_keypoints) {
     assert(camera_->setup_type_ == camera::setup_type_t::Monocular);
-    return feed_frame(create_monocular_frame(img, timestamp, mask), img);
+    return feed_frame(create_monocular_frame(img, timestamp, mask, extra_keypoints), img);
 }
 
 std::shared_ptr<Mat44_t> system::feed_stereo_frame(const cv::Mat& left_img, const cv::Mat& right_img, const double timestamp, const cv::Mat& mask) {

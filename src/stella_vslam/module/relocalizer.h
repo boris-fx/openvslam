@@ -24,7 +24,7 @@ public:
     explicit relocalizer(const double bow_match_lowe_ratio = 0.75, const double proj_match_lowe_ratio = 0.9,
                          const double robust_match_lowe_ratio = 0.8,
                          const unsigned int min_num_bow_matches = 20, const unsigned int min_num_valid_obs = 50,
-                         const bool use_fixed_seed = false);
+                         const bool use_fixed_seed = false, const bool use_orb_features = true);
 
     explicit relocalizer(const stella_vslam_bfx::config_settings& settings);
 
@@ -80,6 +80,8 @@ private:
 
     //! Use fixed random seed for RANSAC if true
     const bool use_fixed_seed_;
+    //! Use ORB features if true
+    const bool use_orb_features_;
 };
 
 } // namespace module

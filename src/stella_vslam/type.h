@@ -156,4 +156,12 @@ using unordered_map = std::unordered_map<T, U>;
 
 } // namespace stella_vslam
 
+namespace stella_vslam_bfx {
+
+// Data structure for providing a per-frame set of KeyPoints with corresponding IDs
+// for matching features across frames (i.e. second[i] = ID of first[i])
+using prematched_points = std::pair<std::vector<cv::KeyPoint>, std::vector<unsigned>>;
+
+} // namespace stella_vslam_bfx
+
 #endif // STELLA_VSLAM_TYPE_H

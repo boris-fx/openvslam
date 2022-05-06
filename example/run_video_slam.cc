@@ -7,11 +7,13 @@
 #include "stella_vslam/system.h"
 #include "stella_vslam/config.h"
 #include "stella_vslam/util/yaml.h"
+#include "util/tinyxml2.h"
 
 #include <iostream>
 #include <chrono>
 #include <fstream>
 #include <numeric>
+#include <dirent.h>
 
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
@@ -19,6 +21,8 @@
 #include <opencv2/videoio.hpp>
 #include <spdlog/spdlog.h>
 #include <popl.hpp>
+
+#include <opencv2/core/types.hpp>
 
 #ifdef USE_STACK_TRACE_LOGGER
 #include <backward.hpp>
@@ -159,6 +163,8 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     // ORB
     const auto orb_node = yaml_optional_ref(yaml_node, "Feature");
     if ( orb_node.size() ) {
+        settings->use_orb_features_ = orb_node["use_orb_features"].as<bool>(true);
+        settings->undistort_prematches_ = orb_node["undistort_prematches"].as<bool>(true);
         settings->ini_fast_threshold_ = orb_node["ini_fast_threshold"].as<unsigned int>(20);
         settings->min_fast_threshold_ = orb_node["min_fast_threshold"].as<unsigned int>(7);
         settings->num_levels_ = orb_node["num_levels"].as<unsigned int>(8);
@@ -287,10 +293,195 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     return settings;
 }
 
+unsigned get_point_id(const std::string& layerName, unsigned i, unsigned j)
+{
+    // Keep track of point IDs assigned for matching; key is <layer name, grid coordinates>
+    static unsigned currPointID = 0;
+    static std::map<std::tuple<std::string, unsigned, unsigned>, unsigned> pointIDs;
+
+    std::tuple<std::string, unsigned, unsigned> idKey(layerName, i, j);
+    if (pointIDs.find(idKey) == pointIDs.end())
+        pointIDs[idKey] = currPointID++;
+    return pointIDs.at(idKey);
+}
+
+// Reads tracked points from Mocha export file (Quantel xml format) and generates a grid of "feature points" with IDs for matching across frames
+void planar_points(const std::string& dirpath, std::map<int, stella_vslam_bfx::prematched_points>& pointsPerFrame, int w, int h, unsigned gridSize = 5)
+{
+    // Basic point that can be averaged
+    struct Coord
+    {
+        float x, y;
+        Coord(float x_ = 0.f, float y_ = 0.f) : x(x_), y(y_) {}
+
+        Coord operator*(const float& f) { return Coord(f * x, f * y); }
+        Coord operator+(const Coord& c) { return Coord(x + c.x, y + c.y); }
+    };
+
+    // Create a grid for each layer in every frame from the four surface corners to maximise chances of triangulation
+    gridSize = std::min(25u, std::max(2u, gridSize));
+    const unsigned gridMaxIdx = gridSize - 1;
+    const float gridStep = 1.f / float(gridMaxIdx);
+    std::vector<std::vector<Coord>> gridPoints(gridSize, std::vector<Coord>(gridSize)); // temporary storage for a layer's point grid
+    
+    auto dir = opendir(dirpath.c_str());
+    struct dirent * file = readdir(dir);
+    int frame;
+    while (file != nullptr)
+    {
+        if (file->d_type == DT_REG)
+        {
+            tinyxml2::XMLDocument doc(true, tinyxml2::COLLAPSE_WHITESPACE);
+            doc.LoadFile((dirpath + "/" + file->d_name).c_str());
+
+            auto layerName = doc.FirstChildElement()->FirstChildElement("Object")->FirstChildElement("Name")->FirstChild()->Value();
+            auto frameNode = doc.FirstChildElement()->FirstChildElement("Object")->FirstChildElement("Frame");
+
+            while (frameNode)
+            {
+                frame = std::stoi( frameNode->FirstChildElement("FrameNumber")->FirstChild()->Value() );
+
+                // Corner points from file
+                gridPoints[0][0].x = std::min( std::max( std::stof(frameNode->FirstChildElement("topleftx")->FirstChild()->Value()), 0.0f), 1.0f );
+                gridPoints[0][0].y = 1.0f - std::min( std::max( std::stof(frameNode->FirstChildElement("toplefty")->FirstChild()->Value()), 0.0f), 1.0f );
+                gridPoints[0][gridMaxIdx].x = std::min( std::max( std::stof(frameNode->FirstChildElement("toprightx")->FirstChild()->Value()), 0.0f), 1.0f );
+                gridPoints[0][gridMaxIdx].y = 1.0f - std::min( std::max( std::stof(frameNode->FirstChildElement("toprighty")->FirstChild()->Value()), 0.0f), 1.0f );
+                gridPoints[gridMaxIdx][0].x = std::min( std::max( std::stof(frameNode->FirstChildElement("bottomleftx")->FirstChild()->Value()), 0.0f), 1.0f );
+                gridPoints[gridMaxIdx][0].y = 1.0f - std::min( std::max( std::stof(frameNode->FirstChildElement("bottomlefty")->FirstChild()->Value()), 0.0f), 1.0f );
+                gridPoints[gridMaxIdx][gridMaxIdx].x = std::min( std::max( std::stof(frameNode->FirstChildElement("bottomrightx")->FirstChild()->Value()), 0.0f), 1.0f );
+                gridPoints[gridMaxIdx][gridMaxIdx].y = 1.0f - std::min( std::max( std::stof(frameNode->FirstChildElement("bottomrighty")->FirstChild()->Value()), 0.0f), 1.0f );
+
+                // Fill in central points
+                float frac = gridStep;
+                for (unsigned i = 1; i < gridMaxIdx; ++i, frac += gridStep)
+                {
+                    gridPoints[i][0] = gridPoints[0][0] * (1.f - frac) + gridPoints[gridMaxIdx][0] * frac;
+                    gridPoints[i][gridMaxIdx] = gridPoints[0][gridMaxIdx] * (1.f - frac) + gridPoints[gridMaxIdx][gridMaxIdx] * frac;
+                }
+                
+                for (unsigned i = 0; i < gridSize; ++i)
+                {
+                    frac = gridStep;
+                    for (unsigned j = 1; j < gridMaxIdx; ++j, frac += gridStep)
+                        gridPoints[i][j] = gridPoints[i][0] * (1.f - frac) + gridPoints[i][gridMaxIdx] * frac;
+                }
+
+                auto & out_points = pointsPerFrame[frame].first;
+                auto & out_ids = pointsPerFrame[frame].second;
+
+                for (unsigned i = 0; i < gridSize; ++i)
+                {
+                    for (unsigned j = 0; j < gridSize; ++j)
+                    {
+                        if (gridPoints[i][j].x > 0.f && gridPoints[i][j].x < 1.f &&
+                            gridPoints[i][j].y > 0.f && gridPoints[i][j].y < 1.f)
+                        {
+                            out_ids.push_back( get_point_id(layerName, i, j) );
+                            out_points.push_back( cv::KeyPoint(gridPoints[i][j].x * w, gridPoints[i][j].y * h, 100.f) );
+                        }
+                    }
+                }
+                
+                frameNode = frameNode->NextSiblingElement("Frame");
+            }
+        }
+        file = readdir(dir);
+    }
+
+    closedir(dir);
+}
+
+// Reads tracked mesh vertices from Mocha export file (Nuke nk format) and stores with IDs for matching across frames
+void mesh_points(const std::string& dirpath, std::map<int, stella_vslam_bfx::prematched_points>& pointsPerFrame, int w, int h)
+{
+    auto dir = opendir(dirpath.c_str());
+    struct dirent * file = readdir(dir);
+    std::string line, layerName;
+    std::map<unsigned, std::map<unsigned, std::pair<float, float>>> trackedPointPositions; // maps point ID from file to per-frame positions
+    const float max_y = float(h);
+    unsigned frame;
+    while (file != nullptr)
+    {
+        if (file->d_type == DT_REG)
+        {
+            std::ifstream data(dirpath + "/" + file->d_name);
+            if (data)
+            {
+                while (std::getline(data, line))
+                {
+                    if (line.length())
+                    {
+                        if (line.rfind("name", 0) == 0) // Layer name - comes after all the points
+                        {
+                            layerName = line.substr(5, line.length());
+
+                            // Transfer collected points to output
+                            for (const auto& pointPosns : trackedPointPositions)
+                            {
+                                auto id = get_point_id(layerName, pointPosns.first, 1000);
+                                for (const auto& pos : pointPosns.second)
+                                {
+                                    auto p = pos.second;
+                                    if (p.first > 0.f && p.first < w && p.second > 0.f && p.second < h)
+                                    {
+                                        frame = pos.first;
+                                        pointsPerFrame[frame].first.push_back( cv::KeyPoint(p.first, p.second, 100.f) );
+                                        pointsPerFrame[frame].second.push_back(id);
+                                    }
+                                }
+                            }
+
+                            // Clear stores for next layer
+                            trackedPointPositions.clear();
+                        }
+                        else if (line.rfind("{ {curve K x1 1} ", 0) == 0)   // positions for a point
+                        {
+                            auto firstQuotePos = line.find_first_of('"');
+                            auto secondQuotePos = line.find_first_of('"', firstQuotePos + 1);
+                            unsigned fileID = std::stoi( line.substr(firstQuotePos + 1, secondQuotePos - firstQuotePos - 1) );
+                            auto & pointPosns = trackedPointPositions[fileID];
+
+                            // x values
+                            auto curveStart = line.find_first_of('{', secondQuotePos),
+                                curveEnd = line.find_first_of('}', curveStart + 1),
+                                xPos = line.find_first_of('x', curveStart + 1);
+                            while (xPos < curveEnd)
+                            {
+                                auto spacePos1 = line.find_first_of(' ', xPos + 1), spacePos2 = line.find_first_of(' ', spacePos1 + 1);
+                                frame = std::stoi( line.substr(xPos + 1, spacePos1 - xPos - 1) );
+                                pointPosns[frame].first = std::stof( line.substr(spacePos1 + 1, spacePos2 - spacePos1 - 1) );
+
+                                xPos = line.find_first_of('x', xPos + 1); 
+                            }
+
+                            // y values
+                            curveStart = line.find_first_of('{', curveEnd + 1);
+                            curveEnd = line.find_first_of('}', curveStart + 1);
+                            xPos = line.find_first_of('x', curveStart + 1);
+                            while (xPos < curveEnd)
+                            {
+                                auto spacePos1 = line.find_first_of(' ', xPos + 1), spacePos2 = line.find_first_of(' ', spacePos1 + 1);
+                                frame = std::stoi( line.substr(xPos + 1, spacePos1 - xPos - 1) );
+                                pointPosns[frame].second = max_y - std::stof( line.substr(spacePos1 + 1, spacePos2 - spacePos1 - 1) );
+
+                                xPos = line.find_first_of('x', xPos + 1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        file = readdir(dir);
+    }
+    closedir(dir);
+}
+
 void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
                    const std::string& vocab_file_path, const std::string& video_file_path, const std::string& mask_img_path,
                    const unsigned int frame_skip, const bool no_sleep, const bool auto_term,
-                   const bool eval_log, const std::string& map_db_path, YAML::Node yaml_node) {
+                   const bool eval_log, const std::string& map_db_path,
+                   const std::string& planar_path, const std::string& mesh_path, 
+                   unsigned gridSize, YAML::Node yaml_node) {
     // load the mask image
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
 
@@ -313,6 +504,13 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
     auto video = cv::VideoCapture(video_file_path, cv::CAP_FFMPEG);
     std::vector<double> track_times;
 
+    std::map<int, stella_vslam_bfx::prematched_points> extraPointsPerFrame;
+    if (!planar_path.empty())
+        planar_points(planar_path, extraPointsPerFrame, video.get(cv::CAP_PROP_FRAME_WIDTH), video.get(cv::CAP_PROP_FRAME_HEIGHT), gridSize);
+    if (!mesh_path.empty())
+        mesh_points(mesh_path, extraPointsPerFrame, video.get(cv::CAP_PROP_FRAME_WIDTH), video.get(cv::CAP_PROP_FRAME_HEIGHT));
+    const bool useExtraPoints = !extraPointsPerFrame.empty();
+
     cv::Mat frame;
     double timestamp = 0.0;
 
@@ -328,7 +526,9 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
 
             if (!frame.empty() && (num_frame % frame_skip == 0)) {
                 // input the current frame and estimate the camera pose
-                SLAM.feed_monocular_frame(frame, timestamp, mask);
+                auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
+                    ? &extraPointsPerFrame.at(num_frame) : nullptr;
+                SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
             }
 
             const auto tp_2 = std::chrono::steady_clock::now();
@@ -427,6 +627,9 @@ int main(int argc, char* argv[]) {
     auto log_level = op.add<popl::Value<std::string>>("", "log-level", "log level", "info");
     auto eval_log = op.add<popl::Switch>("", "eval-log", "store trajectory and tracking times for evaluation");
     auto map_db_path = op.add<popl::Value<std::string>>("p", "map-db", "store a map database at this path after SLAM", "");
+    auto planar_file_path = op.add<popl::Value<std::string>>("l", "planar", "planar tracks file path", "");
+    auto mesh_file_path = op.add<popl::Value<std::string>>("s", "mesh", "mesh tracks file path", "");
+    auto grid_size = op.add<popl::Value<unsigned int>>("g", "grid-size", "grid size for extending planar points", 5);
     try {
         op.parse(argc, argv);
     }
@@ -477,7 +680,9 @@ int main(int argc, char* argv[]) {
     if (cfg->camera_->setup_type_ == stella_vslam::camera::setup_type_t::Monocular) {
         mono_tracking(cfg, vocab_file_path->value(), video_file_path->value(), mask_img_path->value(),
                       frame_skip->value(), no_sleep->is_set(), auto_term->is_set(),
-                      eval_log->is_set(), map_db_path->value(), yaml_node);
+                      eval_log->is_set(), map_db_path->value(),
+                      planar_file_path->value(), mesh_file_path->value(),
+                      grid_size->value(), yaml_node);
     }
     else {
         throw std::runtime_error("Invalid setup type: " + cfg->camera_->get_setup_type_string());

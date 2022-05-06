@@ -17,6 +17,12 @@ unsigned int area::match_in_consistent_area(data::frame& frm_1, data::frame& frm
     std::vector<int> matched_indices_1_in_frm_2(frm_2.frm_obs_.undist_keypts_.size(), -1);
 
     for (unsigned int idx_1 = 0; idx_1 < frm_1.frm_obs_.undist_keypts_.size(); ++idx_1) {
+
+        // Keypoint has already been matched externally
+        if ( frm_1.frm_obs_.idx_is_prematched(idx_1) ) {
+            continue;
+        }
+
         const auto& undist_keypt_1 = frm_1.frm_obs_.undist_keypts_.at(idx_1);
         const auto scale_level_1 = undist_keypt_1.octave;
 
@@ -39,6 +45,12 @@ unsigned int area::match_in_consistent_area(data::frame& frm_1, data::frame& frm
         int best_idx_2 = -1;
 
         for (const auto idx_2 : indices) {
+
+            // Keypoint has already been matched externally
+            if ( frm_2.frm_obs_.idx_is_prematched(idx_2) ) {
+                continue;
+            }
+
             const auto& desc_2 = frm_2.frm_obs_.descriptors_.row(idx_2);
 
             const auto hamm_dist = compute_descriptor_distance_32(desc_1, desc_2);

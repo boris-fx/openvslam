@@ -137,6 +137,8 @@ public:
     std::vector<std::vector<float>> mask_rectangles_;
 
     // ORB settings
+    bool use_orb_features_ = true;
+    bool undistort_prematches_ = true;
     unsigned ini_fast_threshold_ = 20;
     unsigned min_fast_threshold_ = 7;
     unsigned num_levels_ = 8;

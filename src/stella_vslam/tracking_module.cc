@@ -52,7 +52,8 @@ tracking_module::tracking_module(const std::shared_ptr<config>& cfg, data::map_d
       frame_tracker_(camera_, 10, initializer_.get_use_fixed_seed()),
       relocalizer_(cfg->settings_),
       pose_optimizer_(),
-      keyfrm_inserter_(cfg->settings_) {
+      keyfrm_inserter_(cfg->settings_),
+      use_orb_features_(cfg->settings_.use_orb_features_) {
     spdlog::debug("CONSTRUCT: tracking_module");
 }
 
@@ -288,6 +289,13 @@ bool tracking_module::initialize() {
 }
 
 bool tracking_module::track_current_frame() {
+
+    // Using ORB matches will also include any prematched points in the relevant *_based_track()
+    // function/matchers, but we can skip those if we only have prematched points
+    if (!use_orb_features_) {
+        return frame_tracker_.prematch_based_track(curr_frm_, last_frm_, curr_frm_.ref_keyfrm_);
+    }
+
     bool succeeded = false;
 
     // Tracking mode
@@ -388,7 +396,10 @@ bool tracking_module::optimize_current_frame_with_local_map(unsigned int& num_tr
                                                             unsigned int& num_reliable_lms,
                                                             const unsigned int min_num_obs_thr) {
     // acquire more 2D-3D matches by reprojecting the local landmarks to the current frame
-    search_local_landmarks();
+    // (shouldn't make any difference if all points are prematched)
+    if (use_orb_features_) {
+        search_local_landmarks();
+    }
 
     // optimize the pose
     g2o::SE3Quat optimized_pose;

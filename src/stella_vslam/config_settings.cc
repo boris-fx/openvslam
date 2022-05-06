@@ -149,6 +149,8 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     os << std::endl;
 
     os << "Feature/ORB\n";
+    os << "\tUse ORB features: " << settings.use_orb_features_ << std::endl;
+    os << "\tUndistort prematches: " << settings.undistort_prematches_ << std::endl;
     os << "\tIni fast threshold: " << settings.ini_fast_threshold_ << std::endl;
     os << "\tMin fast threshold: " << settings.min_fast_threshold_ << std::endl;
     os << "\tNum levels: " << settings.num_levels_ << std::endl;

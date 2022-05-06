@@ -43,6 +43,12 @@ unsigned int bow_tree::match_frame_and_keyframe(const std::shared_ptr<data::keyf
             const auto& frm_indices = frm_itr->second;
 
             for (const auto keyfrm_idx : keyfrm_indices) {
+
+                // Keypoint has already been matched externally
+                if ( keyfrm->frm_obs_.idx_is_prematched(keyfrm_idx) ) {
+                    continue;
+                }
+
                 // Ignore if the keypoint of keyframe is not associated any 3D points
                 auto& lm = keyfrm_lms.at(keyfrm_idx);
                 if (!lm) {
@@ -60,6 +66,11 @@ unsigned int bow_tree::match_frame_and_keyframe(const std::shared_ptr<data::keyf
 
                 for (const auto frm_idx : frm_indices) {
                     if (matched_lms_in_frm.at(frm_idx)) {
+                        continue;
+                    }
+
+                    // Keypoint has already been matched externally
+                    if (frm.frm_obs_.idx_is_prematched(frm_idx) ) {
                         continue;
                     }
 
@@ -156,6 +167,12 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
             const auto& keyfrm_2_indices = itr_2->second;
 
             for (const auto idx_1 : keyfrm_1_indices) {
+
+                // Keypoint has already been matched externally
+                if ( keyfrm_1->frm_obs_.idx_is_prematched(idx_1) ) {
+                    continue;
+                }
+
                 // Ignore if the keypoint is not associated any 3D points
                 // (because this function is used for Sim3 estimation)
                 auto& lm_1 = keyfrm_1_lms.at(idx_1);
@@ -173,6 +190,12 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
                 unsigned int second_best_hamm_dist = MAX_HAMMING_DIST;
 
                 for (const auto idx_2 : keyfrm_2_indices) {
+
+                    // Keypoint has already been matched externally
+                    if ( keyfrm_2->frm_obs_.idx_is_prematched(idx_2) ) {
+                        continue;
+                    }
+                    
                     // Ignore if the keypoint is not associated any 3D points
                     // (because this function is used for Sim3 estimation)
                     auto& lm_2 = keyfrm_2_lms.at(idx_2);

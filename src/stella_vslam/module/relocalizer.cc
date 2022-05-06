@@ -2,6 +2,7 @@
 #include "stella_vslam/data/keyframe.h"
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/bow_database.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/module/relocalizer.h"
 #include "stella_vslam/util/fancy_index.h"
 
@@ -13,11 +14,12 @@ namespace module {
 relocalizer::relocalizer(const double bow_match_lowe_ratio, const double proj_match_lowe_ratio,
                          const double robust_match_lowe_ratio,
                          const unsigned int min_num_bow_matches, const unsigned int min_num_valid_obs,
-                         const bool use_fixed_seed)
+                         const bool use_fixed_seed, const bool use_orb_features)
     : min_num_bow_matches_(min_num_bow_matches), min_num_valid_obs_(min_num_valid_obs),
       bow_matcher_(bow_match_lowe_ratio, true), proj_matcher_(proj_match_lowe_ratio, true),
       robust_matcher_(robust_match_lowe_ratio, false),
-      pose_optimizer_(), use_fixed_seed_(use_fixed_seed) {
+      pose_optimizer_(), use_fixed_seed_(use_fixed_seed),
+      use_orb_features_(use_orb_features) {
     spdlog::debug("CONSTRUCT: module::relocalizer");
 }
 
@@ -103,7 +105,10 @@ bool relocalizer::reloc_by_candidate(data::frame& curr_frm,
         already_found_landmarks.insert(matched_landmarks.at(idx));
     }
 
-    ok = refine_pose(curr_frm, candidate_keyfrm, already_found_landmarks);
+    if (use_orb_features_) {
+        // Prematched points will all have been dealt with so no point looking for more
+        ok = refine_pose(curr_frm, candidate_keyfrm, already_found_landmarks);
+    }
     return ok;
 }
 
@@ -112,8 +117,13 @@ bool relocalizer::relocalize_by_pnp_solver(data::frame& curr_frm,
                                            bool use_robust_matcher,
                                            std::vector<unsigned int>& inlier_indices,
                                            std::vector<std::shared_ptr<data::landmark>>& matched_landmarks) const {
-    const auto num_matches = use_robust_matcher ? robust_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, matched_landmarks)
+    unsigned int num_matches = 0;
+    if (use_orb_features_) {
+        num_matches = use_robust_matcher ? robust_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, matched_landmarks)
                                                 : bow_matcher_.match_frame_and_keyframe(candidate_keyfrm, curr_frm, matched_landmarks);
+    }
+    stella_vslam_bfx::get_frame_and_keyframe_prematches(candidate_keyfrm, curr_frm, matched_landmarks);
+
     // Discard the candidate if the number of 2D-3D matches is less than the threshold
     if (num_matches < min_num_bow_matches_) {
         spdlog::debug("Number of 2D-3D matches ({}) < threshold ({}). candidate keyframe id is {}", num_matches, min_num_bow_matches_, candidate_keyfrm->id_);

@@ -48,7 +48,7 @@ set(EXECUTABLE_TARGETS "")
 # add_executable(run_image_localization run_image_localization.cc util/image_util.cc)
 # list(APPEND EXECUTABLE_TARGETS run_image_localization)
 
-add_executable(run_video_slam run_video_slam.cc)
+add_executable(run_video_slam run_video_slam.cc util/tinyxml2.cc)
 list(APPEND EXECUTABLE_TARGETS run_video_slam)
 
 # add_executable(run_video_localization run_video_localization.cc)

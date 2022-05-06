@@ -3,6 +3,7 @@
 #include "stella_vslam/data/keyframe.h"
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/match/bow_tree.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/match/projection.h"
 #include "stella_vslam/match/robust.h"
 #include "stella_vslam/module/frame_tracker.h"
@@ -26,12 +27,14 @@ bool frame_tracker::motion_based_track(data::frame& curr_frm, const data::frame&
 
     // Reproject the 3D points observed in the last frame and find 2D-3D matches
     const float margin = (camera_->setup_type_ != camera::setup_type_t::Stereo) ? 20 : 10;
-    auto num_matches = projection_matcher.match_current_and_last_frames(curr_frm, last_frm, margin);
+    auto num_matches = projection_matcher.match_current_and_last_frames(curr_frm, last_frm, margin)
+                        + stella_vslam_bfx::get_frames_prematches(curr_frm, last_frm);
 
     if (num_matches < num_matches_thr_) {
         // Increment the margin, and search again
         std::fill(curr_frm.landmarks_.begin(), curr_frm.landmarks_.end(), nullptr);
-        num_matches = projection_matcher.match_current_and_last_frames(curr_frm, last_frm, 2 * margin);
+        num_matches = projection_matcher.match_current_and_last_frames(curr_frm, last_frm, 2 * margin)
+                        + stella_vslam_bfx::get_frames_prematches(curr_frm, last_frm);
     }
 
     if (num_matches < num_matches_thr_) {
@@ -63,7 +66,8 @@ bool frame_tracker::bow_match_based_track(data::frame& curr_frm, const data::fra
     // Search 2D-2D matches between the ref keyframes and the current frame
     // to acquire 2D-3D matches between the frame keypoints and 3D points observed in the ref keyframe
     std::vector<std::shared_ptr<data::landmark>> matched_lms_in_curr;
-    auto num_matches = bow_matcher.match_frame_and_keyframe(ref_keyfrm, curr_frm, matched_lms_in_curr);
+    const auto num_matches = bow_matcher.match_frame_and_keyframe(ref_keyfrm, curr_frm, matched_lms_in_curr)
+                            + stella_vslam_bfx::get_frame_and_keyframe_prematches(ref_keyfrm, curr_frm, matched_lms_in_curr);
 
     if (num_matches < num_matches_thr_) {
         spdlog::debug("bow match based tracking failed: {} matches < {}", num_matches, num_matches_thr_);
@@ -99,7 +103,8 @@ bool frame_tracker::robust_match_based_track(data::frame& curr_frm, const data::
     // Search 2D-2D matches between the ref keyframes and the current frame
     // to acquire 2D-3D matches between the frame keypoints and 3D points observed in the ref keyframe
     std::vector<std::shared_ptr<data::landmark>> matched_lms_in_curr;
-    auto num_matches = robust_matcher.match_frame_and_keyframe(curr_frm, ref_keyfrm, matched_lms_in_curr, use_fixed_seed_);
+    const auto num_matches = robust_matcher.match_frame_and_keyframe(curr_frm, ref_keyfrm, matched_lms_in_curr, use_fixed_seed_)
+                            + stella_vslam_bfx::get_frame_and_keyframe_prematches(ref_keyfrm, curr_frm, matched_lms_in_curr);
 
     if (num_matches < num_matches_thr_) {
         spdlog::debug("robust match based tracking failed: {} matches < {}", num_matches, num_matches_thr_);
@@ -122,6 +127,42 @@ bool frame_tracker::robust_match_based_track(data::frame& curr_frm, const data::
 
     if (num_valid_matches < num_matches_thr_) {
         spdlog::debug("robust match based tracking failed: {} inlier matches < {}", num_valid_matches, num_matches_thr_);
+        return false;
+    }
+    else {
+        return true;
+    }
+}
+
+bool frame_tracker::prematch_based_track(data::frame& curr_frm, const data::frame& last_frm, const std::shared_ptr<data::keyframe>& ref_keyfrm) const {
+    match::robust robust_matcher(0.8, false);
+
+    // Retrieve 2D-2D matches between the ref keyframes and the current frame
+    // to acquire 2D-3D matches between the frame keypoints and 3D points observed in the ref keyframe
+    std::vector<std::shared_ptr<data::landmark>> matched_lms_in_curr;
+    const auto num_matches = stella_vslam_bfx::get_frame_and_keyframe_prematches(ref_keyfrm, curr_frm, matched_lms_in_curr);
+
+    if (num_matches < num_matches_thr_) {
+        spdlog::debug("prematch-only based tracking failed: {} matches < {}", num_matches, num_matches_thr_);
+        return false;
+    }
+
+    // Update the 2D-3D matches
+    curr_frm.landmarks_ = matched_lms_in_curr;
+
+    // Pose optimization
+    // The initial value is the pose of the previous frame
+    curr_frm.set_pose_cw(last_frm.get_pose_cw());
+    g2o::SE3Quat optimized_pose;
+    std::vector<bool> outlier_flags;
+    pose_optimizer_.optimize(curr_frm, optimized_pose, outlier_flags);
+    curr_frm.set_pose_cw(optimized_pose);
+
+    // Discard the outliers
+    const auto num_valid_matches = discard_outliers(outlier_flags, curr_frm);
+
+    if (num_valid_matches < num_matches_thr_) {
+        spdlog::debug("prematch-only based tracking failed: {} inlier matches < {}", num_valid_matches, num_matches_thr_);
         return false;
     }
     else {

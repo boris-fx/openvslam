@@ -62,6 +62,12 @@ unsigned int robust::match_for_triangulation(const std::shared_ptr<data::keyfram
             const auto& keyfrm_2_indices = itr_2->second;
 
             for (const auto idx_1 : keyfrm_1_indices) {
+
+                // Keypoint has already been matched externally
+                if ( keyfrm_1->frm_obs_.idx_is_prematched(idx_1) ) {
+                    continue;
+                }
+
                 const auto& lm_1 = assoc_lms_in_keyfrm_1.at(idx_1);
                 // 3次元点が存在"する"場合はスルー(triangulation前のmatchingであるため)
                 if (lm_1) {
@@ -81,6 +87,12 @@ unsigned int robust::match_for_triangulation(const std::shared_ptr<data::keyfram
                 int best_idx_2 = -1;
 
                 for (const auto idx_2 : keyfrm_2_indices) {
+                    
+                    // Keypoint has already been matched externally
+                    if ( keyfrm_2->frm_obs_.idx_is_prematched(idx_2) ) {
+                        continue;
+                    }
+
                     // Ignore if the keypoint is associated any 3D points
                     // (because this function is used for triangulation)
                     const auto& lm_2 = assoc_lms_in_keyfrm_2.at(idx_2);
@@ -285,6 +297,12 @@ unsigned int robust::brute_force_match(const data::frame_observation& frm_obs, c
     std::unordered_set<int> already_matched_indices_1;
 
     for (unsigned int idx_2 = 0; idx_2 < num_keypts_2; ++idx_2) {
+
+        // Keypoint has already been matched externally
+        if ( keyfrm->frm_obs_.idx_is_prematched(idx_2) ) {
+            continue;
+        }
+
         // 3次元点が有効なもののみ対象にする
         const auto& lm_2 = lms_2.at(idx_2);
         if (!lm_2) {
@@ -303,6 +321,12 @@ unsigned int robust::brute_force_match(const data::frame_observation& frm_obs, c
         unsigned int second_best_hamm_dist = MAX_HAMMING_DIST;
 
         for (unsigned int idx_1 = 0; idx_1 < num_keypts_1; ++idx_1) {
+
+            // Keypoint has already been matched externally
+            if ( frm_obs.idx_is_prematched(idx_1) ) {
+                continue;
+            }
+            
             // Avoid duplication
             if (static_cast<bool>(already_matched_indices_1.count(idx_1))) {
                 continue;

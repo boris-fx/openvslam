@@ -5,6 +5,7 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/match/fuse.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/match/robust.h"
 #include "stella_vslam/module/two_view_triangulator.h"
 #include "stella_vslam/solve/essential_solver.h"
@@ -18,7 +19,8 @@ namespace stella_vslam {
 mapping_module::mapping_module(const stella_vslam_bfx::config_settings& settings, data::map_database* map_db, data::bow_database* bow_db, data::bow_vocabulary* bow_vocab)
     : local_map_cleaner_(new module::local_map_cleaner(settings, map_db, bow_db)),
       map_db_(map_db), bow_db_(bow_db), bow_vocab_(bow_vocab),
-      local_bundle_adjuster_(new optimize::local_bundle_adjuster(settings)) {
+      local_bundle_adjuster_(new optimize::local_bundle_adjuster(settings)),
+      use_orb_features_(settings.use_orb_features_) {
     spdlog::debug("CONSTRUCT: mapping_module");
     spdlog::debug("load mapping parameters");
 
@@ -286,7 +288,10 @@ void mapping_module::create_new_landmarks() {
 
         // vector of matches (idx in the current, idx in the neighbor)
         std::vector<std::pair<unsigned int, unsigned int>> matches;
-        robust_matcher.match_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches);
+        if (use_orb_features_) {
+            robust_matcher.match_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches);
+        }
+        stella_vslam_bfx::get_prematches_for_triangulation(cur_keyfrm_, ngh_keyfrm, matches);
 
         // triangulation
         triangulate_with_two_keyframes(cur_keyfrm_, ngh_keyfrm, matches);
