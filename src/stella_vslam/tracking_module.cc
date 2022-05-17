@@ -163,13 +163,9 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
 
 #ifdef DETERMINISTIC
     // make sure the mapper has processed any new keyframes before doing anything else
-    // (this kinda defeats the point of threading but placing the wait before the initialize()/
-    // track() calls above doesn't produce deterministic behaviour; it would probably be better
-    // to add more fine-grained checks just before keyframes/landmarks are used)
     std::unique_lock<std::mutex> mapping_lock(mapper_->mtx_processing_);
     mapper_->processing_cv_.wait(
-        mapping_lock, [this]{ return mapper_->is_idle() && !mapper_->keyframe_is_queued(); }
-    );
+        mapping_lock, [this] { return mapper_->is_idle() && !mapper_->keyframe_is_queued(); });
     mapping_lock.unlock();
 #endif
 

@@ -133,15 +133,6 @@ if(USE_ARUCO)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USE_ARUCO)
 endif()
 
-# SQLite
-set(USE_SQLITE OFF CACHE BOOL "Use SQLite")
-if(USE_SQLITE)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC USE_SQLITE)
-    message(STATUS "SQLite: ENABLED")
-else()
-    message(STATUS "SQLite: DISABLED")
-endif()
-
 # Determinism
 set (DETERMINISTIC ON CACHE BOOL "Use deterministic code")
 if (DETERMINISTIC)
@@ -149,6 +140,15 @@ if (DETERMINISTIC)
     message(STATUS "Determinism: ENABLED")
 else()
     message(STATUS "Determinism: DISABLED")
+endif()
+
+# SQLite
+set(USE_SQLITE OFF CACHE BOOL "Use SQLite")
+if(USE_SQLITE)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC USE_SQLITE)
+    message(STATUS "SQLite: ENABLED")
+else()
+    message(STATUS "SQLite: DISABLED")
 endif()
 
 # ----- Configure stella_vslam library -----

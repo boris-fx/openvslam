@@ -19,16 +19,16 @@
 #include <g2o/core/robust_kernel_impl.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
 #include <g2o/solvers/eigen/linear_solver_eigen.h>
-#include <g2o/solvers/dense/linear_solver_dense.h>
-#include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
 
 namespace stella_vslam {
 namespace optimize {
 
-local_bundle_adjuster::local_bundle_adjuster(const unsigned int num_first_iter,
+local_bundle_adjuster::local_bundle_adjuster(const YAML::Node& yaml_node,
+                                             const unsigned int num_first_iter,
                                              const unsigned int num_second_iter)
-    : num_first_iter_(num_first_iter), num_second_iter_(num_second_iter) {}
+    : num_first_iter_(num_first_iter), num_second_iter_(num_second_iter),
+      use_additional_keyframes_for_monocular_(yaml_node["use_additional_keyframes_for_monocular"].as<bool>(false)) {}
 
 void local_bundle_adjuster::optimize(data::map_database* map_db,
                                      const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
@@ -36,6 +36,7 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
 
     // Correct the local keyframes of the current keyframe
     std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> local_keyfrms;
+    bool has_scale = false;
 
     local_keyfrms[curr_keyfrm->id_] = curr_keyfrm;
     const auto curr_covisibilities = curr_keyfrm->graph_node_->get_covisibilities();
@@ -46,8 +47,14 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
         if (local_keyfrm->will_be_erased()) {
             continue;
         }
+        if (local_keyfrm->id_ == 0) {
+            continue;
+        }
 
         local_keyfrms[local_keyfrm->id_] = local_keyfrm;
+        if (local_keyfrm->camera_->setup_type_ != camera::setup_type_t::Monocular) {
+            has_scale = true;
+        }
     }
 
     // Correct landmarks seen in local keyframes
@@ -119,10 +126,24 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
         }
     }
 
+    if (use_additional_keyframes_for_monocular_) {
+        // Ensure that there are always at least two fixed keyframes
+        auto additional_keyfrms_size = 2 - fixed_keyfrms.size();
+        if (!has_scale && fixed_keyfrms.size() < 2 && local_keyfrms.size() > additional_keyfrms_size) {
+            for (unsigned int i = 0; i < additional_keyfrms_size; ++i) {
+                auto itr = local_keyfrms.begin();
+                auto keyfrm_id = itr->first;
+                auto keyfrm = itr->second;
+                local_keyfrms.erase(keyfrm_id);
+                fixed_keyfrms[keyfrm_id] = keyfrm;
+            }
+        }
+    }
+
     // 2. Construct an optimizer
 
     std::unique_ptr<g2o::BlockSolverBase> block_solver;
-    auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    auto linear_solver = g2o::make_unique<g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>>();
     block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
     auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
 
@@ -146,7 +167,7 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
         const auto& local_keyfrm = id_local_keyfrm_pair.second;
 
         all_keyfrms.emplace(id_local_keyfrm_pair);
-        auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(local_keyfrm, local_keyfrm->id_ == 0);
+        auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(local_keyfrm, false);
         optimizer.addVertex(keyfrm_vtx);
     }
 
