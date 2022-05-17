@@ -1,6 +1,8 @@
 #ifndef STELLA_VSLAM_OPTIMIZE_LOCAL_BUNDLE_ADJUSTER_H
 #define STELLA_VSLAM_OPTIMIZE_LOCAL_BUNDLE_ADJUSTER_H
 
+#include "stella_vslam/config_settings.h"
+
 #include <memory>
 
 namespace stella_vslam {
@@ -20,7 +22,7 @@ public:
      * @param num_first_iter
      * @param num_second_iter
      */
-    explicit local_bundle_adjuster(const YAML::Node& yaml_node,
+    explicit local_bundle_adjuster(const stella_vslam_bfx::config_settings& settings,
                                    const unsigned int num_first_iter = 5,
                                    const unsigned int num_second_iter = 10);
 

@@ -158,6 +158,7 @@ public:
 
     // Mapping parameters
     bool use_baseline_dist_thr_ratio_ = false;
+    bool use_additional_keyframes_for_monocular_ = false;
     unsigned num_obs_thr_ = 2;
     unsigned num_reliable_keyfrms_ = 2;
     unsigned desired_valid_obs_ = 0;

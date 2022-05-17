@@ -171,6 +171,7 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
 
     os << "Mapping\n";
     os << "\tUse baseline dist thr ratio: " << settings.use_baseline_dist_thr_ratio_ << std::endl;
+    os << "\tUse additional keyframes for monocular: " << settings.use_additional_keyframes_for_monocular_ << std::endl;
     os << "\tNum obs threshold: " << settings.num_obs_thr_ << std::endl;
     os << "\tNum reliable keyframes: " << settings.num_reliable_keyfrms_ << std::endl;
     os << "\tDesired valid observations: " << settings.desired_valid_obs_ << std::endl;

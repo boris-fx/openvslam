@@ -203,6 +203,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             settings->baseline_dist_thr_ratio_ = mapping_node["baseline_dist_thr_ratio"].as<double>(0.02);
             settings->use_baseline_dist_thr_ratio_ = true;
         }
+        settings->use_additional_keyframes_for_monocular_ = mapping_node["use_additional_keyframes_for_monocular"].as<bool>(false);
         settings->num_obs_thr_ = mapping_node["num_obs_thr"].as<unsigned int>(2);
         settings->num_reliable_keyfrms_ = mapping_node["num_reliable_keyfrms"].as<unsigned int>(2);
         settings->desired_valid_obs_ = mapping_node["desired_valid_obs"].as<unsigned int>(0);
