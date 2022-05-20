@@ -17,7 +17,15 @@
 #include <g2o/core/robust_kernel_impl.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
 #include <g2o/solvers/eigen/linear_solver_eigen.h>
+
+#undef G2O_LINEAR_SOLVER_CLASS
+#if defined(HAVE_G2O_SOLVER_CSPARSE)
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
+#define G2O_LINEAR_SOLVER_CLASS LinearSolverCSparse 
+#else
+#define G2O_LINEAR_SOLVER_CLASS LinearSolverEigen
+#endif
+
 #include <g2o/core/optimization_algorithm_levenberg.h>
 
 namespace stella_vslam {
@@ -37,7 +45,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
     // 2. Construct an optimizer
 
     std::unique_ptr<g2o::BlockSolverBase> block_solver;
-    auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    auto linear_solver = g2o::make_unique<g2o::G2O_LINEAR_SOLVER_CLASS<g2o::BlockSolver_6_3::PoseMatrixType>>();
     block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
     auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
 
