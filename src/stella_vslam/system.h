@@ -26,7 +26,7 @@ class base;
 
 namespace data {
 class frame;
-class frame_observation;
+struct frame_observation;
 class camera_database;
 class orb_params_database;
 class map_database;

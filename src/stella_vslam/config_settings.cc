@@ -1,4 +1,5 @@
 #include "config_settings.h"
+#include <string>
 
 namespace stella_vslam_bfx {
 

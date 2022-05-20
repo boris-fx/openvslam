@@ -40,11 +40,11 @@ feature::orb_params* orb_params_database::get_orb_params(const std::string& orb_
     }
 }
 
-void orb_params_database::from_json(const nlohmann::json& json_orb_params) {
+void orb_params_database::from_json(const nlohmann::json& json_orb_parameters) {
     std::lock_guard<std::mutex> lock(mtx_database_);
 
-    spdlog::info("decoding {} orb_params to load", json_orb_params.size());
-    for (const auto& json_id_orb_params : json_orb_params.items()) {
+    spdlog::info("decoding {} orb_params to load", json_orb_parameters.size());
+    for (const auto& json_id_orb_params : json_orb_parameters.items()) {
         const auto& orb_params_name = json_id_orb_params.key();
         const auto& json_orb_params = json_id_orb_params.value();
 
