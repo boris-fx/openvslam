@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
 project(stella_vslam LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 11)
+if (NOT CMAKE_CXX_STANDARD)
+   set(CMAKE_CXX_STANDARD 11) # c++11
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(POLICY CMP0042)
@@ -63,7 +65,13 @@ endif()
 # Note: add_compile_options() accepts only "simple" generator-expressions :-(
 if(MSVC)
     # C4251: DLL export, C4244: floating->integer, C4305: double->float, C4267: size_t->any, C4127: constant condition
-    add_compile_options(/W4 $<$<CONFIG:Debug>:/MTd>;$<$<CONFIG:Release>:/MT> /source-charset:utf-8 /execution-charset:utf-8 /wd4251 /wd4244 /wd4305 /wd4267 /wd4127 /bigobj)
+    if (BUILD_SHARED_LIBS)
+        add_compile_options($<$<CONFIG:Debug>:/MDd>;$<$<CONFIG:Release>:/MD>)
+    else()
+        add_compile_options($<$<CONFIG:Debug>:/MTd>;$<$<CONFIG:Release>:/MT>)
+    endif()
+
+    add_compile_options(/W4 /source-charset:utf-8 /execution-charset:utf-8 /wd4251 /wd4244 /wd4305 /wd4267 /wd4127 /bigobj)
     add_compile_options("$<$<CONFIG:Debug>:/Zo>;$<$<CONFIG:Release>:/O2>;$<$<CONFIG:None>:/O2>")
     add_link_options(/NODEFAULTLIB:library)
 else()
@@ -88,11 +96,13 @@ endif()
 find_package(Threads REQUIRED)
 
 # OpenMP
-find_package(OpenMP REQUIRED)
-if(NOT TARGET OpenMP::OpenMP_CXX)
-    add_library(OpenMP::OpenMP_CXX IMPORTED INTERFACE)
-    set_property(TARGET OpenMP::OpenMP_CXX
-                 PROPERTY INTERFACE_LINK_LIBRARIES ${OpenMP_CXX_FLAGS} Threads::Threads)
+if(NOT DEFINED USE_OPENMP OR USE_OPENMP)
+   find_package(OpenMP)
+   if(NOT TARGET OpenMP::OpenMP_CXX)
+       add_library(OpenMP::OpenMP_CXX IMPORTED INTERFACE)
+       set_property(TARGET OpenMP::OpenMP_CXX
+                    PROPERTY INTERFACE_LINK_LIBRARIES ${OpenMP_CXX_FLAGS} Threads::Threads)
+   endif()
 endif()
 
 # Eigen
@@ -102,11 +112,11 @@ find_package(Eigen3 3.3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 # OpenCV
-find_package(OpenCV 3.3.1 QUIET
+find_package(OpenCV 4.0 QUIET
              COMPONENTS
              core imgcodecs videoio features2d calib3d highgui)
 if(NOT OpenCV_FOUND)
-    find_package(OpenCV 4.0 QUIET
+    find_package(OpenCV 3.3.1 QUIET
                  COMPONENTS
                  core imgcodecs videoio features2d calib3d highgui)
     if(NOT OpenCV_FOUND)
