@@ -20,14 +20,26 @@ find_package(g2o REQUIRED
              g2o::types_sim3
              g2o::solver_dense
              g2o::solver_eigen
+             OPTIONAL_COMPONENTS
              g2o::solver_csparse
              g2o::csparse_extension
-             OPTIONAL_COMPONENTS
              g2o::csparse)
+
+if(TARGET OpenMP::OpenMP_CXX)
+    set(OPENMP_CXX_LIBRARY OpenMP::OpenMP_CXX)
+endif()
 
 # Check first if CSparse is built from g2o
 if(TARGET g2o::csparse)
     set(${CXSPARSE_LIBRARIES} g2o::csparse)
+    if(TARGET g2o::solver_csparse)
+        set(G2O_SOLVER_CSPARSE_LIBRARY g2o::solver_csparse)
+        target_compile_definitions(${PROJECT_NAME} PUBLIC HAVE_G2O_SOLVER_CSPARSE)
+    endif()
+    if(TARGET g2o::csparse_extension)
+        set(G2O_SOLVER_CSPARSE_EXTENSION_LIBRARY g2o::csparse_extension)
+        target_compile_definitions(${PROJECT_NAME} PUBLIC HAVE_G2O_SOLVER_CSPARSE_EXTENSION)
+    endif()
 else()
     # CXSparse for g2o
     find_package(CXSparse)
@@ -49,7 +61,9 @@ endif()
 if(BOW_FRAMEWORK MATCHES "DBoW2")
     find_package(DBoW2 REQUIRED)
 elseif(BOW_FRAMEWORK MATCHES "FBoW")
-    find_package(fbow QUIET)
+    if (NOT USE_EMBEDDED_BOW_FRAMEWORK)
+        find_package(fbow QUIET)
+    endif()
     if(NOT fbow_FOUND)
         add_subdirectory(${PROJECT_SOURCE_DIR}/3rd/FBoW ${PROJECT_BINARY_DIR}/3rd/FBoW)
     endif()
@@ -167,7 +181,7 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
                       PUBLIC
                       Threads::Threads
-                      OpenMP::OpenMP_CXX
+                      ${OPENMP_CXX_LIBRARY}
                       Eigen3::Eigen
                       opencv_core
                       opencv_features2d
@@ -179,8 +193,8 @@ target_link_libraries(${PROJECT_NAME}
                       g2o::types_sim3
                       g2o::solver_dense
                       g2o::solver_eigen
-                      g2o::solver_csparse
-                      g2o::csparse_extension
+                      ${G2O_SOLVER_CSPARSE_LIBRARY}
+                      ${G2O_SOLVER_CSPARSE_EXTENSION_LIBRARY}
                       ${CXSPARSE_LIBRARIES}
                       ${SUITESPARSE_LIBRARIES}
                       ${BoW_LIBRARY}
