@@ -112,13 +112,18 @@ find_package(Eigen3 3.3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 # OpenCV
+set(OPENCV_FEATURES "core imgcodecs features2d calib3d")
+if (BUILD_TESTS OR BUILD_EXAMPLES)
+   set(OPENCV_FEATURES "${OPENCV_FEATURES} videoio highgui")
+endif()
+
 find_package(OpenCV 4.0 QUIET
              COMPONENTS
-             core imgcodecs videoio features2d calib3d highgui)
+             core imgcodecs features2d calib3d)
 if(NOT OpenCV_FOUND)
     find_package(OpenCV 3.3.1 QUIET
                  COMPONENTS
-                 core imgcodecs videoio features2d calib3d highgui)
+                 core imgcodecs features2d calib3d)
     if(NOT OpenCV_FOUND)
         message(FATAL_ERROR "OpenCV >= 3.3.1 not found")
     endif()
