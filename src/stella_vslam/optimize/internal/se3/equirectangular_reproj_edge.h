@@ -38,26 +38,20 @@ inline bool equirectangular_reproj_edge::read(std::istream& is) {
     for (unsigned int i = 0; i < 2; ++i) {
         is >> _measurement(i);
     }
-    for (unsigned int i = 0; i < 2; ++i) {
-        for (unsigned int j = i; j < 2; ++j) {
-            is >> information()(i, j);
-            if (i != j) {
-                information()(j, i) = information()(i, j);
-            }
-        }
-    }
-    return true;
+    is >> information()(0, 0);
+    is >> information()(0, 1);
+    is >> information()(1, 1);
+    information()(1, 0) = information()(0, 1);
+   return true;
 }
 
 inline bool equirectangular_reproj_edge::write(std::ostream& os) const {
     for (unsigned int i = 0; i < 2; ++i) {
         os << measurement()(i) << " ";
     }
-    for (unsigned int i = 0; i < 2; ++i) {
-        for (unsigned int j = i; j < 2; ++j) {
-            os << " " << information()(i, j);
-        }
-    }
+    os << " " << information()(0, 0);
+    os << " " << information()(0, 1); // == information()(1, 0)
+    os << " " << information()(1, 1);
     return os.good();
 }
 
