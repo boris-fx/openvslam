@@ -109,7 +109,9 @@ endif()
 find_package(Eigen3 3.3 REQUIRED)
 
 # yaml-cpp
-find_package(yaml-cpp REQUIRED)
+if(BUILD_EXAMPLES)
+    find_package(yaml-cpp REQUIRED)
+endif()
 
 # OpenCV
 set(OPENCV_FEATURES "core imgcodecs features2d calib3d")
