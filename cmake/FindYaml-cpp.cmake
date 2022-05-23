@@ -47,7 +47,7 @@ find_library(YAMLCPP_LIBRARIES NAMES yaml-cpp
         PATHS ${YAMLCPP_CHECK_LIBRARY_DIRS})
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(YamlCpp DEFAULT_MSG
+find_package_handle_standard_args(yaml-cpp DEFAULT_MSG
         YAMLCPP_INCLUDE_DIRS YAMLCPP_LIBRARIES)
 
 if(YAMLCPP_INCLUDE_DIRS AND YAMLCPP_LIBRARIES)
