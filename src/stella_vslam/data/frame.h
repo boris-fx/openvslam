@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_FRAME_H
 #define STELLA_VSLAM_DATA_FRAME_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/feature/orb_params.h"
@@ -39,7 +40,7 @@ namespace data {
 class keyframe;
 class landmark;
 
-class frame {
+class STELLA_VSLAM_API frame {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

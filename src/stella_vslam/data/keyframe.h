@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_KEYFRAME_H
 #define STELLA_VSLAM_DATA_KEYFRAME_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/feature/orb_params.h"
@@ -40,7 +41,7 @@ class marker2d;
 class map_database;
 class bow_database;
 
-class keyframe : public std::enable_shared_from_this<keyframe> {
+class STELLA_VSLAM_API keyframe : public std::enable_shared_from_this<keyframe> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

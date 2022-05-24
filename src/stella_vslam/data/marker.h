@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_MARKER_H
 #define STELLA_VSLAM_DATA_MARKER_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 
 #include <mutex>
@@ -16,7 +17,7 @@ namespace data {
 
 class keyframe;
 
-class marker {
+class STELLA_VSLAM_API marker {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

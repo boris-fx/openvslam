@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_SYSTEM_H
 #define STELLA_VSLAM_SYSTEM_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 #include "stella_vslam/data/bow_vocabulary_fwd.h"
 
@@ -51,7 +52,7 @@ namespace io {
 class map_database_io_base;
 }
 
-class system {
+class STELLA_VSLAM_API system {
 public:
     //! Constructor
     system(const std::shared_ptr<config>& cfg, const std::string& vocab_file_path);

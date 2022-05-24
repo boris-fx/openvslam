@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_LANDMARK_H
 #define STELLA_VSLAM_DATA_LANDMARK_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 
 #include <map>
@@ -20,7 +21,7 @@ class keyframe;
 
 class map_database;
 
-class landmark {
+class STELLA_VSLAM_API landmark {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

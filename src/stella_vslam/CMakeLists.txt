@@ -76,6 +76,7 @@ endif()
 add_library(${PROJECT_NAME}
             ${CMAKE_CURRENT_SOURCE_DIR}/config.h
             ${CMAKE_CURRENT_SOURCE_DIR}/config_settings.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/exports.h
             ${CMAKE_CURRENT_SOURCE_DIR}/type.h
             ${CMAKE_CURRENT_SOURCE_DIR}/system.h
             ${CMAKE_CURRENT_SOURCE_DIR}/tracking_module.h
@@ -90,6 +91,7 @@ add_library(${PROJECT_NAME}
 
 # Set output directory of the library
 set_target_properties(${PROJECT_NAME} PROPERTIES
+                      DEFINE_SYMBOL STELLA_VSLAM_DLL_EXPORT
                       OUTPUT_NAME stella_vslam
                       ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
                       LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)

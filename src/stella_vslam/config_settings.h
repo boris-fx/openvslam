@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_BFX_CONFIG_SETTINGS_H
 #define STELLA_VSLAM_BFX_CONFIG_SETTINGS_H
 
+#include "stella_vslam/exports.h"
 #include <ostream>
 #include <array>
 #include <vector>
@@ -59,7 +60,7 @@ namespace io {
 
 namespace stella_vslam_bfx {
 
-class config_settings {
+class STELLA_VSLAM_API config_settings {
 public:
 
     //! Constructor for perspective camera

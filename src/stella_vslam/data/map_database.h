@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_MAP_DATABASE_H
 #define STELLA_VSLAM_DATA_MAP_DATABASE_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/data/bow_vocabulary_fwd.h"
 #include "stella_vslam/data/frame_statistics.h"
 
@@ -31,7 +32,7 @@ class camera_database;
 class orb_params_database;
 class bow_database;
 
-class map_database {
+class STELLA_VSLAM_API map_database {
 public:
     /**
      * Constructor

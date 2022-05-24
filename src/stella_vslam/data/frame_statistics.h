@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_FRAME_STATISTICS_H
 #define STELLA_VSLAM_DATA_FRAME_STATISTICS_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 
 #include <vector>
@@ -13,7 +14,7 @@ namespace data {
 class frame;
 class keyframe;
 
-class frame_statistics {
+class STELLA_VSLAM_API frame_statistics {
 public:
     /**
      * Constructor

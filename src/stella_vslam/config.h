@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_CONFIG_H
 #define STELLA_VSLAM_CONFIG_H
 
+#include "stella_vslam/exports.h"
 #include "config_settings.h"
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/feature/orb_params.h"
@@ -11,7 +12,7 @@ namespace marker_model {
 class base;
 }
 
-class config {
+class STELLA_VSLAM_API config {
 public:
     //! Constructor
     explicit config(const stella_vslam_bfx::config_settings& settings);

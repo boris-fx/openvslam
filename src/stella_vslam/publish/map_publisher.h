@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_PUBLISH_MAP_PUBLISHER_H
 #define STELLA_VSLAM_PUBLISH_MAP_PUBLISHER_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 
 #include <mutex>
@@ -18,7 +19,7 @@ class map_database;
 
 namespace publish {
 
-class map_publisher {
+class STELLA_VSLAM_API map_publisher {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
