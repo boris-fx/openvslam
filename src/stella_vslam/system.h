@@ -90,6 +90,9 @@ public:
     //! Get the frame publisher
     const std::shared_ptr<publish::frame_publisher> get_frame_publisher() const;
 
+    //! Get the current frame
+    const data::frame& get_current_frame() const;
+
     //-----------------------------------------
     // module management
 
