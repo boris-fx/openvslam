@@ -5,6 +5,7 @@
 #include "stella_vslam/type.h"
 #include "stella_vslam/data/bow_vocabulary_fwd.h"
 
+#include <fstream>
 #include <string>
 #include <thread>
 #include <memory>
@@ -57,6 +58,9 @@ public:
     //! Constructor
     system(const std::shared_ptr<config>& cfg, const std::string& vocab_file_path);
 
+#if !defined(USE_DBOW2)
+    system(const std::shared_ptr<config>& cfg, std::ifstream & vocab_data);
+#endif
     //! Destructor
     ~system();
 
@@ -187,6 +191,9 @@ public:
     double depthmap_factor_ = 1.0;
 
 private:
+    //! Common constructor code
+    void init(const config *);
+
     //! Check reset request of the system
     void check_reset_request();
 

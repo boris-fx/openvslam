@@ -41,6 +41,44 @@ double get_depthmap_factor(const camera::base* camera, const stella_vslam_bfx::c
     }
     return depthmap_factor;
 }
+
+data::bow_vocabulary * loadOrbVocabulary(std::ifstream & str)
+{
+    auto * bow_vocab = new fbow::Vocabulary();
+    bow_vocab->fromStream(str);
+    if (!bow_vocab->isValid()) {
+        spdlog::critical("wrong path to vocabulary");
+        delete bow_vocab;
+        bow_vocab = nullptr;
+        throw std::runtime_error("Vocabulary: invalid vocabulary");
+    }
+    return bow_vocab;
+}
+
+data::bow_vocabulary * loadOrbVocabulary(const std::string &vocab_file_path)
+{
+    spdlog::info("loading ORB vocabulary: {}", vocab_file_path);
+
+#ifdef USE_DBOW2
+    auto * bow_vocab = new data::bow_vocabulary();
+    try {
+        bow_vocab->loadFromBinaryFile(vocab_file_path);
+    }
+    catch (const std::exception&) {
+        spdlog::critical("wrong path to vocabulary");
+        delete bow_vocab;
+        bow_vocab = nullptr;
+        throw std::runtime_error("Vocabulary: invalid vocabulary");
+    }
+    return bow_vocab;
+#else
+    std::ifstream file(vocab_file_path,std::ios::binary);
+    if (!file)
+        throw std::runtime_error("Vocabulary::readFromFile could not open: "+ vocab_file_path);
+    return loadOrbVocabulary(file);
+#endif
+}
+
 } // namespace
 
 namespace stella_vslam {
@@ -51,6 +89,24 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
       undistort_prematches_(cfg->settings_.undistort_prematches_) {
     spdlog::debug("CONSTRUCT: system");
 
+    bow_vocab_ = loadOrbVocabulary(vocab_file_path);
+
+    init(cfg_.get());
+}
+
+system::system(const std::shared_ptr<config>& cfg, std::ifstream & vocab_data)
+    : cfg_(cfg), camera_(cfg->camera_), orb_params_(cfg->orb_params_),
+    use_orb_features_(cfg->settings_.use_orb_features_),
+    undistort_prematches_(cfg->settings_.undistort_prematches_) {
+    spdlog::debug("CONSTRUCT: system");
+
+    bow_vocab_ = loadOrbVocabulary(vocab_data);
+
+    init(cfg_.get());
+}
+
+void system::init(const config * cfg)
+{
     std::ostringstream message_stream;
 
     message_stream << std::endl;
@@ -67,33 +123,9 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     message_stream << std::endl;
 
     // show configuration
-    message_stream << *cfg_ << std::endl;
+    message_stream << *cfg << std::endl;
 
     spdlog::info(message_stream.str());
-
-    // load ORB vocabulary
-    spdlog::info("loading ORB vocabulary: {}", vocab_file_path);
-#ifdef USE_DBOW2
-    bow_vocab_ = new data::bow_vocabulary();
-    try {
-        bow_vocab_->loadFromBinaryFile(vocab_file_path);
-    }
-    catch (const std::exception&) {
-        spdlog::critical("wrong path to vocabulary");
-        delete bow_vocab_;
-        bow_vocab_ = nullptr;
-        exit(EXIT_FAILURE);
-    }
-#else
-    bow_vocab_ = new fbow::Vocabulary();
-    bow_vocab_->readFromFile(vocab_file_path);
-    if (!bow_vocab_->isValid()) {
-        spdlog::critical("wrong path to vocabulary");
-        delete bow_vocab_;
-        bow_vocab_ = nullptr;
-        exit(EXIT_FAILURE);
-    }
-#endif
 
     // database
     cam_db_ = new data::camera_database(camera_);
@@ -101,8 +133,8 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     bow_db_ = new data::bow_database(bow_vocab_);
 
     // frame and map publisher
-    frame_publisher_ = std::shared_ptr<publish::frame_publisher>(new publish::frame_publisher(cfg_, map_db_));
-    map_publisher_ = std::shared_ptr<publish::map_publisher>(new publish::map_publisher(cfg_, map_db_));
+    frame_publisher_ = std::make_shared<publish::frame_publisher>(cfg_, map_db_);
+    map_publisher_ = std::make_shared<publish::map_publisher>(cfg_, map_db_);
 
     // map I/O
     if (cfg_->settings_.map_format_ == stella_vslam::io::map_format_t::SQLite3) {
@@ -110,8 +142,8 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
         map_database_io_ = std::make_shared<io::map_database_io_sqlite3>();
 #else
         throw std::runtime_error("Map format: " +
-                stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]
-                + " is disabled");
+            stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]
+            + " is disabled");
 #endif
     }
     else if (cfg_->settings_.map_format_ == stella_vslam::io::map_format_t::Msgpack) {
@@ -119,7 +151,7 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
     }
     else {
         throw std::runtime_error("Invalid map format: " + 
-                stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]);
+            stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]);
     }
 
     // tracking module
@@ -220,8 +252,8 @@ void system::startup(const bool need_initialize) {
         tracker_->tracking_state_ = tracker_state_t::Lost;
     }
 
-    mapping_thread_ = std::unique_ptr<std::thread>(new std::thread(&stella_vslam::mapping_module::run, mapper_));
-    global_optimization_thread_ = std::unique_ptr<std::thread>(new std::thread(&stella_vslam::global_optimization_module::run, global_optimizer_));
+    mapping_thread_ = std::make_unique<std::thread>(&stella_vslam::mapping_module::run, mapper_);
+    global_optimization_thread_ = std::make_unique<std::thread>(&stella_vslam::global_optimization_module::run, global_optimizer_);
 }
 
 void system::shutdown() {
