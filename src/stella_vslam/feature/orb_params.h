@@ -28,7 +28,7 @@ struct orb_params {
     //! name (id for saving)
     const std::string name_;
 
-    const float scale_factor_ = 1.2;
+    const float scale_factor_ = 1.2f;
     const float log_scale_factor_ = std::log(1.2);
     const unsigned int num_levels_ = 8;
     const unsigned int ini_fast_thr_ = 20;
