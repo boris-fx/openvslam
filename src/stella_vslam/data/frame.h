@@ -44,6 +44,8 @@ class STELLA_VSLAM_API frame {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+    static void reset_next_id() { next_id_ = 0; }
+
     frame() = default;
 
     bool operator==(const frame& frm) { return this->id_ == frm.id_; }

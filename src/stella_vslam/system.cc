@@ -6,6 +6,7 @@
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/data/camera_database.h"
 #include "stella_vslam/data/common.h"
+#include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/frame_observation.h"
 #include "stella_vslam/data/orb_params_database.h"
 #include "stella_vslam/data/map_database.h"
@@ -126,6 +127,11 @@ void system::init(const config * cfg)
     message_stream << *cfg << std::endl;
 
     spdlog::info(message_stream.str());
+
+    // reset static data
+    data::frame::reset_next_id();
+    data::keyframe::reset_next_id();
+    data::landmark::reset_next_id();
 
     // database
     cam_db_ = new data::camera_database(camera_);

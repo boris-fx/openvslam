@@ -25,6 +25,8 @@ class STELLA_VSLAM_API landmark {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+    static void reset_next_id() { next_id_ = 0; }
+
     //! Data structure for sorting keyframes by ID for consistent results in local map cleaning/BA
     using observations_t = std::map<std::weak_ptr<keyframe>, unsigned int, id_less<std::weak_ptr<keyframe>>>;
 

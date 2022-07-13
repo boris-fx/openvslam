@@ -44,6 +44,8 @@ class bow_database;
 class STELLA_VSLAM_API keyframe : public std::enable_shared_from_this<keyframe> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    
+    static void reset_next_id() { next_id_ = 0; }
 
     /**
      * Constructor for building from a frame
