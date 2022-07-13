@@ -177,7 +177,7 @@ private:
     id_ordered_set<std::weak_ptr<keyframe>> loop_edges_;
 
     //! need mutex for access to connections
-    mutable std::mutex mtx_;
+    mutable std::recursive_mutex mtx_;
 };
 
 } // namespace data

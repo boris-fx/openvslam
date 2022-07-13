@@ -17,7 +17,7 @@ graph_node::graph_node(std::shared_ptr<keyframe>& keyfrm, const bool spanning_pa
     : owner_keyfrm_(keyfrm), spanning_parent_is_not_set_(spanning_parent_is_not_set) {}
 
 void graph_node::add_connection(const std::shared_ptr<keyframe>& keyfrm, const unsigned int weight) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     bool need_update = false;
     if (!connected_keyfrms_and_weights_.count(keyfrm)) {
         // if `keyfrm` not exists
@@ -36,7 +36,7 @@ void graph_node::add_connection(const std::shared_ptr<keyframe>& keyfrm, const u
 }
 
 void graph_node::erase_connection(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     bool need_update = false;
     if (connected_keyfrms_and_weights_.count(keyfrm)) {
         connected_keyfrms_and_weights_.erase(keyfrm);
@@ -138,7 +138,7 @@ void graph_node::update_connections() {
     }
 
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
 
         connected_keyfrms_and_weights_ = decltype(connected_keyfrms_and_weights_)(keyfrm_weights.begin(), keyfrm_weights.end());
 
@@ -156,7 +156,7 @@ void graph_node::update_connections() {
 }
 
 void graph_node::update_covisibility_orders() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     update_covisibility_orders_impl();
 }
 
@@ -182,7 +182,7 @@ void graph_node::update_covisibility_orders_impl() {
 }
 
 std::set<std::shared_ptr<keyframe>> graph_node::get_connected_keyframes() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::set<std::shared_ptr<keyframe>> keyfrms;
 
     for (const auto& keyfrm_and_weight : connected_keyfrms_and_weights_) {
@@ -193,7 +193,7 @@ std::set<std::shared_ptr<keyframe>> graph_node::get_connected_keyframes() const 
 }
 
 std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::vector<std::shared_ptr<keyframe>> covisibilities;
 
     for (const auto& covisibility : ordered_covisibilities_) {
@@ -206,7 +206,7 @@ std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities() const {
 }
 
 std::vector<std::shared_ptr<keyframe>> graph_node::get_top_n_covisibilities(const unsigned int num_covisibilities) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::vector<std::shared_ptr<keyframe>> covisibilities;
     unsigned int i = 0;
     for (const auto& covisibility : ordered_covisibilities_) {
@@ -223,7 +223,7 @@ std::vector<std::shared_ptr<keyframe>> graph_node::get_top_n_covisibilities(cons
 }
 
 std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities_over_weight(const unsigned int weight) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     if (ordered_covisibilities_.empty()) {
         return std::vector<std::shared_ptr<keyframe>>();
@@ -252,7 +252,7 @@ std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities_over_weigh
 }
 
 unsigned int graph_node::get_weight(const std::shared_ptr<keyframe>& keyfrm) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (connected_keyfrms_and_weights_.count(keyfrm)) {
         return connected_keyfrms_and_weights_.at(keyfrm);
     }
@@ -262,33 +262,33 @@ unsigned int graph_node::get_weight(const std::shared_ptr<keyframe>& keyfrm) con
 }
 
 void graph_node::set_spanning_parent(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_parent_ = keyfrm;
 }
 
 std::shared_ptr<keyframe> graph_node::get_spanning_parent() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return spanning_parent_.lock();
 }
 
 void graph_node::change_spanning_parent(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_parent_ = keyfrm;
     keyfrm->graph_node_->add_spanning_child(owner_keyfrm_.lock());
 }
 
 void graph_node::add_spanning_child(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_children_.insert(keyfrm);
 }
 
 void graph_node::erase_spanning_child(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_children_.erase(keyfrm);
 }
 
 void graph_node::recover_spanning_connections() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     // 1. find new parents for my children
 
@@ -352,7 +352,7 @@ void graph_node::recover_spanning_connections() {
 }
 
 std::set<std::shared_ptr<keyframe>> graph_node::get_spanning_children() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::set<std::shared_ptr<keyframe>> locked_spanning_children;
     for (const auto& keyfrm : spanning_children_) {
         locked_spanning_children.insert(keyfrm.lock());
@@ -361,19 +361,19 @@ std::set<std::shared_ptr<keyframe>> graph_node::get_spanning_children() const {
 }
 
 bool graph_node::has_spanning_child(const std::shared_ptr<keyframe>& keyfrm) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return static_cast<bool>(spanning_children_.count(keyfrm));
 }
 
 void graph_node::add_loop_edge(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     loop_edges_.insert(keyfrm);
     // cannot erase loop edges
     owner_keyfrm_.lock()->set_not_to_be_erased();
 }
 
 std::set<std::shared_ptr<keyframe>> graph_node::get_loop_edges() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::set<std::shared_ptr<keyframe>> locked_loop_edges;
     for (const auto& keyfrm : loop_edges_) {
         locked_loop_edges.insert(keyfrm.lock());
@@ -382,7 +382,7 @@ std::set<std::shared_ptr<keyframe>> graph_node::get_loop_edges() const {
 }
 
 bool graph_node::has_loop_edge() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return !loop_edges_.empty();
 }
 
