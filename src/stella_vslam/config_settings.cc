@@ -195,6 +195,7 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     os << "Initializer\n";
     os << "\tUse fixed seed: " << settings.use_fixed_seed_ << std::endl;
     os << "\tNum ransac iterations: " << settings.num_ransac_iterations_ << std::endl;
+    os << "\tMin num valid pts: " << settings.min_num_valid_pts_ << std::endl;
     os << "\tMin num triangulated pts: " << settings.min_num_triangulated_pts_ << std::endl;
     os << "\tNum ba iterations: " << settings.num_ba_iterations_ << std::endl;
     os << "\tParallax deg threshold: " << settings.parallax_deg_threshold_ << std::endl;

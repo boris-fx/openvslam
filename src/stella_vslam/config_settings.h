@@ -182,6 +182,7 @@ public:
     // Solve/initializer settings
     bool use_fixed_seed_ = true;
     unsigned num_ransac_iterations_ = 100;
+    unsigned min_num_valid_pts_ = 50;
     unsigned min_num_triangulated_pts_ = 50;
     unsigned num_ba_iterations_ = 20;
     float parallax_deg_threshold_ = 1.0f;

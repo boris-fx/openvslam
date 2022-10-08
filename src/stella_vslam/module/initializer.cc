@@ -20,6 +20,7 @@ initializer::initializer(data::map_database* map_db, data::bow_database* bow_db,
                          const stella_vslam_bfx::config_settings& settings)
     : map_db_(map_db), bow_db_(bow_db),
       num_ransac_iters_(settings.num_ransac_iterations_),
+      min_num_valid_pts_(settings.min_num_valid_pts_),
       min_num_triangulated_(settings.min_num_triangulated_pts_),
       parallax_deg_thr_(settings.parallax_deg_threshold_),
       reproj_err_thr_(settings.reprojection_error_threshold_),
@@ -127,17 +128,17 @@ void initializer::create_initializer(data::frame& curr_frm) {
         case camera::model_type_t::Perspective:
         case camera::model_type_t::Fisheye:
         case camera::model_type_t::RadialDivision: {
-            initializer_ = std::unique_ptr<initialize::perspective>(new initialize::perspective(init_frm_,
-                                                                                                num_ransac_iters_, min_num_triangulated_,
-                                                                                                parallax_deg_thr_, reproj_err_thr_,
-                                                                                                use_fixed_seed_));
+            initializer_ = std::unique_ptr<initialize::perspective>(
+                new initialize::perspective(
+                    init_frm_, num_ransac_iters_, min_num_triangulated_, min_num_valid_pts_,
+                    parallax_deg_thr_, reproj_err_thr_, use_fixed_seed_));
             break;
         }
         case camera::model_type_t::Equirectangular: {
-            initializer_ = std::unique_ptr<initialize::bearing_vector>(new initialize::bearing_vector(init_frm_,
-                                                                                                      num_ransac_iters_, min_num_triangulated_,
-                                                                                                      parallax_deg_thr_, reproj_err_thr_,
-                                                                                                      use_fixed_seed_));
+            initializer_ = std::unique_ptr<initialize::bearing_vector>(
+                new initialize::bearing_vector(
+                    init_frm_, num_ransac_iters_, min_num_triangulated_, min_num_valid_pts_,
+                    parallax_deg_thr_, reproj_err_thr_, use_fixed_seed_));
             break;
         }
     }
@@ -155,7 +156,7 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm) {
     }
     num_matches += stella_vslam_bfx::get_frames_prematches(init_frm_, curr_frm, prev_matched_coords_, init_matches_);
 
-    if (num_matches < min_num_triangulated_) {
+    if (num_matches < min_num_valid_pts_) {
         // rebuild the initializer with the next frame
         reset();
         return false;
