@@ -80,6 +80,10 @@ foreach(EXECUTABLE_TARGET IN LISTS EXECUTABLE_TARGETS)
 
     # PangolinViewer is used on a priority basis
     if(USE_PANGOLIN_VIEWER)
+	
+		add_compile_definitions(HAVE_GLEW)
+		add_compile_definitions(USE_EIGEN)
+
         # Set macro flag
         target_compile_definitions(${EXECUTABLE_TARGET} PRIVATE USE_PANGOLIN_VIEWER)
         # Link viewer

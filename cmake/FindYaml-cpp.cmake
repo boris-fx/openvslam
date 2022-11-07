@@ -14,7 +14,7 @@
 #                            search for yaml-cpp libraries.
 
 # Find include directory
-string(REPLACE ":" ";" YAMLCPP_INCLUDE_DIR_HINTS "$ENV{YAMLCPP_INCLUDE_DIR_HINTS}")
+string(REPLACE ":" ";" YAMLCPP_INCLUDE_DIR_HINTS "${YAMLCPP_INCLUDE_DIR_HINTS}")
 string(REPLACE ":" ";" CPATH "$ENV{CPATH}")
 string(REPLACE ":" ";" C_INCLUDE_PATH "$ENV{C_INCLUDE_PATH}")
 string(REPLACE ":" ";" CPLUS_INCLUDE_PATH "$ENV{CPLUS_INCLUDE_PATH}")
@@ -27,12 +27,11 @@ list(APPEND YAMLCPP_CHECK_INCLUDE_DIRS
         /usr/local/include
         /usr/local/opt/include
         /usr/include)
-find_path(YAMLCPP_INCLUDE_DIRS NAMES yaml.h
-        PATH_SUFFIXES yaml-cpp
+find_path(YAMLCPP_INCLUDE_DIRS NAMES yaml-cpp/yaml.h
         PATHS ${YAMLCPP_CHECK_INCLUDE_DIRS})
 
 # Find library
-string(REPLACE ":" ";" YAMLCPP_LIBRARY_DIR_HINTS "$ENV{YAMLCPP_LIBRARY_DIR_HINTS}")
+string(REPLACE ":" ";" YAMLCPP_LIBRARY_DIR_HINTS "${YAMLCPP_LIBRARY_DIR_HINTS}")
 string(REPLACE ":" ";" LIBRARY_PATH "$ENV{LIBRARY_PATH}")
 string(REPLACE ":" ";" LD_LIBRARY_PATH "$ENV{LD_LIBRARY_PATH}")
 list(APPEND YAMLCPP_CHECK_LIBRARY_DIRS

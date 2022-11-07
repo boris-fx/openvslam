@@ -11,6 +11,8 @@
 
 #include <pangolin/pangolin.h>
 
+#include "exports.h"
+
 namespace stella_vslam {
 
 class config;
@@ -25,7 +27,7 @@ class map_publisher;
 
 namespace pangolin_viewer {
 
-class viewer {
+class PANGOLIN_VIEWER_API viewer {
 public:
     /**
      * Constructor

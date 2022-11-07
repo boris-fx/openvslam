@@ -177,7 +177,8 @@ target_include_directories(${PROJECT_NAME}
                            "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/>"
                            "$<INSTALL_INTERFACE:include/stella_vslam/3rd/json/include>"
                            "$<INSTALL_INTERFACE:include/stella_vslam/3rd/spdlog/include>"
-                           "$<INSTALL_INTERFACE:include/>")
+                           "$<INSTALL_INTERFACE:include/>"
+						   ${YAMLCPP_INCLUDE_DIRS})
 
 # Link to required libraries
 target_link_libraries(${PROJECT_NAME}
@@ -208,7 +209,7 @@ if (USE_SQLITE)
 endif()
 
 if(BUILD_EXAMPLES)
-    target_link_libraries(${PROJECT_NAME} PUBLIC yaml-cpp)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${YAMLCPP_LIBRARIES})
 endif()
 
 # ----- Install configuration -----

@@ -12,7 +12,7 @@ namespace data {
 
 class keyframe;
 
-class graph_node {
+class STELLA_VSLAM_API graph_node {
 public:
     /**
      * Constructor
