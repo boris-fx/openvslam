@@ -49,7 +49,7 @@ namespace se3 {
  /** 
  * \brief Reprojection error based on 3 vertices: Camera, 3DPoint, Camera intrinsics
  *
- * Used perspective_reproj_edge as a base. Some functions are identical: read(), write()
+ * Used mono_perspective_reproj_edge as a base. Some functions are identical: read(), write(), depth_is_positive()
  */
 class bfx_mono_perspective_reproj_tri_edge final : public g2o::BaseTertiaryEdge<2, Vec2_t, landmark_vertex, shot_vertex, bfx_camera_intrinsics_vertex> {
 public:

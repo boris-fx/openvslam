@@ -32,6 +32,11 @@ enum class color_order_t {
 };
 const std::array<std::string, 3> color_order_to_string = {{"Gray", "RGB", "BGR"}};
 
+struct autocalibration_params {
+    bool optimise_focal_length;
+
+};
+
 } // namespace camera
 
 // NB stella_vslam doesn't actually use the enums below; they

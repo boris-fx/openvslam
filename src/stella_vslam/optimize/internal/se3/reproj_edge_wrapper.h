@@ -59,7 +59,7 @@ inline reproj_edge_wrapper<T>::reproj_edge_wrapper(const std::shared_ptr<T>& sho
                                                    const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
                                                    const float inv_sigma_sq, const float sqrt_chi_sq, const bool use_huber_loss)
     : camera_(shot->camera_), shot_(shot), lm_(lm), idx_(idx), is_monocular_(obs_x_right < 0) {
-    // 拘束条件を設定
+    // 拘束条件を設定 - Set constraints
     switch (camera_->model_type_) {
         case camera::model_type_t::Perspective: {
             auto c = static_cast<camera::perspective*>(camera_);
