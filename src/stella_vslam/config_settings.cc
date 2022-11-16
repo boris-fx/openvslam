@@ -3,14 +3,22 @@
 
 namespace stella_vslam_bfx {
 
+std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration)
+{
+    os << "\tOptimise focal length: " << (autocalibration.optimise_focal_length ? "yes" : "no")
+       << std::endl;
+    return os;
+}
+
 config_settings::config_settings(stella_vslam::camera::model_type_t camera_model,
                                     stella_vslam::camera::setup_type_t camera_setup,
                                     stella_vslam::camera::color_order_t colour_order,
+                                    autocalibration_parameters autocalibration,
                                     int cols, int rows, double fps, double fx, double fy,
                                     double cx, double cy, double p1, double p2,
                                     double k1, double k2, double k3) :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
-    cols_(cols), rows_(rows), fps_(fps)
+    autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
 {
     if (camera_model != stella_vslam::camera::model_type_t::Perspective)
         throw std::runtime_error("Incorrect camera settings for type");
@@ -29,11 +37,12 @@ config_settings::config_settings(stella_vslam::camera::model_type_t camera_model
 config_settings::config_settings(stella_vslam::camera::model_type_t camera_model,
                                     stella_vslam::camera::setup_type_t camera_setup,
                                     stella_vslam::camera::color_order_t colour_order,
+                                    autocalibration_parameters autocalibration,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
                                     double k1, double k2, double k3, double k4) :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
-    cols_(cols), rows_(rows), fps_(fps)
+    autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
 {
     if (camera_model != stella_vslam::camera::model_type_t::Fisheye)
         throw std::runtime_error("Incorrect camera settings for type");
@@ -51,11 +60,12 @@ config_settings::config_settings(stella_vslam::camera::model_type_t camera_model
 config_settings::config_settings(stella_vslam::camera::model_type_t camera_model,
                                     stella_vslam::camera::setup_type_t camera_setup,
                                     stella_vslam::camera::color_order_t colour_order,
+                                    autocalibration_parameters autocalibration,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
                                     double distortion) :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
-    cols_(cols), rows_(rows), fps_(fps)
+    autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
 {
     if (camera_model != stella_vslam::camera::model_type_t::RadialDivision)
         throw std::runtime_error("Incorrect camera settings for type");
@@ -91,6 +101,7 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     os << "\tColor order: " <<
         stella_vslam::camera::color_order_to_string[static_cast<unsigned>(settings.colour_order_)]
         << std::endl;
+    os << settings.autocalibration_parameters_;
 
     os << "\tCols: " << settings.cols_ << std::endl;
     os << "\tRows: " << settings.rows_ << std::endl;

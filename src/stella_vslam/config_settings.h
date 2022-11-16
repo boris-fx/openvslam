@@ -32,11 +32,6 @@ enum class color_order_t {
 };
 const std::array<std::string, 3> color_order_to_string = {{"Gray", "RGB", "BGR"}};
 
-struct autocalibration_params {
-    bool optimise_focal_length;
-
-};
-
 } // namespace camera
 
 // NB stella_vslam doesn't actually use the enums below; they
@@ -65,6 +60,13 @@ namespace io {
 
 namespace stella_vslam_bfx {
 
+struct STELLA_VSLAM_API autocalibration_parameters {
+   
+    bool optimise_focal_length;
+
+    friend std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration);
+};
+
 class STELLA_VSLAM_API config_settings {
 public:
 
@@ -72,6 +74,7 @@ public:
     config_settings(stella_vslam::camera::model_type_t camera_model,
                     stella_vslam::camera::setup_type_t camera_setup,
                     stella_vslam::camera::color_order_t colour_order,
+                    autocalibration_parameters autocalibration,
                     int cols, int rows, double fps, double fx, double fy,
                     double cx, double cy, double p1, double p2,
                     double k1, double k2, double k3);
@@ -80,6 +83,7 @@ public:
     config_settings(stella_vslam::camera::model_type_t camera_model,
                     stella_vslam::camera::setup_type_t camera_setup,
                     stella_vslam::camera::color_order_t colour_order,
+                    autocalibration_parameters autocalibration,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
                     double k1, double k2, double k3, double k4);
@@ -88,6 +92,7 @@ public:
     config_settings(stella_vslam::camera::model_type_t camera_model,
                     stella_vslam::camera::setup_type_t camera_setup,
                     stella_vslam::camera::color_order_t colour_order,
+                    autocalibration_parameters autocalibration,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
                     double distortion);
@@ -109,6 +114,7 @@ public:
     stella_vslam::camera::model_type_t camera_model_;
     stella_vslam::camera::setup_type_t camera_setup_;
     stella_vslam::camera::color_order_t colour_order_;
+    autocalibration_parameters autocalibration_parameters_;
     int cols_;
     int rows_;
     double fps_;

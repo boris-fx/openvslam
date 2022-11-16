@@ -11,10 +11,12 @@ namespace stella_vslam {
 namespace camera {
 
 radial_division::radial_division(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
+                                 const stella_vslam_bfx::autocalibration_parameters& autocalibration,
                                  const unsigned int cols, const unsigned int rows, const double fps,
                                  const double fx, const double fy, const double cx, const double cy,
                                  const double distortion, const double focal_x_baseline, const double depth_thr)
-    : base(name, setup_type, model_type_t::RadialDivision, color_order, cols, rows, fps, focal_x_baseline, focal_x_baseline / fx, depth_thr),
+    : base(name, setup_type, model_type_t::RadialDivision, color_order, autocalibration,
+      cols, rows, fps, focal_x_baseline, focal_x_baseline / fx, depth_thr),
       fx_(fx), fy_(fy), cx_(cx), cy_(cy), fx_inv_(1.0 / fx), fy_inv_(1.0 / fy),
       distortion_(distortion) {
     spdlog::debug("CONSTRUCT: camera::radial_division");
@@ -30,7 +32,7 @@ radial_division::radial_division(const std::string& name, const setup_type_t& se
 }
 
 radial_division::radial_division(const stella_vslam_bfx::config_settings& settings)
-    : radial_division("", load_setup_type(settings), load_color_order(settings),
+    : radial_division("", load_setup_type(settings), load_color_order(settings), settings.autocalibration_parameters_,
                       settings.cols_, settings.rows_, settings.fps_,
                       settings.radial_division_settings_.fx_, settings.radial_division_settings_.fy_,
                       settings.radial_division_settings_.cx_, settings.radial_division_settings_.cy_,
@@ -157,6 +159,7 @@ nlohmann::json radial_division::to_json() const {
         {"model_type", get_model_type_string()},
         {"setup_type", get_setup_type_string()},
         {"color_order", get_color_order_string()},
+        {"autocalibration.optimise_focal_length", autocalibration_parameters_.optimise_focal_length},
         {"cols", cols_},
         {"rows", rows_},
         {"fps", fps_},

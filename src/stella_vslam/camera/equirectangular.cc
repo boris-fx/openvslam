@@ -8,7 +8,8 @@ namespace camera {
 
 equirectangular::equirectangular(const std::string& name, const color_order_t& color_order,
                                  const unsigned int cols, const unsigned int rows, const double fps)
-    : base(name, setup_type_t::Monocular, model_type_t::Equirectangular, color_order, cols, rows, fps, 0.0, 0.0, 0.0) {
+    : base(name, setup_type_t::Monocular, model_type_t::Equirectangular,
+      color_order, stella_vslam_bfx::autocalibration_parameters(), cols, rows, fps, 0.0, 0.0, 0.0) {
     spdlog::debug("CONSTRUCT: camera::equirectangular");
 
     img_bounds_ = compute_image_bounds();
@@ -82,6 +83,7 @@ nlohmann::json equirectangular::to_json() const {
     return {{"model_type", get_model_type_string()},
             {"setup_type", get_setup_type_string()},
             {"color_order", get_color_order_string()},
+            {"autocalibration.optimise_focal_length", autocalibration_parameters_.optimise_focal_length},
             {"cols", cols_},
             {"rows", rows_},
             {"fps", fps_},

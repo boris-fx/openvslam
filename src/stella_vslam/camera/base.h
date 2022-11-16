@@ -31,7 +31,8 @@ struct image_bounds {
 class base {
 public:
     //! Constructor
-    base(const std::string& name, const setup_type_t setup_type, const model_type_t model_type, const color_order_t color_order,
+    base(const std::string& name, const setup_type_t setup_type, const model_type_t model_type,
+         const color_order_t color_order, stella_vslam_bfx::autocalibration_parameters autocalibration,
          const unsigned int cols, const unsigned int rows, const double fps,
          const double focal_x_baseline, const double true_baseline, const double depth_thr,
          const unsigned int num_grid_cols = 64, const unsigned int num_grid_rows = 48);
@@ -68,6 +69,8 @@ public:
     static color_order_t load_color_order(const stella_vslam_bfx::config_settings& settings);
     //! Load color order from string
     static color_order_t load_color_order(const std::string& color_order_str);
+
+    stella_vslam_bfx::autocalibration_parameters autocalibration_parameters_;
 
     //! Show common parameters along camera models
     void show_common_parameters() const;

@@ -31,6 +31,112 @@
 namespace stella_vslam {
 namespace optimize {
 
+/** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
+internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
+                                                                        std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
+{
+    // We don't have access to the camera database, but we can get the shared camera from a keyframe
+    camera::base* camera(nullptr);
+    for (const auto& keyfrm : keyfrms) {
+        if (!keyfrm) {
+            continue;
+        }
+        if (keyfrm->will_be_erased()) {
+            continue;
+        }
+        camera = keyfrm->camera_;
+        break;
+    }
+
+    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
+        return nullptr;
+
+    double focal_length_x_pixels;
+    switch (camera->model_type_) {
+        case camera::model_type_t::Perspective: {
+            auto c = static_cast<camera::perspective*>(camera);
+            focal_length_x_pixels = c->fx_;
+            break;
+        }
+        case camera::model_type_t::Fisheye: {
+            auto c = static_cast<camera::fisheye*>(camera);
+            focal_length_x_pixels = c->fx_;
+            break;
+        }
+        case camera::model_type_t::RadialDivision: {
+            auto c = static_cast<camera::radial_division*>(camera);
+            focal_length_x_pixels = c->fx_;
+            break;
+        }
+        default:
+            return nullptr;
+    }
+
+    // Convert the camera intrinsics to a g2o vertex
+    auto vtx = new internal::bfx_camera_intrinsics_vertex();
+
+    const auto vtx_id = *offset;
+    (*offset)++;
+
+    vtx->setId(vtx_id);
+    vtx->setEstimate(focal_length_x_pixels);
+    vtx->setFixed(false);
+    vtx->setMarginalized(false); // "this node is marginalized out during the optimization"
+                                 // This is set to false for camera positions, true for points
+
+    return vtx;
+}
+
+/** Populate the shared keyframe camera from a camera intrinsics vertex **/
+bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms,
+                                 internal::bfx_camera_intrinsics_vertex *vertex)
+{
+    if (!vertex)
+        return false;
+
+    // We don't have access to the camera database, but we can get the shared camera from a keyframe
+    camera::base* camera(nullptr);
+    for (const auto& keyfrm : keyfrms) {
+        if (!keyfrm) {
+            continue;
+        }
+        if (keyfrm->will_be_erased()) {
+            continue;
+        }
+        camera = keyfrm->camera_;
+        break;
+    }
+
+    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
+        return false; // Nothing to do
+
+    double focal_length_x_pixels = vertex->estimate();
+    switch (camera->model_type_) {
+        case camera::model_type_t::Perspective: {
+            camera::perspective* c = static_cast<camera::perspective*>(camera);
+            double par = c->fy_ / c->fx_;
+            c->fx_ = focal_length_x_pixels;
+            c->fy_ = focal_length_x_pixels * par;
+            return true;
+        }
+        case camera::model_type_t::Fisheye: {
+            auto c = static_cast<camera::fisheye*>(camera);
+            double par = c->fy_ / c->fx_;
+            c->fx_ = focal_length_x_pixels;
+            c->fy_ = focal_length_x_pixels * par;
+            return true;
+        }
+        case camera::model_type_t::RadialDivision: {
+            auto c = static_cast<camera::radial_division*>(camera);
+            double par = c->fy_ / c->fx_;
+            c->fx_ = focal_length_x_pixels;
+            c->fy_ = focal_length_x_pixels * par;
+            return true;
+        }
+    }
+    return false;
+}
+
 void optimize_impl(g2o::SparseOptimizer& optimizer,
                    std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
                    std::vector<std::shared_ptr<data::landmark>>& lms,
@@ -39,6 +145,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
                    internal::se3::shot_vertex_container& keyfrm_vtx_container,
                    internal::landmark_vertex_container& lm_vtx_container,
                    internal::marker_vertex_container& marker_vtx_container,
+                   internal::bfx_camera_intrinsics_vertex* camera_intrinsics_vtx,
                    unsigned int num_iter,
                    bool use_huber_kernel,
                    bool* const force_stop_flag) {
@@ -54,6 +161,10 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
     if (force_stop_flag) {
         optimizer.setForceStopFlag(force_stop_flag);
     }
+
+    // If there's a camera intrinsics g2o vertex, add it to the optimizer
+    if (camera_intrinsics_vtx)
+        optimizer.addVertex(camera_intrinsics_vtx);
 
     // 3. Convert each of the keyframe to the g2o vertex, then set it to the optimizer
 
@@ -120,7 +231,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
             const auto sqrt_chi_sq = (keyfrm->camera_->setup_type_ == camera::setup_type_t::Monocular)
                                          ? sqrt_chi_sq_2D
                                          : sqrt_chi_sq_3D;
-            auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, lm, lm_vtx,
+            auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, lm, lm_vtx, camera_intrinsics_vtx,
                                                         idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
                                                         inv_sigma_sq, sqrt_chi_sq, use_huber_kernel);
             reproj_edge_wraps.push_back(reproj_edge_wrap);
@@ -162,7 +273,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
                 const auto& undist_pt = mkr_2d.undist_corners_.at(corner_idx);
                 const float x_right = -1.0;
                 const float inv_sigma_sq = 1.0;
-                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, nullptr, corner_vtx,
+                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, nullptr, corner_vtx, camera_intrinsics_vtx,
                                                             0, undist_pt.x, undist_pt.y, x_right,
                                                             inv_sigma_sq, 0.0, false);
                 reproj_edge_wraps.push_back(reproj_edge_wrap);
@@ -198,10 +309,13 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     internal::landmark_vertex_container lm_vtx_container(vtx_id_offset, lms.size());
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
+    // Camera intrinsics vertex
+    internal::bfx_camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
 
     g2o::SparseOptimizer optimizer;
 
-    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container, marker_vtx_container,
+    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
+                  marker_vtx_container, camera_intrinsics_vtx,
                   num_iter_, use_huber_kernel_, force_stop_flag);
 
     if (force_stop_flag && *force_stop_flag) {
@@ -209,6 +323,8 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     }
 
     // 6. Extract the result
+
+    bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
@@ -259,13 +375,16 @@ bool global_bundle_adjuster::optimize(std::unordered_set<unsigned int>& optimize
     internal::landmark_vertex_container lm_vtx_container(vtx_id_offset, lms.size());
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
+    // Camera intrinsics vertex
+    internal::bfx_camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
 
     g2o::SparseOptimizer optimizer;
     auto terminateAction = new terminate_action;
     terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
-    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container, marker_vtx_container,
+    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
+                  marker_vtx_container, camera_intrinsics_vtx,
                   num_iter_, use_huber_kernel_, force_stop_flag);
 
     if (force_stop_flag && *force_stop_flag && !terminateAction->stopped_by_terminate_action_) {
@@ -273,6 +392,8 @@ bool global_bundle_adjuster::optimize(std::unordered_set<unsigned int>& optimize
     }
 
     // 6. Extract the result
+
+    bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {

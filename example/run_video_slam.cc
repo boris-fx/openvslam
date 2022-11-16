@@ -82,6 +82,9 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     int rows = camera_node["rows"].as<unsigned int>();
     double fps = camera_node["fps"].as<double>();
     
+    stella_vslam_bfx::autocalibration_parameters autocalibration;
+    autocalibration.optimise_focal_length = true;
+
     switch (camera_model)
     {
         case stella_vslam::camera::model_type_t::Perspective:
@@ -97,7 +100,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double k3 = camera_node["k3"].as<double>();
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
-                                            colour_order, cols, rows, fps,
+                                                             colour_order, autocalibration, cols, rows, fps,
                                             fx, fy, cx, cy, p1, p2, k1, k2, k3);
             break;
         }
@@ -113,7 +116,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double k4 = camera_node["k4"].as<double>();
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
-                                            colour_order, cols, rows, fps,
+                                                             colour_order, autocalibration, cols, rows, fps,
                                             fx, fy, cx, cy, k1, k2, k3, k4);
             break;
         }
@@ -126,7 +129,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double d = camera_node["distortion"].as<double>();
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
-                                            colour_order, cols, rows, fps,
+                                                             colour_order, autocalibration, cols, rows, fps,
                                             fx, fy, cx, cy, d);
             break;
         }
