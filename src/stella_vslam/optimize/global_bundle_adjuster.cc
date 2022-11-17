@@ -31,6 +31,55 @@
 namespace stella_vslam {
 namespace optimize {
 
+/** Populate the shared keyframe camera from a camera intrinsics vertex **/
+struct focal_length_from_keyframes {
+    double *fx = nullptr;
+    double *fy = nullptr;
+    stella_vslam_bfx::autocalibration_parameters* autocalibration_params = nullptr;
+
+    focal_length_from_keyframes(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
+    {
+        // Get the shared camera from a keyframe
+        camera::base* camera(nullptr);
+        for (const auto& keyfrm : keyfrms) {
+            if (!keyfrm) {
+                continue;
+            }
+            if (keyfrm->will_be_erased()) {
+                continue;
+            }
+            camera = keyfrm->camera_;
+            break;
+        }
+
+        if (!camera)
+            return;
+
+        autocalibration_params = &camera->autocalibration_parameters_;
+
+        switch (camera->model_type_) {
+            case camera::model_type_t::Perspective: {
+                auto c = static_cast<camera::perspective*>(camera);
+                fx = &c->fx_;
+                fy = &c->fy_;
+                break;
+            }
+            case camera::model_type_t::Fisheye: {
+                auto c = static_cast<camera::fisheye*>(camera);
+                fx = &c->fx_;
+                fy = &c->fy_;
+                break;
+            }
+            case camera::model_type_t::RadialDivision: {
+                auto c = static_cast<camera::radial_division*>(camera);
+                fx = &c->fx_;
+                fy = &c->fy_;
+                break;
+            }
+        }
+    }
+};
+   
 /** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
 internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
                                                                         std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
@@ -79,7 +128,11 @@ internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const st
     (*offset)++;
 
     vtx->setId(vtx_id);
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    vtx->setEstimate(internal::bfx_camera_intrinsics_vertex_type(focal_length_x_pixels, 0.0, 0.0));
+#else
     vtx->setEstimate(focal_length_x_pixels);
+#endif
     vtx->setFixed(false);
     vtx->setMarginalized(false); // "this node is marginalized out during the optimization"
                                  // This is set to false for camera positions, true for points
@@ -110,7 +163,12 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
     if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
         return false; // Nothing to do
 
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    double focal_length_x_pixels = vertex->estimate()(0);
+#else
     double focal_length_x_pixels = vertex->estimate();
+#endif
+
     switch (camera->model_type_) {
         case camera::model_type_t::Perspective: {
             camera::perspective* c = static_cast<camera::perspective*>(camera);
@@ -151,10 +209,21 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
                    bool* const force_stop_flag) {
     // 2. Construct an optimizer
 
-    std::unique_ptr<g2o::BlockSolverBase> block_solver;
-    auto linear_solver = g2o::make_unique<g2o::G2O_LINEAR_SOLVER_CLASS<g2o::BlockSolver_6_3::PoseMatrixType>>();
-    block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
-    auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+    g2o::OptimizationAlgorithmLevenberg* algorithm(nullptr);
+    // Block solver takes ownership of linear_solver
+    // algorithm takes ownership of block_solver
+    if (camera_intrinsics_vtx) {
+        std::unique_ptr<g2o::BlockSolverBase> block_solver;
+        auto linear_solver = g2o::make_unique<g2o::G2O_LINEAR_SOLVER_CLASS<g2o::BlockSolverX::PoseMatrixType>>();
+        block_solver = g2o::make_unique<g2o::BlockSolverX>(std::move(linear_solver));
+        algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+    }
+    else {
+        std::unique_ptr<g2o::BlockSolverBase> block_solver;
+        auto linear_solver = g2o::make_unique<g2o::G2O_LINEAR_SOLVER_CLASS<g2o::BlockSolver_6_3::PoseMatrixType>>();
+        block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
+        algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+    }
 
     optimizer.setAlgorithm(algorithm);
 
@@ -325,6 +394,8 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     // 6. Extract the result
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
+
+    //std::cout << settings << std::endl;
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {

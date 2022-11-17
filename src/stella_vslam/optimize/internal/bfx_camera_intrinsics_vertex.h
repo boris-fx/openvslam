@@ -17,13 +17,13 @@ namespace internal {
  *
  * Currently 1 value, which is focal length in x direction pixels
  * 
- * Used landmark_vertex as a base
+ * Used landmark_vertex as a starting point
  */
-class bfx_camera_intrinsics_vertex final : public g2o::BaseVertex<1, double> {
+class bfx_camera_intrinsics_vertex_1 final : public g2o::BaseVertex<1, double> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    bfx_camera_intrinsics_vertex();
+    bfx_camera_intrinsics_vertex_1();
 
     bool read(std::istream& is) override;
 
@@ -34,28 +34,96 @@ public:
     void oplusImpl(const double* update) override;
 };
 
-inline bfx_camera_intrinsics_vertex::bfx_camera_intrinsics_vertex()
+inline bfx_camera_intrinsics_vertex_1::bfx_camera_intrinsics_vertex_1()
     : g2o::BaseVertex<1, double>() {}
 
-inline bool bfx_camera_intrinsics_vertex::read(std::istream& is) {
-    Vec3_t lv;
+inline bool bfx_camera_intrinsics_vertex_1::read(std::istream& is) {
     is >> _estimate;
     return true;
 }
 
-inline bool bfx_camera_intrinsics_vertex::write(std::ostream& os) const {
+inline bool bfx_camera_intrinsics_vertex_1::write(std::ostream& os) const {
     const double focalLengthXPixels = estimate();
     os << focalLengthXPixels << " ";
     return os.good();
 }
 
-inline void bfx_camera_intrinsics_vertex::setToOriginImpl() {
-    _estimate = 1000.0; // Not sure what this is used for
+inline void bfx_camera_intrinsics_vertex_1::setToOriginImpl() {
+    _estimate = 0.0; // g2o says "sets the node to the origin (used in the multilevel stuff)"
 }
 
-inline void bfx_camera_intrinsics_vertex::oplusImpl(const double* update) {
+inline void bfx_camera_intrinsics_vertex_1::oplusImpl(const double* update) {
     _estimate += *update;
 }
+
+/** 
+ * \brief Camera intrinsics class 2-vector
+ *
+ * Currently 1 value, which is focal length in x direction pixels
+ * 
+ * Used landmark_vertex as a starting point (search '3', replace with '2')
+ */
+class bfx_camera_intrinsics_vertex_2 final : public g2o::BaseVertex<3, Vec3_t> {
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    bfx_camera_intrinsics_vertex_2();
+
+    bool read(std::istream& is) override;
+
+    bool write(std::ostream& os) const override;
+
+    void setToOriginImpl() override;
+
+    void oplusImpl(const double* update) override;
+};
+
+inline bfx_camera_intrinsics_vertex_2::bfx_camera_intrinsics_vertex_2()
+    : g2o::BaseVertex<3, Vec3_t>() {}
+
+inline bool bfx_camera_intrinsics_vertex_2::read(std::istream& is) {
+    Vec3_t lv;
+    for (unsigned int i = 0; i < 3; ++i) {
+        is >> _estimate(i);
+    }
+    return true;
+}
+
+inline bool bfx_camera_intrinsics_vertex_2::write(std::ostream& os) const {
+    const Vec3_t pos_w = estimate();
+    for (unsigned int i = 0; i < 3; ++i) {
+        os << pos_w(i) << " ";
+    }
+    return os.good();
+}
+
+inline void bfx_camera_intrinsics_vertex_2::setToOriginImpl() {
+    _estimate.fill(0);  // g2o says "sets the node to the origin (used in the multilevel stuff)"
+}
+
+inline void bfx_camera_intrinsics_vertex_2::oplusImpl(const double* update) {
+    Eigen::Map<const Vec3_t> v(update);
+    _estimate += v;
+}
+
+#define USE_PADDED_CAMERA_INTRINSICS_VERTEX
+
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+// temp
+using bfx_camera_intrinsics_vertex = bfx_camera_intrinsics_vertex_2;
+using bfx_camera_intrinsics_vertex_type = Vec3_t;
+
+
+
+//#include "landmark_vertex.h"
+//using bfx_camera_intrinsics_vertex = landmark_vertex;
+//using bfx_camera_intrinsics_vertex_type = Vec3_t;
+
+#else
+// temp
+using bfx_camera_intrinsics_vertex = bfx_camera_intrinsics_vertex_1;
+
+#endif
 
 } // namespace internal
 } // namespace optimize

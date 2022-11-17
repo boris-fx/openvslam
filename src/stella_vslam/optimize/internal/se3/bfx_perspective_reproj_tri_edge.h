@@ -101,7 +101,11 @@ inline void bfx_mono_perspective_reproj_tri_edge::computeError() {
     const auto v2 = static_cast<const landmark_vertex*>(_vertices.at(0));
     const auto v3 = static_cast<const bfx_camera_intrinsics_vertex*>(_vertices.at(2));
     const Vec2_t obs(_measurement);
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    _error = obs - cam_project(v1->estimate().map(v2->estimate()), v3->estimate()(0));
+#else
     _error = obs - cam_project(v1->estimate().map(v2->estimate()), v3->estimate());
+#endif
 }
 
 inline void bfx_mono_perspective_reproj_tri_edge::linearizeOplus() {
@@ -113,7 +117,11 @@ inline void bfx_mono_perspective_reproj_tri_edge::linearizeOplus() {
     const Vec3_t pos_c = cam_pose_cw.map(pos_w);
 
     auto v3 = static_cast<bfx_camera_intrinsics_vertex*>(_vertices.at(2));
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    double fx = v3->bfx_camera_intrinsics_vertex::estimate()(0);
+#else
     double fx = v3->bfx_camera_intrinsics_vertex::estimate();
+#endif
     double fy = par_ * fx; 
 
     const auto x = pos_c(0);
@@ -147,6 +155,14 @@ inline void bfx_mono_perspective_reproj_tri_edge::linearizeOplus() {
 
     _jacobianOplusXk(0, 0) = -x / z;
     _jacobianOplusXk(1, 0) = -(par_ * y) / z;
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    _jacobianOplusXk(0, 1) = 0;
+    _jacobianOplusXk(1, 1) = 0;
+    _jacobianOplusXk(0, 2) = 0;
+    _jacobianOplusXk(1, 2) = 0;
+#endif
+
+
 }
 
 inline bool bfx_mono_perspective_reproj_tri_edge::depth_is_positive() const {
