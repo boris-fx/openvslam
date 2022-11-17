@@ -32,12 +32,16 @@ namespace stella_vslam {
 namespace optimize {
 
 /** Populate the shared keyframe camera from a camera intrinsics vertex **/
-struct focal_length_from_keyframes {
+struct keyframe_autocalibration_wrapper {
     double *fx = nullptr;
     double *fy = nullptr;
     stella_vslam_bfx::autocalibration_parameters* autocalibration_params = nullptr;
 
-    focal_length_from_keyframes(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
+    bool operator()() const {
+        return fx && fy && autocalibration_params;
+    }
+
+    keyframe_autocalibration_wrapper(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
     {
         // Get the shared camera from a keyframe
         camera::base* camera(nullptr);
@@ -84,42 +88,11 @@ struct focal_length_from_keyframes {
 internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
                                                                         std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
 {
-    // We don't have access to the camera database, but we can get the shared camera from a keyframe
-    camera::base* camera(nullptr);
-    for (const auto& keyfrm : keyfrms) {
-        if (!keyfrm) {
-            continue;
-        }
-        if (keyfrm->will_be_erased()) {
-            continue;
-        }
-        camera = keyfrm->camera_;
-        break;
-    }
-
-    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
+    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    if (!autocalibration_wrapper())
         return nullptr;
-
-    double focal_length_x_pixels;
-    switch (camera->model_type_) {
-        case camera::model_type_t::Perspective: {
-            auto c = static_cast<camera::perspective*>(camera);
-            focal_length_x_pixels = c->fx_;
-            break;
-        }
-        case camera::model_type_t::Fisheye: {
-            auto c = static_cast<camera::fisheye*>(camera);
-            focal_length_x_pixels = c->fx_;
-            break;
-        }
-        case camera::model_type_t::RadialDivision: {
-            auto c = static_cast<camera::radial_division*>(camera);
-            focal_length_x_pixels = c->fx_;
-            break;
-        }
-        default:
-            return nullptr;
-    }
+    if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
+        return nullptr;
 
     // Convert the camera intrinsics to a g2o vertex
     auto vtx = new internal::bfx_camera_intrinsics_vertex();
@@ -129,9 +102,9 @@ internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const st
 
     vtx->setId(vtx_id);
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
-    vtx->setEstimate(internal::bfx_camera_intrinsics_vertex_type(focal_length_x_pixels, 0.0, 0.0));
+    vtx->setEstimate(internal::bfx_camera_intrinsics_vertex_type(*autocalibration_wrapper.fx, 0.0, 0.0));
 #else
-    vtx->setEstimate(focal_length_x_pixels);
+    vtx->setEstimate(*autocalibration_wrapper.fx);
 #endif
     vtx->setFixed(false);
     vtx->setMarginalized(false); // "this node is marginalized out during the optimization"
@@ -147,21 +120,11 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
     if (!vertex)
         return false;
 
-    // We don't have access to the camera database, but we can get the shared camera from a keyframe
-    camera::base* camera(nullptr);
-    for (const auto& keyfrm : keyfrms) {
-        if (!keyfrm) {
-            continue;
-        }
-        if (keyfrm->will_be_erased()) {
-            continue;
-        }
-        camera = keyfrm->camera_;
-        break;
-    }
-
-    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
-        return false; // Nothing to do
+    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    if (!autocalibration_wrapper())
+        return nullptr;
+    if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
+        return nullptr;
 
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
     double focal_length_x_pixels = vertex->estimate()(0);
@@ -169,30 +132,11 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
     double focal_length_x_pixels = vertex->estimate();
 #endif
 
-    switch (camera->model_type_) {
-        case camera::model_type_t::Perspective: {
-            camera::perspective* c = static_cast<camera::perspective*>(camera);
-            double par = c->fy_ / c->fx_;
-            c->fx_ = focal_length_x_pixels;
-            c->fy_ = focal_length_x_pixels * par;
-            return true;
-        }
-        case camera::model_type_t::Fisheye: {
-            auto c = static_cast<camera::fisheye*>(camera);
-            double par = c->fy_ / c->fx_;
-            c->fx_ = focal_length_x_pixels;
-            c->fy_ = focal_length_x_pixels * par;
-            return true;
-        }
-        case camera::model_type_t::RadialDivision: {
-            auto c = static_cast<camera::radial_division*>(camera);
-            double par = c->fy_ / c->fx_;
-            c->fx_ = focal_length_x_pixels;
-            c->fy_ = focal_length_x_pixels * par;
-            return true;
-        }
-    }
-    return false;
+    double par = *autocalibration_wrapper.fy / *autocalibration_wrapper.fx;
+    *autocalibration_wrapper.fx = focal_length_x_pixels;
+    *autocalibration_wrapper.fy = focal_length_x_pixels * par;
+
+    return true;
 }
 
 void optimize_impl(g2o::SparseOptimizer& optimizer,
@@ -383,6 +327,9 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
 
     g2o::SparseOptimizer optimizer;
 
+    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
                   marker_vtx_container, camera_intrinsics_vtx,
                   num_iter_, use_huber_kernel_, force_stop_flag);
@@ -394,8 +341,9 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     // 6. Extract the result
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
+    double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
-    //std::cout << settings << std::endl;
+    std::cout << "Init - Focal length: " << fx_before << " -> " << fx_after << (focal_length_modified ? " (edit)" : " ( no edit)") << std::endl;
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
@@ -454,6 +402,9 @@ bool global_bundle_adjuster::optimize(std::unordered_set<unsigned int>& optimize
     terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
+    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
                   marker_vtx_container, camera_intrinsics_vtx,
                   num_iter_, use_huber_kernel_, force_stop_flag);
@@ -465,6 +416,9 @@ bool global_bundle_adjuster::optimize(std::unordered_set<unsigned int>& optimize
     // 6. Extract the result
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
+    double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+
+    std::cout << "Bundle - Focal length: " << fx_before << " -> " << fx_after << (focal_length_modified ? " (edit)" : " ( no edit)") << std::endl;
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
