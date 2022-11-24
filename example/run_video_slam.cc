@@ -100,8 +100,8 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double k3 = camera_node["k3"].as<double>();
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
-                                                             colour_order, autocalibration, cols, rows, fps,
-                                            fx, fy, cx, cy, p1, p2, k1, k2, k3);
+                                                             colour_order, cols, rows, fps,
+                                            fx, fy, cx, cy, p1, p2, k1, k2, k3, autocalibration);
             break;
         }
         case stella_vslam::camera::model_type_t::Fisheye:
@@ -116,8 +116,8 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double k4 = camera_node["k4"].as<double>();
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
-                                                             colour_order, autocalibration, cols, rows, fps,
-                                            fx, fy, cx, cy, k1, k2, k3, k4);
+                                                             colour_order, cols, rows, fps,
+                                            fx, fy, cx, cy, k1, k2, k3, k4, autocalibration);
             break;
         }
         case stella_vslam::camera::model_type_t::RadialDivision:
@@ -129,8 +129,8 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             double d = camera_node["distortion"].as<double>();
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
-                                                             colour_order, autocalibration, cols, rows, fps,
-                                            fx, fy, cx, cy, d);
+                                                             colour_order, cols, rows, fps,
+                                            fx, fy, cx, cy, d, autocalibration);
             break;
         }
         case stella_vslam::camera::model_type_t::Equirectangular:
