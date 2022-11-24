@@ -128,6 +128,7 @@ void global_optimization_module::queue_keyframe(const std::shared_ptr<data::keyf
     std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
     if (keyfrm->id_ != 0) {
         keyfrms_queue_.push_back(keyfrm);
+        spdlog::info("global optimization module queued key frame {} {}", keyfrm->id_, keyfrm->timestamp_);
     }
 }
 

@@ -43,7 +43,7 @@ void loop_bundle_adjuster::optimize() {
     eigen_alloc_unord_map<unsigned int, Vec3_t> lm_to_pos_w_after_global_BA;
     eigen_alloc_unord_map<unsigned int, Mat44_t> keyfrm_to_pose_cw_after_global_BA;
     const auto global_BA = optimize::global_bundle_adjuster(map_db_, num_iter_, false);
-    bool ok = global_BA.optimize(optimized_keyfrm_ids, optimized_landmark_ids,
+    bool ok = global_BA.optimizeGlobal(optimized_keyfrm_ids, optimized_landmark_ids,
                                  lm_to_pos_w_after_global_BA,
                                  keyfrm_to_pose_cw_after_global_BA, &abort_loop_BA_);
 

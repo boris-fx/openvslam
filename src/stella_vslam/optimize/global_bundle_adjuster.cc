@@ -28,6 +28,8 @@
 
 #include <g2o/core/optimization_algorithm_levenberg.h>
 
+#include <spdlog/spdlog.h>
+
 namespace stella_vslam {
 namespace optimize {
 
@@ -343,7 +345,12 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
     double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
-    std::cout << "Init - Focal length: " << fx_before << " -> " << fx_after << (focal_length_modified ? " (edit)" : " ( no edit)") << std::endl;
+    //spdlog::info("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    //spdlog::debug("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    //spdlog::trace("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    spdlog::warn("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    //spdlog::error("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    //spdlog::critical("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
@@ -376,7 +383,7 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     }
 }
 
-bool global_bundle_adjuster::optimize(std::unordered_set<unsigned int>& optimized_keyfrm_ids,
+bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& optimized_keyfrm_ids,
                                       std::unordered_set<unsigned int>& optimized_landmark_ids,
                                       eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                                       eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,
@@ -418,7 +425,7 @@ bool global_bundle_adjuster::optimize(std::unordered_set<unsigned int>& optimize
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
     double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
-    std::cout << "Bundle - Focal length: " << fx_before << " -> " << fx_after << (focal_length_modified ? " (edit)" : " ( no edit)") << std::endl;
+    spdlog::warn("global bundle focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {

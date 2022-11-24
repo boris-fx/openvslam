@@ -35,7 +35,7 @@ public:
      * @param force_stop_flag
      * @return false if aborted
      */
-    bool optimize(std::unordered_set<unsigned int>& optimized_keyfrm_ids,
+    bool optimizeGlobal(std::unordered_set<unsigned int>& optimized_keyfrm_ids,
                   std::unordered_set<unsigned int>& optimized_landmark_ids,
                   eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                   eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,

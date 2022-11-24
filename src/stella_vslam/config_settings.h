@@ -64,6 +64,7 @@ struct STELLA_VSLAM_API autocalibration_parameters {
    
     bool optimise_focal_length;
 
+    static autocalibration_parameters mochaDefault();
     friend std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration);
 };
 
@@ -74,28 +75,28 @@ public:
     config_settings(stella_vslam::camera::model_type_t camera_model,
                     stella_vslam::camera::setup_type_t camera_setup,
                     stella_vslam::camera::color_order_t colour_order,
-                    autocalibration_parameters autocalibration,
                     int cols, int rows, double fps, double fx, double fy,
                     double cx, double cy, double p1, double p2,
-                    double k1, double k2, double k3);
+                    double k1, double k2, double k3,
+                    autocalibration_parameters autocalibration = autocalibration_parameters::mochaDefault());
     
     //! Constructor for fisheye camera
     config_settings(stella_vslam::camera::model_type_t camera_model,
                     stella_vslam::camera::setup_type_t camera_setup,
                     stella_vslam::camera::color_order_t colour_order,
-                    autocalibration_parameters autocalibration,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
-                    double k1, double k2, double k3, double k4);
+                    double k1, double k2, double k3, double k4,
+                    autocalibration_parameters autocalibration = autocalibration_parameters::mochaDefault());
     
     //! Constructor for radial division camera
     config_settings(stella_vslam::camera::model_type_t camera_model,
                     stella_vslam::camera::setup_type_t camera_setup,
                     stella_vslam::camera::color_order_t colour_order,
-                    autocalibration_parameters autocalibration,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
-                    double distortion);
+                    double distortion,
+                    autocalibration_parameters autocalibration = autocalibration_parameters::mochaDefault());
     
     //! Constructor for equirectangular camera
     config_settings(stella_vslam::camera::model_type_t camera_model,

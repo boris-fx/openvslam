@@ -3,6 +3,15 @@
 
 namespace stella_vslam_bfx {
 
+autocalibration_parameters autocalibration_parameters::mochaDefault()
+{
+    autocalibration_parameters parameters;
+    
+    parameters.optimise_focal_length = false;
+
+    return parameters;
+}
+
 std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration)
 {
     os << "\tOptimise focal length: " << (autocalibration.optimise_focal_length ? "yes" : "no")
@@ -13,10 +22,10 @@ std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& aut
 config_settings::config_settings(stella_vslam::camera::model_type_t camera_model,
                                     stella_vslam::camera::setup_type_t camera_setup,
                                     stella_vslam::camera::color_order_t colour_order,
-                                    autocalibration_parameters autocalibration,
                                     int cols, int rows, double fps, double fx, double fy,
                                     double cx, double cy, double p1, double p2,
-                                    double k1, double k2, double k3) :
+                                 double k1, double k2, double k3, autocalibration_parameters autocalibration)
+    :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
     autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
 {
@@ -37,10 +46,10 @@ config_settings::config_settings(stella_vslam::camera::model_type_t camera_model
 config_settings::config_settings(stella_vslam::camera::model_type_t camera_model,
                                     stella_vslam::camera::setup_type_t camera_setup,
                                     stella_vslam::camera::color_order_t colour_order,
-                                    autocalibration_parameters autocalibration,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
-                                    double k1, double k2, double k3, double k4) :
+                                 double k1, double k2, double k3, double k4, autocalibration_parameters autocalibration)
+    :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
     autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
 {
@@ -60,10 +69,10 @@ config_settings::config_settings(stella_vslam::camera::model_type_t camera_model
 config_settings::config_settings(stella_vslam::camera::model_type_t camera_model,
                                     stella_vslam::camera::setup_type_t camera_setup,
                                     stella_vslam::camera::color_order_t colour_order,
-                                    autocalibration_parameters autocalibration,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
-                                    double distortion) :
+                                 double distortion, autocalibration_parameters autocalibration)
+    :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
     autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
 {
