@@ -7,7 +7,13 @@
 #include "stella_vslam/system.h"
 #include "stella_vslam/config.h"
 #include "stella_vslam/util/yaml.h"
+#include "stella_vslam/util/bfx_video_evaluation.h"
 #include "util/tinyxml2.h"
+
+
+#include "stella_vslam/data/map_database.h"
+#include "stella_vslam/data/keyframe.h"
+#include "stella_vslam/data/landmark.h"
 
 #include <iostream>
 #include <chrono>
@@ -479,6 +485,187 @@ void mesh_points(const std::string& dirpath, std::map<int, stella_vslam_bfx::pre
     closedir(dir);
 }
 
+void bfxTestDrawFrame(cv::Mat const& mat)
+{
+    static bool done = false;
+    if (done)
+        return;
+    done = true;
+
+
+
+
+}
+
+#include <opencv2/imgproc.hpp>
+
+void MyEllipse(cv::Mat img, double angle) {
+
+   float w = 400.0f;
+
+    int thickness = 5;
+    int lineType = 8;
+    cv::ellipse(img,
+            cv::Point(w / 2, w / 2),
+                cv::Size(w / 4, w / 16),
+            angle,
+            0,
+            360,
+                cv::Scalar(255, 0, 0),
+            thickness,
+            lineType);
+
+
+}
+
+bool bfxTestSaveVideo(std::string const& source, stella_vslam::data::map_database* map_db) {
+   using namespace std;
+   using namespace cv;
+   using namespace stella_vslam;
+
+   bool askOutputType(false);
+
+   if (!map_db)
+       return false;
+
+   auto keyfrms = map_db->get_all_keyframes();
+   auto lms = map_db->get_all_landmarks();
+   int numCameras = keyfrms.size();
+   int numLocators = lms.size();
+
+   std::map<int, std::shared_ptr<data::keyframe>> sourceFrameToKeyframe;
+
+   for (const auto& keyfrm : keyfrms) {
+       if (!keyfrm)
+           continue;
+       sourceFrameToKeyframe[keyfrm->src_frm_id_] = keyfrm;
+       //spdlog::info("keyframe id {} source id {} timestamp {}", keyfrm->id_, keyfrm->src_frm_id_, keyfrm->timestamp_);
+   }
+
+   spdlog::info("bfxTestSaveVideo {} cameras, {} points", numCameras, numLocators);
+
+    cv::VideoCapture inputVideo(source);              // Open input
+    if (!inputVideo.isOpened()) {
+        std::cout << "Could not open the input video: " << source << std::endl;
+        return false;
+    }
+    string::size_type pAt = source.find_last_of('.');                // Find extension point
+    const string NAME = source.substr(0, pAt) + "R" + ".mp4"; // Form the new name with container
+    int ex = static_cast<int>(inputVideo.get(CAP_PROP_FOURCC));      // Get Codec Type- Int form
+    // Transform from int to char via Bitwise operators
+    char EXT[] = {(char)(ex & 0XFF), (char)((ex & 0XFF00) >> 8), (char)((ex & 0XFF0000) >> 16), (char)((ex & 0XFF000000) >> 24), 0};
+    Size S = Size((int)inputVideo.get(CAP_PROP_FRAME_WIDTH), // Acquire input size
+                  (int)inputVideo.get(CAP_PROP_FRAME_HEIGHT));
+    VideoWriter outputVideo; // Open the output
+    if (askOutputType)
+        outputVideo.open(NAME, ex = -1, inputVideo.get(CAP_PROP_FPS), S, true);
+    else
+        outputVideo.open(NAME, ex, inputVideo.get(CAP_PROP_FPS), S, true);
+    if (!outputVideo.isOpened()) {
+        cout << "Could not open the output video for write: " << source << endl;
+        return -1;
+    }
+    cout << "Input frame resolution: Width=" << S.width << "  Height=" << S.height
+         << " of nr#: " << inputVideo.get(CAP_PROP_FRAME_COUNT) << endl;
+    cout << "Input codec type: " << EXT << endl;
+    int channel = 2; // Select the channel to save
+
+    Mat src, res;
+    vector<Mat> spl;
+    int srcFrame(0);
+    for (;;) //Show the image captured in the window and repeat
+    {
+       #if 1
+        inputVideo >> src; // read
+
+        if (src.empty())
+            break;       // check if at end
+
+        //split(src, spl); // process - extract only the correct channel
+        //for (int i = 0; i < 3; ++i)
+          //  if (i != channel)
+            //    spl[i] = Mat::zeros(S, spl[0].type());
+        //merge(spl, res);
+        //outputVideo.write(res); //save or
+
+        int thickness = 2;
+        int lineType = 8;
+
+        // Find associated keyframe data
+        auto foundKeyframe = sourceFrameToKeyframe.find(srcFrame);
+        std::shared_ptr<data::keyframe> keyframe;
+        if (foundKeyframe != sourceFrameToKeyframe.end())
+            keyframe = foundKeyframe->second;
+
+        if (keyframe) {
+           camera::base* camera = keyframe->camera_;
+           Vec2_t reproj;
+           float x_right; // ???
+           for (auto const& landmark : lms) {
+               bool inside = camera->reproject_to_image(keyframe->get_rot_cw(), keyframe->get_trans_cw(), landmark->get_pos_in_world(), reproj, x_right);
+               int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
+               cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
+                          cv::Scalar(0, 0, 255), thickness,
+                          lineType, shift);
+           
+           }
+        }
+
+    //    MyEllipse(src, 90);
+    //    MyEllipse(src, 0);
+    //    MyEllipse(src, 45);
+    //    MyEllipse(src, -45);
+
+    //float p = 400.0f;
+    //    int markerType = cv::MARKER_CROSS;
+    //    int markerSize = 20;
+    //    cv::drawMarker(src, cv::Point(p / 2, p / 2), cv::Scalar(0, 255, 0),
+    //                   markerType, markerSize, thickness,
+    //                   lineType);
+
+    //    int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
+    //    cv::circle(src, cv::Point(500, 500), 5,
+    //               cv::Scalar(0, 0, 255), thickness,
+    //               lineType, shift);
+
+    //    //cv::InputArrayOfArrays pts;
+    //    //cv::fillPoly(img, pts,
+    //    //             cv::Scalar(0, 0, 255), lineType, shift, cv::Point(0,0));
+
+    //    std::vector<cv::Point> vPts = {
+    //        {600, 600},
+    //        {600, 610},
+    //        {610, 610},
+    //        {610, 600}};
+    //    //const Point *pts, int npts,
+    //    cv::fillConvexPoly(src, &vPts[0], vPts.size(),
+    //                       cv::Scalar(0, 0, 255), lineType,
+    //                       shift);
+
+
+        if (keyframe)
+           outputVideo << src;
+
+       #else
+        inputVideo >> src; // read
+        if (src.empty())
+            break;       // check if at end
+        split(src, spl); // process - extract only the correct channel
+        for (int i = 0; i < 3; ++i)
+            if (i != channel)
+                spl[i] = Mat::zeros(S, spl[0].type());
+        merge(spl, res);
+        //outputVideo.write(res); //save or
+        outputVideo << res;
+        #endif
+
+        ++srcFrame;
+    }
+    cout << "Finished writing" << endl;
+    return 0;
+}
+
+
 void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
                    const std::string& vocab_file_path, const std::string& video_file_path, const std::string& mask_img_path,
                    const unsigned int frame_skip, const bool no_sleep, const bool auto_term,
@@ -525,6 +712,8 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         while (is_not_end) {
             is_not_end = video.read(frame);
 
+            //bfxTestDrawFrame(frame);
+
             const auto tp_1 = std::chrono::steady_clock::now();
 
             if (!frame.empty() && (num_frame % frame_skip == 0)) {
@@ -562,6 +751,11 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         while (SLAM.loop_BA_is_running()) {
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
         }
+
+
+        stella_vslam::data::map_database* map_db = SLAM.map_db_;
+        //bool ok = bfxTestSaveVideo(video_file_path, map_db);
+        bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, map_db);
 
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER

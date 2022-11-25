@@ -64,9 +64,9 @@ struct STELLA_VSLAM_API autocalibration_parameters {
    
     bool optimise_focal_length;
 
-    static autocalibration_parameters mochaDefault();
     friend std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration);
 };
+STELLA_VSLAM_API autocalibration_parameters mochaDefaultAutocalibrationParameters();
 
 class STELLA_VSLAM_API config_settings {
 public:
@@ -78,7 +78,7 @@ public:
                     int cols, int rows, double fps, double fx, double fy,
                     double cx, double cy, double p1, double p2,
                     double k1, double k2, double k3,
-                    autocalibration_parameters autocalibration = autocalibration_parameters::mochaDefault());
+                    autocalibration_parameters autocalibration = mochaDefaultAutocalibrationParameters());
     
     //! Constructor for fisheye camera
     config_settings(stella_vslam::camera::model_type_t camera_model,
@@ -87,7 +87,7 @@ public:
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
                     double k1, double k2, double k3, double k4,
-                    autocalibration_parameters autocalibration = autocalibration_parameters::mochaDefault());
+                    autocalibration_parameters autocalibration = mochaDefaultAutocalibrationParameters());
     
     //! Constructor for radial division camera
     config_settings(stella_vslam::camera::model_type_t camera_model,
@@ -96,7 +96,7 @@ public:
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
                     double distortion,
-                    autocalibration_parameters autocalibration = autocalibration_parameters::mochaDefault());
+                    autocalibration_parameters autocalibration = mochaDefaultAutocalibrationParameters());
     
     //! Constructor for equirectangular camera
     config_settings(stella_vslam::camera::model_type_t camera_model,

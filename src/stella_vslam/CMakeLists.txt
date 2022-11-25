@@ -11,6 +11,7 @@ if(USE_SQLITE)
     find_package(SQLite3 REQUIRED)
 endif()
 
+
 # g2o
 find_package(g2o REQUIRED
              COMPONENTS
@@ -249,6 +250,7 @@ add_subdirectory(optimize)
 add_subdirectory(publish)
 add_subdirectory(solve)
 add_subdirectory(util)
+
 
 # ----- Configure IDE -----
 

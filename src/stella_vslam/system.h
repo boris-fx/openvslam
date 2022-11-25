@@ -221,9 +221,11 @@ private:
     //! orb_params database
     data::orb_params_database* orb_params_db_ = nullptr;
 
+public:
     //! map database
     data::map_database* map_db_ = nullptr;
 
+private:
     //! BoW vocabulary
     data::bow_vocabulary* bow_vocab_ = nullptr;
 

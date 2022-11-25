@@ -3,7 +3,7 @@
 
 namespace stella_vslam_bfx {
 
-autocalibration_parameters autocalibration_parameters::mochaDefault()
+autocalibration_parameters mochaDefaultAutocalibrationParameters()
 {
     autocalibration_parameters parameters;
     
