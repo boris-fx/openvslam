@@ -16,7 +16,7 @@ public:
     /**
      * Constructor
      */
-    explicit loop_bundle_adjuster(data::map_database* map_db, const unsigned int num_iter = 10);
+    explicit loop_bundle_adjuster(data::map_database* map_db, const unsigned int num_iter = 100);
 
     /**
      * Destructor

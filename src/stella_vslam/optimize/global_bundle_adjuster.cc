@@ -299,8 +299,21 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
 
     // 5. Perform optimization
 
+    optimizer.setComputeBatchStatistics(true);
     optimizer.initializeOptimization();
-    optimizer.optimize(num_iter);
+
+    bool ok = optimizer.optimize(num_iter);
+
+    spdlog::info("optimizer.optimize iterations {} huber {} ok {}", num_iter, use_huber_kernel, ok);
+    g2o::BatchStatisticsContainer& stats = optimizer.batchStatistics();
+    for (int i = 0; i < stats.size(); ++i) {
+        if (stats[i].iteration < 0)
+            continue;
+        auto const& stat(stats[i]);
+        double gain = i == 0 ? 0 : (stats[i-1].chi2 - stats[i].chi2) / stats[i].chi2;
+        double gain2 = i == 0 ? 0 : (sqrt(stats[i - 1].chi2) - sqrt(stats[i].chi2)) / sqrt(stats[i].chi2);
+        spdlog::info("-> iter {} #vertices {} #edges {} chi2 {} gain {} {}", stat.iteration, stat.numVertices, stat.numEdges, stat.chi2, gain, gain2);
+    }
 
     if (force_stop_flag && *force_stop_flag) {
         return;
@@ -405,8 +418,9 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
     internal::bfx_camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
 
     g2o::SparseOptimizer optimizer;
+
     auto terminateAction = new terminate_action;
-    terminateAction->setGainThreshold(1e-3);
+//    terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
     keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
@@ -415,6 +429,8 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
                   marker_vtx_container, camera_intrinsics_vtx,
                   num_iter_, use_huber_kernel_, force_stop_flag);
+   if (terminateAction->stopped_by_terminate_action_)
+       spdlog::warn("optimizeGlobal terminated early after failing to hit gain threshold of {}", terminateAction->gainThreshold());
 
     if (force_stop_flag && *force_stop_flag && !terminateAction->stopped_by_terminate_action_) {
         return false;

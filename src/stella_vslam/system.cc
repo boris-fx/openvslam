@@ -362,6 +362,10 @@ bool system::loop_BA_is_running() const {
     return global_optimizer_->loop_BA_is_running();
 }
 
+void system::run_loop_BA() {
+    global_optimizer_->run_loop_BA();
+}
+
 void system::abort_loop_BA() {
     global_optimizer_->abort_loop_BA();
 }

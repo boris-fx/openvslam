@@ -30,8 +30,7 @@ void MyEllipse(cv::Mat img, double angle) {
                 lineType);
 }
 
-bool bfx_create_evaluation_video(std::string const& trackedVideoName, stella_vslam::data::map_database* map_db)
-{
+bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName, stella_vslam::data::map_database* map_db) {
     using namespace std;
     using namespace cv;
     using namespace stella_vslam;
@@ -63,7 +62,7 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, stella_vsl
         return false;
     }
     string::size_type pAt = trackedVideoName.find_last_of('.');                // Find extension point
-    const string outputVideoName = trackedVideoName.substr(0, pAt) + "_Stella" + ".mp4"; // Form the new name with container
+    const string outputVideoName = trackedVideoName.substr(0, pAt) + "_" + testName + ".mp4"; // Form the new name with container
     int ex = static_cast<int>(inputVideo.get(CAP_PROP_FOURCC)); // Get Codec Type- Int form
     // Transform from int to char via Bitwise operators
     char EXT[] = {(char)(ex & 0XFF), (char)((ex & 0XFF00) >> 8), (char)((ex & 0XFF0000) >> 16), (char)((ex & 0XFF000000) >> 24), 0};
@@ -117,7 +116,7 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, stella_vsl
                 camera->reproject_to_image(keyframe->get_rot_cw(), keyframe->get_trans_cw(), landmark->get_pos_in_world(), reproj, x_right);
                 int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
                 cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
-                           cv::Scalar(0, 0, 255), thickness,
+                           cv::Scalar(0, 255, 0), thickness,
                            lineType, shift);
             }
         }

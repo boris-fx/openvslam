@@ -121,6 +121,9 @@ public:
     //! Loop BA is running or not
     bool loop_BA_is_running() const;
 
+    //! Force a global bundle adjustment if one is not already running
+    void run_loop_BA();
+
     //! Abort the loop BA externally
     void abort_loop_BA();
 

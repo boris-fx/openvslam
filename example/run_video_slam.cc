@@ -675,6 +675,8 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
     // load the mask image
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
 
+    double initialFocalLength = (cfg->settings_.camera_model_ == stella_vslam::camera::model_type_t::Perspective) ? cfg->settings_.perspective_settings_.fx_ : 0;
+
     // build a SLAM system
     stella_vslam::system SLAM(cfg, vocab_file_path);
     // startup the SLAM process
@@ -747,6 +749,11 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
             }
         }
 
+        // Final bundle
+        SLAM.run_loop_BA();
+
+        std::this_thread::sleep_for(std::chrono::microseconds(1000000));
+
         // wait until the loop BA is finished
         while (SLAM.loop_BA_is_running()) {
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
@@ -755,7 +762,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
 
         stella_vslam::data::map_database* map_db = SLAM.map_db_;
         //bool ok = bfxTestSaveVideo(video_file_path, map_db);
-        bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, map_db);
+        bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db);
 
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER
