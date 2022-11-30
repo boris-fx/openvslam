@@ -235,7 +235,20 @@ void global_optimization_module::run_forced_loop_bundle()
         thread_for_loop_BA_->join();
         thread_for_loop_BA_.reset(nullptr);
     }
-    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get()));
+
+    int loopClosingNumIter = loop_bundle_adjuster_->num_iter(); // store default
+    loop_bundle_adjuster_->set_num_iter(100);
+    int num_iter = 100;
+    bool general_bundle = true;
+    //thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get(), num_iter, general_bundle));
+    //thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get()));
+    
+    std::function<void(stella_vslam::module::loop_bundle_adjuster *, int, bool)> optimizeFunction = [](stella_vslam::module::loop_bundle_adjuster* ba, int num_iter, bool general_bundle) {
+        ba->optimize(num_iter, general_bundle);
+    };
+    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(optimizeFunction, loop_bundle_adjuster_.get(), num_iter, general_bundle));
+    
+    loop_bundle_adjuster_->set_num_iter(loopClosingNumIter); // revert to default
 
     // 6. post-processing
 
@@ -327,7 +340,9 @@ void global_optimization_module::correct_loop() {
         thread_for_loop_BA_->join();
         thread_for_loop_BA_.reset(nullptr);
     }
-    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get()));
+   // thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get()));
+    std::function<void()> optimizeFunction = [=]() { loop_bundle_adjuster_->optimize(); };
+    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread([=]() { loop_bundle_adjuster_->optimize(); }));
 
     // 6. post-processing
 

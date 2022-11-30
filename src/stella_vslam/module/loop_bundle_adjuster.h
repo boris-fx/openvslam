@@ -16,7 +16,7 @@ public:
     /**
      * Constructor
      */
-    explicit loop_bundle_adjuster(data::map_database* map_db, const unsigned int num_iter = 100);
+    explicit loop_bundle_adjuster(data::map_database* map_db, const unsigned int num_iter = 10);
 
     /**
      * Destructor
@@ -41,7 +41,12 @@ public:
     /**
      * Run loop BA
      */
-    void optimize();
+    void optimize(int num_iter=10, bool general_bundle=false);
+
+    int num_iter() const { return num_iter_; }
+    void set_num_iter(int num_iter) { num_iter_ = num_iter; }
+
+    void set_general_bundle(bool general_bundle) { general_bundle_ = general_bundle; }
 
 private:
     //! map database
@@ -51,7 +56,10 @@ private:
     mapping_module* mapper_ = nullptr;
 
     //! number of iteration for optimization
-    const unsigned int num_iter_ = 10;
+    unsigned int num_iter_ = 10;
+
+    //! true for a general bundle, rather than a loop closing bundle
+    bool general_bundle_ = false;
 
     //-----------------------------------------
     // thread management

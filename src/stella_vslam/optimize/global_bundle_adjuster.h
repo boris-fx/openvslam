@@ -39,7 +39,7 @@ public:
                   std::unordered_set<unsigned int>& optimized_landmark_ids,
                   eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                   eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,
-                  bool* const force_stop_flag = nullptr) const;
+                        bool* const force_stop_flag, int num_iter, bool general_bundle) const;
 
 private:
     //! map database

@@ -400,7 +400,7 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
                                       std::unordered_set<unsigned int>& optimized_landmark_ids,
                                       eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                                       eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,
-                                      bool* const force_stop_flag) const {
+                                            bool* const force_stop_flag, int num_iter, bool general_bundle) const {
     // 1. Collect the dataset
     auto keyfrms = map_db_->get_all_keyframes();
     auto lms = map_db_->get_all_landmarks();
@@ -420,15 +420,17 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
     g2o::SparseOptimizer optimizer;
 
     auto terminateAction = new terminate_action;
-//    terminateAction->setGainThreshold(1e-3);
+    if (!general_bundle)
+        terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
     keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
     double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
+    // NB: Uses num_iter, not num_iter_
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
                   marker_vtx_container, camera_intrinsics_vtx,
-                  num_iter_, use_huber_kernel_, force_stop_flag);
+                  num_iter, use_huber_kernel_, force_stop_flag);
    if (terminateAction->stopped_by_terminate_action_)
        spdlog::warn("optimizeGlobal terminated early after failing to hit gain threshold of {}", terminateAction->gainThreshold());
 
