@@ -2,6 +2,7 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
+#include "stella_vslam/data/bfx_shared_camera_intrinsics.h"
 #include "stella_vslam/marker_model/base.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
 #include "stella_vslam/optimize/terminate_action.h"
@@ -33,64 +34,11 @@
 namespace stella_vslam {
 namespace optimize {
 
-/** Populate the shared keyframe camera from a camera intrinsics vertex **/
-struct keyframe_autocalibration_wrapper {
-    double *fx = nullptr;
-    double *fy = nullptr;
-    stella_vslam_bfx::autocalibration_parameters* autocalibration_params = nullptr;
-
-    bool operator()() const {
-        return fx && fy && autocalibration_params;
-    }
-
-    keyframe_autocalibration_wrapper(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
-    {
-        // Get the shared camera from a keyframe
-        camera::base* camera(nullptr);
-        for (const auto& keyfrm : keyfrms) {
-            if (!keyfrm) {
-                continue;
-            }
-            if (keyfrm->will_be_erased()) {
-                continue;
-            }
-            camera = keyfrm->camera_;
-            break;
-        }
-
-        if (!camera)
-            return;
-
-        autocalibration_params = &camera->autocalibration_parameters_;
-
-        switch (camera->model_type_) {
-            case camera::model_type_t::Perspective: {
-                auto c = static_cast<camera::perspective*>(camera);
-                fx = &c->fx_;
-                fy = &c->fy_;
-                break;
-            }
-            case camera::model_type_t::Fisheye: {
-                auto c = static_cast<camera::fisheye*>(camera);
-                fx = &c->fx_;
-                fy = &c->fy_;
-                break;
-            }
-            case camera::model_type_t::RadialDivision: {
-                auto c = static_cast<camera::radial_division*>(camera);
-                fx = &c->fx_;
-                fy = &c->fy_;
-                break;
-            }
-        }
-    }
-};
-   
 /** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
 internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
                                                                         std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
 {
-    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
     if (!autocalibration_wrapper())
         return nullptr;
     if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
@@ -122,7 +70,7 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
     if (!vertex)
         return false;
 
-    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
     if (!autocalibration_wrapper())
         return nullptr;
     if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
@@ -302,9 +250,28 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
     optimizer.setComputeBatchStatistics(true);
     optimizer.initializeOptimization();
 
+    int pre_edges(-1);
+    double pre_rms(-1), pre_rms_robust(-1), pre_chi2(-1), pre_chi2_robust(-1);
+    if (true) { // should be removed - 
+      optimizer.computeActiveErrors();
+      pre_rms = sqrt(optimizer.activeChi2() / (double)optimizer.activeEdges().size());
+      pre_rms_robust = sqrt(optimizer.activeRobustChi2() / (double)optimizer.activeEdges().size());
+      pre_chi2 = optimizer.activeChi2();
+      pre_chi2_robust = optimizer.activeRobustChi2();
+      pre_edges = optimizer.activeEdges().size();
+      spdlog::info("              before BA  chi2 {} robust-chi2 {} edges {} rms {} robust-rms {}",
+                   pre_chi2, pre_chi2_robust, pre_edges, pre_rms, pre_rms_robust);
+    }
+
+
     bool ok = optimizer.optimize(num_iter);
 
     spdlog::info("optimizer.optimize iterations {} huber {} ok {}", num_iter, use_huber_kernel, ok);
+    double rms = sqrt(optimizer.activeChi2() / (double)optimizer.activeEdges().size());
+    double rms_robust = sqrt(optimizer.activeRobustChi2() / (double)optimizer.activeEdges().size());
+    spdlog::info("                         chi2 {} robust-chi2 {} edges {} rms {} robust-rms {}",
+       optimizer.activeChi2(), optimizer.activeRobustChi2(), optimizer.activeEdges().size(), rms, rms_robust);
+
     g2o::BatchStatisticsContainer& stats = optimizer.batchStatistics();
     for (int i = 0; i < stats.size(); ++i) {
         if (stats[i].iteration < 0)
@@ -342,7 +309,7 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
 
     g2o::SparseOptimizer optimizer;
 
-    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
     double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
@@ -420,11 +387,11 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
     g2o::SparseOptimizer optimizer;
 
     auto terminateAction = new terminate_action;
-    if (!general_bundle)
+    if (!general_bundle) // if general_bundle use default value of 1e-6
         terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
-    keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
     double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
     // NB: Uses num_iter, not num_iter_

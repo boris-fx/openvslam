@@ -111,6 +111,8 @@ public:
 
 public:
 
+   std::string trackedVideoName; // temp for debug
+
     // Camera/image settings (common)
     stella_vslam::camera::model_type_t camera_model_;
     stella_vslam::camera::setup_type_t camera_setup_;

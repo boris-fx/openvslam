@@ -11,6 +11,7 @@
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/landmark.h>
+#include <stella_vslam/util/bfx_video_evaluation.h>
 
 namespace stella_vslam_bfx {
 
@@ -30,7 +31,8 @@ void MyEllipse(cv::Mat img, double angle) {
                 lineType);
 }
 
-bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName, stella_vslam::data::map_database* map_db) {
+bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName, stella_vslam::data::map_database* map_db)
+{
     using namespace std;
     using namespace cv;
     using namespace stella_vslam;
@@ -109,16 +111,39 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
             keyframe = foundKeyframe->second;
 
         if (keyframe) {
+            int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
             camera::base* camera = keyframe->camera_;
+
+
+            /*
+            // Observations - red
+            for (auto const& keypt : keyframe->frm_obs_.undist_keypts_) {
+                            cv::circle(src, keypt.pt, 8,
+                           cv::Scalar(255, 0, 0), thickness,
+                           lineType, shift);
+            }
+
+            // Bearing vectors - pink
+            std::vector<cv::Point2f> undist_pts_from_bearings;
+            camera->convert_bearings_to_points(keyframe->frm_obs_.bearings_, undist_pts_from_bearings);
+            for (auto const& point : undist_pts_from_bearings) {
+                cv::circle(src, point, 6,
+                           cv::Scalar(255, 0, 255), thickness,
+                           lineType, shift);
+            }
+            */
+
+            // Reprojections - green
             Vec2_t reproj;
             float x_right; // ???
             for (auto const& landmark : lms) {
                 camera->reproject_to_image(keyframe->get_rot_cw(), keyframe->get_trans_cw(), landmark->get_pos_in_world(), reproj, x_right);
-                int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
-                cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
+                cv::circle(src, cv::Point(reproj(0), reproj(1)), 4,
                            cv::Scalar(0, 255, 0), thickness,
                            lineType, shift);
             }
+
+
         }
 
         //    MyEllipse(src, 90);
