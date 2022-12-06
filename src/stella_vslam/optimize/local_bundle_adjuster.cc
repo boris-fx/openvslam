@@ -36,7 +36,7 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
                                      const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
     // 1. Aggregate the local and fixed keyframes, and local landmarks
 
-   spdlog::warn("local_bundle_adjuster::optimize - current keyframe: {}", curr_keyfrm->id_);
+   //spdlog::warn("local_bundle_adjuster::optimize - current keyframe: {}", curr_keyfrm->id_);
 
     // Correct the local keyframes of the current keyframe
     std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> local_keyfrms;

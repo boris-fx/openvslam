@@ -14,7 +14,7 @@
 namespace stella_vslam_bfx {
 
 bool keyframe_autocalibration_wrapper::operator()() const {
-    return fx && fy && autocalibration_params;
+    return fx && fy && autocalibration_params && camera;
 }
 
 bool fx_fy_from_camera(stella_vslam::camera::base* camera, double **fx, double **fy)
@@ -47,14 +47,11 @@ bool fx_fy_from_camera(stella_vslam::camera::base* camera, double **fx, double *
     return true;
 }
 
-
-
 keyframe_autocalibration_wrapper::keyframe_autocalibration_wrapper(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms)
 {
    using namespace stella_vslam;
 
     // Get the shared camera from a keyframe
-    camera::base* camera(nullptr);
     for (const auto& keyfrm : keyfrms) {
         if (!keyfrm) {
             continue;
@@ -91,7 +88,7 @@ keyframe_autocalibration_wrapper::keyframe_autocalibration_wrapper(std::vector<s
     //        break;
     //    }
     //}
-    bool ok = fx_fy_from_camera(camera, &fx, &fy);
+    fx_fy_from_camera(camera, &fx, &fy);
 }
 
 bool setFocalLengthXPixels(stella_vslam::data::map_database* map_db,

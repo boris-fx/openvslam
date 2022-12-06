@@ -73,8 +73,6 @@ private:
     //-----------------------------------------
     // parameters
 
-       std::string trackedVideoName; // temp for debug
-
     //! max number of iterations of RANSAC (only for monocular initializer)
     const unsigned int num_ransac_iters_;
     //! min number of valid pts (It should be greater than or equal to min_num_triangulated_)
@@ -105,9 +103,6 @@ private:
 
     //! Create an initial map with monocular camera setup
     bool create_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm, bool destroy_initialiser, bool optimise_focal_length);
-
-    //! Update map after a bundle which changed the focal length
-    bool update_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm, bool destroy_initialiser, bool optimise_focal_length);
 
     //! Scaling up or down a initial map
     void scale_map(const std::shared_ptr<data::keyframe>& init_keyfrm, const std::shared_ptr<data::keyframe>& curr_keyfrm, const double scale);

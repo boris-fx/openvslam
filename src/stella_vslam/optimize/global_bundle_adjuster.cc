@@ -340,6 +340,11 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
         const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
 
         keyfrm->set_pose_cw(cam_pose_cw);
+
+        if (focal_length_modified && autocalibration_wrapper.camera) {
+            keyfrm->frm_obs_.bearings_.clear();
+            autocalibration_wrapper.camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
+        }
     }
 
     for (unsigned int i = 0; i < lms.size(); ++i) {
@@ -357,7 +362,6 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
 
         auto lm_vtx = lm_vtx_container.get_vertex(lm);
         const Vec3_t pos_w = lm_vtx->estimate();
-
         lm->set_pos_in_world(pos_w);
         lm->update_mean_normal_and_obs_scale_variance();
     }
@@ -418,6 +422,11 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
         }
         auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
         const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
+
+        if (focal_length_modified && autocalibration_wrapper.camera) {
+            keyfrm->frm_obs_.bearings_.clear();
+            autocalibration_wrapper.camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
+        }
 
         keyfrm_to_pose_cw_after_global_BA[keyfrm->id_] = cam_pose_cw;
         optimized_keyfrm_ids.insert(keyfrm->id_);

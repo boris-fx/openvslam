@@ -495,7 +495,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
 
     double initialFocalLength = (cfg->settings_.camera_model_ == stella_vslam::camera::model_type_t::Perspective) ? cfg->settings_.perspective_settings_.fx_ : 0;
-    const_cast<std::string&>(cfg->settings_.trackedVideoName) = video_file_path;
+
     // build a SLAM system
     stella_vslam::system SLAM(cfg, vocab_file_path);
     // startup the SLAM process

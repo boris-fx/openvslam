@@ -138,7 +138,7 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
             float x_right; // ???
             for (auto const& landmark : lms) {
                 camera->reproject_to_image(keyframe->get_rot_cw(), keyframe->get_trans_cw(), landmark->get_pos_in_world(), reproj, x_right);
-                cv::circle(src, cv::Point(reproj(0), reproj(1)), 4,
+                cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
                            cv::Scalar(0, 255, 0), thickness,
                            lineType, shift);
             }
