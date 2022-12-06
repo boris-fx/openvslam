@@ -251,7 +251,6 @@ add_subdirectory(publish)
 add_subdirectory(solve)
 add_subdirectory(util)
 
-
 # ----- Configure IDE -----
 
 if (CMAKE_GENERATOR MATCHES "Visual Studio")

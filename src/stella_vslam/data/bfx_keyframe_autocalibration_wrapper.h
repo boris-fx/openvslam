@@ -39,25 +39,3 @@ bool setFocalLengthXPixels(stella_vslam::data::frame& frm, double focal_length_x
 
 } // namespace stella_vslam_bfx
 
-namespace stella_vslam {
-namespace data {
-
-class frame;
-
-class keyframe;
-
-class map_database;
-
-class STELLA_VSLAM_API bfx_shared_camera_intrinsics {
-public:
-    //EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-    double focal_length_x_pixels;
-
-    //! encode landmark information as JSON
-    nlohmann::json to_json() const;
-
-};
-
-} // namespace data
-} // namespace stella_vslam

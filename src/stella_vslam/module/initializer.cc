@@ -3,7 +3,7 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
-#include "stella_vslam/data/bfx_shared_camera_intrinsics.h"
+#include "stella_vslam/data/bfx_keyframe_autocalibration_wrapper.h"
 #include "stella_vslam/initialize/bearing_vector.h"
 #include "stella_vslam/initialize/perspective.h"
 #include "stella_vslam/marker_model/base.h"

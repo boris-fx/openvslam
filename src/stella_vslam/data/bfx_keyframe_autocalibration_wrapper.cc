@@ -1,4 +1,4 @@
-#include "stella_vslam/data/bfx_shared_camera_intrinsics.h"
+#include "stella_vslam/data/bfx_keyframe_autocalibration_wrapper.h"
 
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
@@ -131,17 +131,4 @@ bool setFocalLengthXPixels(stella_vslam::data::frame& frm, double focal_length_x
 
 }
 
-
 } // namespace stella_vslam_bfx
-
-
-
-namespace stella_vslam {
-namespace data {
-
-nlohmann::json bfx_shared_camera_intrinsics::to_json() const {
-    return {{"focal_length_x_pixels", focal_length_x_pixels}};
-}
-
-} // namespace data
-} // namespace stella_vslam
