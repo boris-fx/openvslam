@@ -17,6 +17,16 @@ class frame;
 
 namespace initialize {
 
+struct initialisation_cache {
+    enum model { model_H,
+                 model_F,
+                 model_E,
+                 model_undefined }; /// view pair constraint: homography, fundamental, or essential matrix
+    model m = model_undefined;
+    Mat33_t ref_to_cur;                /// Cached H_ref_to_cur, F_ref_to_cur, or E_ref_to_cur
+    std::vector<bool> is_inlier_match; /// Cached inliers to H, F, or E
+};
+
 class base {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -34,8 +44,12 @@ public:
     //! Destructor
     virtual ~base() = default;
 
+
     //! Initialize with the current frame
-    virtual bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur) = 0;
+    virtual bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache *cache=nullptr) = 0;
+
+    //! Re-initialize with the current frame
+    virtual bool cached_initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache *cache) = 0;
 
     //! Get the rotation from the reference to the current
     Mat33_t get_rotation_ref_to_cur() const;
@@ -52,7 +66,7 @@ public:
 protected:
     //! Find the most plausible pose and set them to the member variables (outputs)
     bool find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots, const eigen_alloc_vector<Vec3_t>& init_transes,
-                                  const std::vector<bool>& is_inlier_match, const bool depth_is_positive);
+                                  const std::vector<bool>& is_inlier_match, const bool depth_is_positive, double parallax_deg_thr_multiplier=1.0);
 
     //! Generate 3D points from matches with valid and sufficient parallax
     unsigned int triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& trans_ref_to_cur,
@@ -60,7 +74,7 @@ protected:
                              eigen_alloc_vector<Vec3_t>& triangulated_pts,
                              std::vector<bool>& is_triangulated,
                              unsigned int& num_triangulated_pts,
-                             float& parallax_deg);
+                             float& parallax_deg, bool verbose);
 
     //-----------------------------------------
     // reference frame information

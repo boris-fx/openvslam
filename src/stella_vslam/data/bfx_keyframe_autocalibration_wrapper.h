@@ -37,5 +37,7 @@ bool setFocalLengthXPixels(stella_vslam::data::map_database * map_db, double foc
 
 bool setFocalLengthXPixels(stella_vslam::data::frame& frm, double focal_length_x_pixels);
 
+bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_length_x_pixels);
+
 } // namespace stella_vslam_bfx
 

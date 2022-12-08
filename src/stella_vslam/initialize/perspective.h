@@ -31,22 +31,25 @@ public:
     ~perspective() override;
 
     //! Initialize with the current frame
-    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur) override;
+    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache = nullptr) override;
+
+    //! Re-initialize with the current frame
+    bool cached_initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) override;
 
 private:
     //! Reconstruct the initial map with the H matrix
     //! (NOTE: the output variables will be set if succeeded)
-    bool reconstruct_with_H(const Mat33_t& H_ref_to_cur, const std::vector<bool>& is_inlier_match);
+    bool reconstruct_with_H(const Mat33_t& H_ref_to_cur, const std::vector<bool>& is_inlier_match, double parallax_deg_thr_multiplier);
 
     //! Reconstruct the initial map with the F matrix
     //! (NOTE: the output variables will be set if succeeded)
-    bool reconstruct_with_F(const Mat33_t& F_ref_to_cur, const std::vector<bool>& is_inlier_match);
+    bool reconstruct_with_F(const Mat33_t& F_ref_to_cur, const std::vector<bool>& is_inlier_match, double parallax_deg_thr_multiplier);
 
     //! Get the camera matrix from the camera object
     static Mat33_t get_camera_matrix(camera::base* camera);
 
     //! camera matrix of the reference frame
-    const Mat33_t ref_cam_matrix_;
+    Mat33_t ref_cam_matrix_;
     //! camera matrix of the current frame
     Mat33_t cur_cam_matrix_;
 

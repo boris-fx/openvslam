@@ -77,24 +77,49 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             }
 
             bool optimise_focal_length = curr_frm.camera_->autocalibration_parameters_.optimise_focal_length;
-            bool destroy_initialiser_in_createMap(!optimise_focal_length);
-            int maxIterations = 1; //(optimise_focal_length ? 4 : 1);
-            int iteration(0);
-            while (iteration < maxIterations) {
+            bool refine_initialisation(optimise_focal_length);
+            //bool refine_initialisation(true);
 
-                // try to initialize
-                if (!try_initialize_for_monocular(curr_frm)) {
-                    // failed
-                    return false;
-                }
+            bool destroy_initialiser_in_createMap(!refine_initialisation);
 
-                //bool optimise_focal_length_this_iteration(optimise_focal_length && iteration!=);
+            initialize::initialisation_cache init_cache;
+            initialize::initialisation_cache* cache(refine_initialisation ? &init_cache : nullptr);
 
-                // create new map if succeeded
-                create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
 
-                ++iteration;
+//if (init_frm_.id_ != 0 || curr_frm.id_ != 7)
+//                return false;
+//{
+//    stella_vslam_bfx::setCameraFocalLength(curr_frm.camera_, 900);
+//}
+
+            // try to initialize
+            if (!try_initialize_for_monocular(curr_frm, cache)) {
+               // failed
+               return false;
             }
+
+            // create new map if succeeded
+            create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
+
+            // Try to improve the initialisation now that the focal length estimate has been improved
+            if (refine_initialisation) {
+            
+               for (int i = 0; i < 1; ++i) {
+                
+                   if (!refine_initialize_for_monocular(curr_frm, cache)) {
+                       // failed
+                       break;
+                   }
+
+                   // create new map if succeeded
+                   map_db_->clear();
+                   state_ = initializer_state_t::Initializing;
+                   create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
+               
+               }
+            
+            }
+
 
             //nlohmann::json json_keyfrms, json_landmarks;
             //map_db_->to_json(json_keyfrms, json_landmarks);
@@ -176,7 +201,7 @@ void initializer::create_initializer(data::frame& curr_frm) {
     state_ = initializer_state_t::Initializing;
 }
 
-bool initializer::try_initialize_for_monocular(data::frame& curr_frm) {
+bool initializer::try_initialize_for_monocular(data::frame& curr_frm, initialize::initialisation_cache* cache) {
     assert(state_ == initializer_state_t::Initializing);
 
     unsigned int num_matches = 0;
@@ -195,7 +220,64 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm) {
     // try to initialize with the initial frame and the current frame
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
-    return initializer_->initialize(curr_frm, init_matches_);
+    return initializer_->initialize(curr_frm, init_matches_, cache);
+}
+
+bool initializer::refine_initialize_for_monocular(data::frame& curr_frm, initialize::initialisation_cache* cache) {
+
+
+   #if 1 // complete reset
+
+initializer_.reset(nullptr);
+
+{ // create_initialiser without setting the init frame to current
+
+       // initialize the previously matched coordinates
+    prev_matched_coords_.resize(init_frm_.frm_obs_.undist_keypts_.size());
+    for (unsigned int i = 0; i < init_frm_.frm_obs_.undist_keypts_.size(); ++i) {
+        prev_matched_coords_.at(i) = init_frm_.frm_obs_.undist_keypts_.at(i).pt;
+    }
+
+    // initialize matchings (init_idx -> curr_idx)
+    std::fill(init_matches_.begin(), init_matches_.end(), -1);
+
+    // build a initializer
+    initializer_.reset(nullptr);
+    switch (init_frm_.camera_->model_type_) {
+        case camera::model_type_t::Perspective:
+        case camera::model_type_t::Fisheye:
+        case camera::model_type_t::RadialDivision: {
+            initializer_ = std::unique_ptr<initialize::perspective>(
+                new initialize::perspective(
+                    init_frm_, num_ransac_iters_, min_num_triangulated_, min_num_valid_pts_,
+                    parallax_deg_thr_, reproj_err_thr_, use_fixed_seed_));
+            break;
+        }
+        case camera::model_type_t::Equirectangular: {
+            initializer_ = std::unique_ptr<initialize::bearing_vector>(
+                new initialize::bearing_vector(
+                    init_frm_, num_ransac_iters_, min_num_triangulated_, min_num_valid_pts_,
+                    parallax_deg_thr_, reproj_err_thr_, use_fixed_seed_));
+            break;
+        }
+    }
+
+    state_ = initializer_state_t::Initializing;
+}
+
+bool init = try_initialize_for_monocular(curr_frm, cache);
+return init;
+   #else
+
+   if (init_matches_.empty())
+        return false;
+
+    // try to initialize with the initial frame and the current frame
+    assert(initializer_);
+    spdlog::debug("refine initialization with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
+    bool init = initializer_->cached_initialize(curr_frm, init_matches_, cache);
+    return init;
+    #endif
 }
 
 bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm, bool destroy_initialiser, bool optimise_focal_length) {
@@ -305,7 +387,14 @@ bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data
 
     // global bundle adjustment
     const auto global_bundle_adjuster = optimize::global_bundle_adjuster(map_db_, num_ba_iters_, true);
-    global_bundle_adjuster.optimize_for_initialization();
+    bool *const null_force_stop_flag(nullptr), camera_was_modified;
+    global_bundle_adjuster.optimize_for_initialization(null_force_stop_flag, &camera_was_modified);
+    if (camera_was_modified) {
+        curr_frm.frm_obs_.bearings_.clear();
+        curr_frm.camera_->convert_keypoints_to_bearings(curr_frm.frm_obs_.undist_keypts_, curr_frm.frm_obs_.bearings_);
+        init_frm_.frm_obs_.bearings_.clear();
+        init_frm_.camera_->convert_keypoints_to_bearings(init_frm_.frm_obs_.undist_keypts_, init_frm_.frm_obs_.bearings_);
+    }
 
     if (indefinite_scale) {
         // scale the map so that the median of depths is 1.0

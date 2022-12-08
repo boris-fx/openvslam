@@ -31,7 +31,10 @@ public:
     ~bearing_vector() override;
 
     //! Initialize with the current frame
-    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur) override;
+    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache = nullptr) override;
+
+    //! Re-initialize after improving focal length estimate with the current frame - N/A for bearing_vector
+    bool cached_initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) override;
 
 private:
     //! Reconstruct the initial map with the E matrix

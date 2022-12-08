@@ -43,9 +43,10 @@ void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
     eigen_alloc_unord_map<unsigned int, Vec3_t> lm_to_pos_w_after_global_BA;
     eigen_alloc_unord_map<unsigned int, Mat44_t> keyfrm_to_pose_cw_after_global_BA;
     const auto global_BA = optimize::global_bundle_adjuster(map_db_, num_iter_, false);
+    bool camera_was_modified;
     bool ok = global_BA.optimizeGlobal(optimized_keyfrm_ids, optimized_landmark_ids,
                                        lm_to_pos_w_after_global_BA,
-                                       keyfrm_to_pose_cw_after_global_BA, &abort_loop_BA_, num_iter, general_bundle);
+                                       keyfrm_to_pose_cw_after_global_BA, &abort_loop_BA_, num_iter, general_bundle, &camera_was_modified);
 
     {
         std::lock_guard<std::mutex> lock1(mtx_thread_);

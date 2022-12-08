@@ -82,11 +82,14 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
     double focal_length_x_pixels = vertex->estimate();
 #endif
 
+#if 1
+    return stella_vslam_bfx::setCameraFocalLength(autocalibration_wrapper.camera, focal_length_x_pixels);
+#else
     double par = *autocalibration_wrapper.fy / *autocalibration_wrapper.fx;
     *autocalibration_wrapper.fx = focal_length_x_pixels;
     *autocalibration_wrapper.fy = focal_length_x_pixels * par;
-
     return true;
+#endif
 }
 
 void optimize_impl(g2o::SparseOptimizer& optimizer,
@@ -276,10 +279,10 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
     for (int i = 0; i < stats.size(); ++i) {
         if (stats[i].iteration < 0)
             continue;
-        auto const& stat(stats[i]);
-        double gain = i == 0 ? 0 : (stats[i-1].chi2 - stats[i].chi2) / stats[i].chi2;
-        double gain2 = i == 0 ? 0 : (sqrt(stats[i - 1].chi2) - sqrt(stats[i].chi2)) / sqrt(stats[i].chi2);
-        spdlog::info("-> iter {} #vertices {} #edges {} chi2 {} gain {} {}", stat.iteration, stat.numVertices, stat.numEdges, stat.chi2, gain, gain2);
+        //auto const& stat(stats[i]);
+        //double gain = i == 0 ? 0 : (stats[i-1].chi2 - stats[i].chi2) / stats[i].chi2;
+        //double gain2 = i == 0 ? 0 : (sqrt(stats[i - 1].chi2) - sqrt(stats[i].chi2)) / sqrt(stats[i].chi2);
+        //spdlog::info("-> iter {} #vertices {} #edges {} chi2 {} gain {} {}", stat.iteration, stat.numVertices, stat.numEdges, stat.chi2, gain, gain2);
     }
 
     if (force_stop_flag && *force_stop_flag) {
@@ -290,7 +293,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
 global_bundle_adjuster::global_bundle_adjuster(data::map_database* map_db, const unsigned int num_iter, const bool use_huber_kernel)
     : map_db_(map_db), num_iter_(num_iter), use_huber_kernel_(use_huber_kernel) {}
 
-void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_flag) const {
+void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_flag, bool *camera_was_modified) const {
     // 1. Collect the dataset
     auto keyfrms = map_db_->get_all_keyframes();
     auto lms = map_db_->get_all_landmarks();
@@ -324,6 +327,9 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
     double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+
+    if (camera_was_modified)
+        *camera_was_modified = focal_length_modified;
 
     //spdlog::info("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
     //spdlog::debug("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
@@ -371,7 +377,7 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
                                       std::unordered_set<unsigned int>& optimized_landmark_ids,
                                       eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                                       eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,
-                                            bool* const force_stop_flag, int num_iter, bool general_bundle) const {
+                                            bool* const force_stop_flag, int num_iter, bool general_bundle, bool* camera_was_modified) const {
     // 1. Collect the dataset
     auto keyfrms = map_db_->get_all_keyframes();
     auto lms = map_db_->get_all_landmarks();
@@ -414,6 +420,8 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
     double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
+    if (camera_was_modified)
+        *camera_was_modified = focal_length_modified;
     spdlog::warn("global bundle focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
 
     for (auto keyfrm : keyfrms) {
