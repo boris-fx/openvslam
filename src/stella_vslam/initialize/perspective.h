@@ -36,6 +36,8 @@ public:
     //! Re-initialize with the current frame
     bool cached_initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) override;
 
+    double temp_parallax_multiplier;
+
 private:
     //! Reconstruct the initial map with the H matrix
     //! (NOTE: the output variables will be set if succeeded)

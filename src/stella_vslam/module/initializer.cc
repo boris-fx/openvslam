@@ -77,20 +77,12 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             }
 
             bool optimise_focal_length = curr_frm.camera_->autocalibration_parameters_.optimise_focal_length;
-            bool refine_initialisation(optimise_focal_length);
-            //bool refine_initialisation(true);
-
+            double last_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
+            bool refine_initialisation(false);//optimise_focal_length);
             bool destroy_initialiser_in_createMap(!refine_initialisation);
 
             initialize::initialisation_cache init_cache;
             initialize::initialisation_cache* cache(refine_initialisation ? &init_cache : nullptr);
-
-
-//if (init_frm_.id_ != 0 || curr_frm.id_ != 7)
-//                return false;
-//{
-//    stella_vslam_bfx::setCameraFocalLength(curr_frm.camera_, 900);
-//}
 
             // try to initialize
             if (!try_initialize_for_monocular(curr_frm, cache)) {
@@ -103,23 +95,27 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
 
             // Try to improve the initialisation now that the focal length estimate has been improved
             if (refine_initialisation) {
-            
+               double const focal_length_change_percent_threshold(5.0); /// Stop iterating if the change percent falls below this
                for (int i = 0; i < 1; ++i) {
-                
+                   double new_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
+                   double focal_length_change_percent = fabs(100.0 * (new_focal_length - last_focal_length) / last_focal_length);
+                   last_focal_length = new_focal_length;
+                   if (focal_length_change_percent < focal_length_change_percent_threshold)
+                       break;
+
                    if (!refine_initialize_for_monocular(curr_frm, cache)) {
                        // failed
                        break;
                    }
 
+                   //break;
+
                    // create new map if succeeded
                    map_db_->clear();
                    state_ = initializer_state_t::Initializing;
                    create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
-               
                }
-            
             }
-
 
             //nlohmann::json json_keyfrms, json_landmarks;
             //map_db_->to_json(json_keyfrms, json_landmarks);

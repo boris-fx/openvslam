@@ -42,6 +42,8 @@ bool fx_fy_from_camera(stella_vslam::camera::base* camera, double **fx, double *
             *fy = &c->fy_;
             break;
         }
+        default:
+            return false;
     }
 
     return true;
@@ -91,6 +93,15 @@ keyframe_autocalibration_wrapper::keyframe_autocalibration_wrapper(std::vector<s
     fx_fy_from_camera(camera, &fx, &fy);
 }
 
+double getCameraFocalLengthXPixels(stella_vslam::camera::base const* camera)
+{
+    double *fx(nullptr), *fy(nullptr);
+    bool ok = fx_fy_from_camera(const_cast<stella_vslam::camera::base*>(camera), &fx, &fy);
+    if (ok && fx)
+        return *fx;
+    return 0;
+}
+
 bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_length_x_pixels)
 {
     using namespace stella_vslam;
@@ -108,7 +119,13 @@ bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_lengt
                                     fx, fy, ref.cx_, ref.cy_,
                                     ref.k1_, ref.k2_, ref.p1_, ref.p2_, ref.k3_,
                                     ref.focal_x_baseline_, ref.depth_thr_);
-            memcpy(c, &alt, sizeof(camera::perspective)); // NB: camera::perspective's copy and move seem to be deleted
+            // Copy the bits that are affected by focal length. NB: camera::perspective's copy and move seem to be deleted
+            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<cv::Mat&>(c->cv_cam_matrix_) = alt.cv_cam_matrix_;
+            const_cast<Mat33_t&>(c->eigen_cam_matrix_) = alt.eigen_cam_matrix_;
             return true;
         }
         case camera::model_type_t::Fisheye: {
@@ -123,7 +140,13 @@ bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_lengt
                                 fx, fy, ref.cx_, ref.cy_,
                                 ref.k1_, ref.k2_, ref.k3_, ref.k4_,
                                 ref.focal_x_baseline_, ref.depth_thr_);
-            memcpy(c, &alt, sizeof(camera::fisheye)); // NB: camera::fisheye's copy and move seem to be deleted
+            // Copy the bits that are affected by focal length. NB: camera::fisheye's copy and move seem to be deleted
+            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<cv::Mat&>(c->cv_cam_matrix_) = alt.cv_cam_matrix_;
+            const_cast<Mat33_t&>(c->eigen_cam_matrix_) = alt.eigen_cam_matrix_;
             return true;
         }
         case camera::model_type_t::RadialDivision: {
@@ -137,7 +160,13 @@ bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_lengt
                                         ref.cols_, ref.rows_, ref.fps_,
                                         fx, fy, ref.cx_, ref.cy_,
                                         ref.distortion_, ref.focal_x_baseline_, ref.depth_thr_);
-            memcpy(c, &alt, sizeof(camera::radial_division)); // NB: camera::radial_division's copy and move seem to be deleted
+            // Copy the bits that are affected by focal length. NB: camera::radial_division's copy and move seem to be deleted
+            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<cv::Mat&>(c->cv_cam_matrix_) = alt.cv_cam_matrix_;
+            const_cast<Mat33_t&>(c->eigen_cam_matrix_) = alt.eigen_cam_matrix_;
             return true;
         }
     }
