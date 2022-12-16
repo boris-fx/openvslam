@@ -51,13 +51,10 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
     // number of triangulated 3D points
     std::vector<unsigned int> num_triangulated_pts(num_hypothesis);
 
-    spdlog::info("");
-    spdlog::info("==========================");
-    spdlog::info("");
 
     for (unsigned int i = 0; i < num_hypothesis; ++i) {
         nums_valid_pts.at(i) = triangulate(init_rots.at(i), init_transes.at(i), is_inlier_match, depth_is_positive,
-                                           init_triangulated_pts.at(i), init_is_triangulated.at(i), num_triangulated_pts.at(i), init_parallax.at(i), i==2);
+                                           init_triangulated_pts.at(i), init_is_triangulated.at(i), num_triangulated_pts.at(i), init_parallax.at(i), false);
     }
 
     rot_ref_to_cur_ = Mat33_t::Zero();
