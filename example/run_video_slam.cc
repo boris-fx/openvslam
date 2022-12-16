@@ -569,7 +569,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         }
 
         // Final bundle
-        if (true) {
+        if (false) {
             SLAM.run_loop_BA();
             std::this_thread::sleep_for(std::chrono::microseconds(1000000));
         }

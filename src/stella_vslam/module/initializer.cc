@@ -154,7 +154,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
 
             bool optimise_focal_length = curr_frm.camera_->autocalibration_parameters_.optimise_focal_length;
             double last_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
-            bool refine_initialisation(optimise_focal_length);
+            bool refine_initialisation(false);//(optimise_focal_length);
             bool destroy_initialiser_in_createMap(!refine_initialisation);
             data::frame start_init_frm, start_curr_frm;
             if (refine_initialisation) {
