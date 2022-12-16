@@ -80,7 +80,7 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
     }
 
     // reject if the parallax is too small
-    spdlog::info("parallax test {} > {}", std::cos(parallax_deg_thr_multiplier*parallax_deg_thr_ / 180.0 * M_PI), init_parallax.at(max_num_valid_index));
+    //spdlog::info("parallax test {} > {}", std::cos(parallax_deg_thr_multiplier*parallax_deg_thr_ / 180.0 * M_PI), init_parallax.at(max_num_valid_index));
     if (init_parallax.at(max_num_valid_index) > std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI)) {
         return false;
     }
@@ -96,7 +96,7 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
     triangulated_pts_ = init_triangulated_pts.at(max_num_valid_index);
     is_triangulated_ = init_is_triangulated.at(max_num_valid_index);
 
-    if (true) { //remove
+    if (false) { //remove
         auto input_count = std::count(is_inlier_match.begin(), is_inlier_match.end(), true);
         spdlog::info("found plausable pose: input {}, inlier {}, triangulated {}, valid {}",
                      is_inlier_match.size(), input_count, num_triangulated_pts.at(max_num_valid_index), *max_num_valid_pts_iter);

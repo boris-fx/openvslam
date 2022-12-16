@@ -74,7 +74,7 @@ if (temp_reinitialise)
 
     // select a case according to the score
     if (0.40 < rel_score_H && homography_solver.solution_is_valid()) {
-        spdlog::debug("reconstruct_with_H");
+        //spdlog::debug("reconstruct_with_H");
         const Mat33_t H_ref_to_cur = homography_solver.get_best_H_21();
         const auto is_inlier_match = homography_solver.get_inlier_matches();
         if (cache) {
@@ -85,13 +85,13 @@ if (temp_reinitialise)
         return reconstruct_with_H(H_ref_to_cur, is_inlier_match, 1.0);
     }
     else if (fundamental_solver.solution_is_valid()) {
-        spdlog::info("reconstruct_with_F");
+        //spdlog::info("reconstruct_with_F");
 
         const Mat33_t F_ref_to_cur = fundamental_solver.get_best_F_21();
         const auto is_inlier_match = fundamental_solver.get_inlier_matches();
 
-        spdlog::info("F is {}", F_ref_to_cur);
-        spdlog::info("F candidate matches {}", is_inlier_match.size());
+        //spdlog::info("F is {}", F_ref_to_cur);
+        //spdlog::info("F candidate matches {}", is_inlier_match.size());
 
 if (temp_reinitialise)
             int y = 0;
