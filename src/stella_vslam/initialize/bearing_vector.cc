@@ -23,7 +23,7 @@ bearing_vector::~bearing_vector() {
     spdlog::debug("DESTRUCT: initialize::bearing_vector");
 }
 
-bool bearing_vector::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) {
+bool bearing_vector::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier) {
     // set the current camera model
     cur_camera_ = cur_frm.camera_;
     // store the keypoints and bearings
@@ -47,32 +47,14 @@ bool bearing_vector::initialize(const data::frame& cur_frm, const std::vector<in
     if (essential_solver.solution_is_valid()) {
         const Mat33_t E_ref_to_cur = essential_solver.get_best_E_21();
         const auto is_inlier_match = essential_solver.get_inlier_matches();
-        if (cache) {
-            cache->m = initialisation_cache::model_E;
-            cache->ref_to_cur = E_ref_to_cur;
-            cache->is_inlier_match = is_inlier_match;
-        }
-        return reconstruct_with_E(E_ref_to_cur, is_inlier_match);
+        return reconstruct_with_E(E_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
     }
     else {
         return false;
     }
 }
 
-bool bearing_vector::cached_initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) {
-
-    if (!cache)
-        return false;
-
-    if (cache->m == initialisation_cache::model_E) {
-        spdlog::debug("cached reconstruct_with_E");
-        return reconstruct_with_E(cache->ref_to_cur, cache->is_inlier_match);
-    }
-
-    return false;
-}
-
-bool bearing_vector::reconstruct_with_E(const Mat33_t& E_ref_to_cur, const std::vector<bool>& is_inlier_match) {
+bool bearing_vector::reconstruct_with_E(const Mat33_t& E_ref_to_cur, const std::vector<bool>& is_inlier_match, double parallax_deg_thr_multiplier) {
     // found the most plausible pose from the FOUR hypothesis computed from the E matrix
 
     // decompose the E matrix
@@ -85,7 +67,7 @@ bool bearing_vector::reconstruct_with_E(const Mat33_t& E_ref_to_cur, const std::
     assert(init_rots.size() == 4);
     assert(init_transes.size() == 4);
 
-    const auto pose_is_found = find_most_plausible_pose(init_rots, init_transes, is_inlier_match, false);
+    const auto pose_is_found = find_most_plausible_pose(init_rots, init_transes, is_inlier_match, false, parallax_deg_thr_multiplier);
     if (!pose_is_found) {
         return false;
     }

@@ -9,7 +9,6 @@
 #include <thread>
 
 #include <spdlog/spdlog.h>
-#include <spdlog/fmt/ostr.h>
 
 namespace stella_vslam {
 namespace initialize {
@@ -22,7 +21,7 @@ perspective::perspective(const data::frame& ref_frm,
                          const float reproj_err_thr,
                          bool use_fixed_seed)
     : base(ref_frm, num_ransac_iters, min_num_triangulated, min_num_valid_pts, parallax_deg_thr, reproj_err_thr),
-      ref_cam_matrix_(get_camera_matrix(ref_frm.camera_)), use_fixed_seed_(use_fixed_seed), temp_parallax_multiplier(0.7) {
+      ref_cam_matrix_(get_camera_matrix(ref_frm.camera_)), use_fixed_seed_(use_fixed_seed) {
     spdlog::debug("CONSTRUCT: initialize::perspective");
 }
 
@@ -30,16 +29,7 @@ perspective::~perspective() {
     spdlog::debug("DESTRUCT: initialize::perspective");
 }
 
-bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) {
-
-bool temp_reinitialise(cache && cache->m != initialisation_cache::model_undefined);
-
-//    if (temp_reinitialise)
-//        return cached_initialize(cur_frm, ref_matches_with_cur, cache);
-
-if (temp_reinitialise)
-    int yy = 0;
-
+bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier) {
     // set the current camera model
     cur_camera_ = cur_frm.camera_;
     // store the keypoints and bearings
@@ -74,57 +64,16 @@ if (temp_reinitialise)
 
     // select a case according to the score
     if (0.40 < rel_score_H && homography_solver.solution_is_valid()) {
-        //spdlog::debug("reconstruct_with_H");
+        spdlog::debug("reconstruct_with_H");
         const Mat33_t H_ref_to_cur = homography_solver.get_best_H_21();
         const auto is_inlier_match = homography_solver.get_inlier_matches();
-        if (cache) {
-            cache->m = initialisation_cache::model_H;
-            cache->ref_to_cur = H_ref_to_cur;
-            cache->is_inlier_match = is_inlier_match;
-        }
-        return reconstruct_with_H(H_ref_to_cur, is_inlier_match, 1.0);
+        return reconstruct_with_H(H_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
     }
     else if (fundamental_solver.solution_is_valid()) {
-        //spdlog::info("reconstruct_with_F");
-
+        spdlog::debug("reconstruct_with_F");
         const Mat33_t F_ref_to_cur = fundamental_solver.get_best_F_21();
         const auto is_inlier_match = fundamental_solver.get_inlier_matches();
-
-        //spdlog::info("F is {}", F_ref_to_cur);
-        //spdlog::info("F candidate matches {}", is_inlier_match.size());
-
-if (temp_reinitialise)
-            int y = 0;
-        //return reconstruct_with_F(cache->ref_to_cur, cache->is_inlier_match, temp_parallax_multiplier);
-
-        if (cache) {
-            cache->m = initialisation_cache::model_F;
-            cache->ref_to_cur = F_ref_to_cur;
-            cache->is_inlier_match = is_inlier_match;
-        }
-        return reconstruct_with_F(F_ref_to_cur, is_inlier_match, temp_reinitialise ? temp_parallax_multiplier : 1.0);
-    }
-    else {
-        return false;
-    }
-}
-
-bool perspective::cached_initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) {
-
-   if (!cache)
-        return false;
-
-   ref_cam_matrix_ = get_camera_matrix(cur_frm.camera_);
-   cur_cam_matrix_ = get_camera_matrix(cur_frm.camera_);
-
-   if (cache->m==initialisation_cache::model_H) {
-        spdlog::debug("cached reconstruct_with_H");
-       return reconstruct_with_H(cache->ref_to_cur, cache->is_inlier_match, temp_parallax_multiplier);
-    }
-   else if (cache->m == initialisation_cache::model_F) {
-        spdlog::info("cached reconstruct_with_F");
-       bool result = reconstruct_with_F(cache->ref_to_cur, cache->is_inlier_match, temp_parallax_multiplier);
-       return result;
+        return reconstruct_with_F(F_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
     }
     else {
         return false;
@@ -163,10 +112,6 @@ bool perspective::reconstruct_with_F(const Mat33_t& F_ref_to_cur, const std::vec
     if (!solve::fundamental_solver::decompose(F_ref_to_cur, ref_cam_matrix_, cur_cam_matrix_, init_rots, init_transes)) {
         return false;
     }
-
-    spdlog::info("F_ref_to_cur {}, ref_cam_matrix_ {}, cur_cam_matrix_ {}", F_ref_to_cur, ref_cam_matrix_, cur_cam_matrix_);
-    for (int i = 0; i < init_rots.size(); ++i)
-       spdlog::info("init_rots {}, init_transes {}", init_rots[i], init_transes[i]);
 
     assert(init_rots.size() == 4);
     assert(init_transes.size() == 4);

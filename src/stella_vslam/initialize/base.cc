@@ -1,9 +1,6 @@
 #include "stella_vslam/data/frame.h"
 #include "stella_vslam/initialize/base.h"
 #include "stella_vslam/solve/triangulator.h"
-#include "stella_vslam/camera/perspective.h"
-#include <spdlog/spdlog.h>
-#include <spdlog/fmt/ostr.h>
 
 namespace stella_vslam {
 namespace initialize {
@@ -51,10 +48,9 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
     // number of triangulated 3D points
     std::vector<unsigned int> num_triangulated_pts(num_hypothesis);
 
-
     for (unsigned int i = 0; i < num_hypothesis; ++i) {
         nums_valid_pts.at(i) = triangulate(init_rots.at(i), init_transes.at(i), is_inlier_match, depth_is_positive,
-                                           init_triangulated_pts.at(i), init_is_triangulated.at(i), num_triangulated_pts.at(i), init_parallax.at(i), false);
+                                           init_triangulated_pts.at(i), init_is_triangulated.at(i), num_triangulated_pts.at(i), init_parallax.at(i));
     }
 
     rot_ref_to_cur_ = Mat33_t::Zero();
@@ -80,7 +76,6 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
     }
 
     // reject if the parallax is too small
-    //spdlog::info("parallax test {} > {}", std::cos(parallax_deg_thr_multiplier*parallax_deg_thr_ / 180.0 * M_PI), init_parallax.at(max_num_valid_index));
     if (init_parallax.at(max_num_valid_index) > std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI)) {
         return false;
     }
@@ -96,29 +91,15 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
     triangulated_pts_ = init_triangulated_pts.at(max_num_valid_index);
     is_triangulated_ = init_is_triangulated.at(max_num_valid_index);
 
-    if (false) { //remove
-        auto input_count = std::count(is_inlier_match.begin(), is_inlier_match.end(), true);
-        spdlog::info("found plausable pose: input {}, inlier {}, triangulated {}, valid {}",
-                     is_inlier_match.size(), input_count, num_triangulated_pts.at(max_num_valid_index), *max_num_valid_pts_iter);
-    }
-
     return true;
 }
-
-void printRefCamera(camera::base* const camera) {
-    if (camera->model_type_ == camera::model_type_t::Perspective) {
-        auto c = static_cast<camera::perspective*>(camera);
-        spdlog::info("Camera fx {} fy {} cx {} cy {}", c->fx_, c->fy_, c->cx_, c->cy_);
-    }
-}
-
 
 unsigned int base::triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& trans_ref_to_cur,
                                const std::vector<bool>& is_inlier_match, const bool depth_is_positive,
                                eigen_alloc_vector<Vec3_t>& triangulated_pts,
                                std::vector<bool>& is_triangulated,
                                unsigned int& num_triangulated_pts,
-                               float& parallax_cos, bool verbose) {
+                               float& parallax_cos) {
     // = cos(0.5deg)
     constexpr float cos_parallax_thr = 0.99996192306;
     const float reproj_err_thr_sq = reproj_err_thr_ * reproj_err_thr_;
@@ -137,8 +118,6 @@ unsigned int base::triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& tran
     unsigned int num_valid_pts = 0;
     num_triangulated_pts = 0;
 
-    int vLimit(3);
-
     // for each matching, triangulate a 3D point and compute a parallax and a reprojection error
     for (unsigned int i = 0; i < ref_cur_matches_.size(); ++i) {
         if (!is_inlier_match.at(i)) {
@@ -148,13 +127,7 @@ unsigned int base::triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& tran
         const Vec3_t& ref_bearing = ref_bearings_.at(ref_cur_matches_.at(i).first);
         const Vec3_t& cur_bearing = cur_bearings_.at(ref_cur_matches_.at(i).second);
 
-        if (verbose && i < vLimit)
-            spdlog::info("Triangulating {} Bref {} Bcur {} R {} t {}", i, ref_bearing, cur_bearing, rot_ref_to_cur, trans_ref_to_cur);
-
         const Vec3_t pos_c_in_ref = solve::triangulator::triangulate(ref_bearing, cur_bearing, rot_ref_to_cur, trans_ref_to_cur);
-
-        if (verbose && i < vLimit)
-            spdlog::info("pos_c_in_ref {} {}", i, pos_c_in_ref);
 
         if (!std::isfinite(pos_c_in_ref(0))
             || !std::isfinite(pos_c_in_ref(1))
@@ -171,20 +144,12 @@ unsigned int base::triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& tran
 
         const bool parallax_is_small = cos_parallax_thr < cos_parallax;
 
-        if (verbose && i < vLimit)
-            spdlog::info("Triangulating {} parallax_is_small {} pos_c_in_ref(2) {}", i, parallax_is_small, pos_c_in_ref(2));
-
         // reject if the 3D point is in front of the cameras
         if (depth_is_positive) {
             if (!parallax_is_small && pos_c_in_ref(2) <= 0) {
                 continue;
             }
             const Vec3_t pos_c_in_cur = rot_ref_to_cur * pos_c_in_ref + trans_ref_to_cur;
-
-            if (verbose && i < vLimit)
-                spdlog::info("Triangulating {} parallax_is_small {} pos_c_in_cur(2) {}", i, parallax_is_small, pos_c_in_cur(2));
-
-
             if (!parallax_is_small && pos_c_in_cur(2) <= 0) {
                 continue;
             }
@@ -193,30 +158,17 @@ unsigned int base::triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& tran
         const auto& ref_undist_keypt = ref_undist_keypts_.at(ref_cur_matches_.at(i).first);
         const auto& cur_undist_keypt = cur_undist_keypts_.at(ref_cur_matches_.at(i).second);
 
-                if (verbose && i < vLimit)
-            spdlog::info("pos_c_in_ref {} {} ", pos_c_in_ref, i);
-                if (verbose && i < vLimit) {
-                    spdlog::info("ref_camera_ {} {} ", *ref_camera_, i);
-                    printRefCamera(ref_camera_);
-                }
         // compute a reprojection error in the reference
         Vec2_t reproj_in_ref;
         float x_right_in_ref;
         const auto is_valid_ref = ref_camera_->reproject_to_image(Mat33_t::Identity(), Vec3_t::Zero(), pos_c_in_ref,
                                                                   reproj_in_ref, x_right_in_ref);
         if (!parallax_is_small && !is_valid_ref) {
-            if (verbose && i < vLimit)
-                spdlog::info("Fail is_valid_ref {}", i);
             continue;
         }
 
-        if (verbose && i < vLimit)
-            spdlog::info("reproj_in_ref {} ref_undist_keypt.pt {} {} ", reproj_in_ref, ref_undist_keypt.pt, i);
-
         const float ref_reproj_err_sq = (reproj_in_ref - ref_undist_keypt.pt).squaredNorm();
         if (reproj_err_thr_sq < ref_reproj_err_sq) {
-            if (verbose && i < vLimit)
-                spdlog::info("Fail ref_reproj_err_sq {} {}", i, ref_reproj_err_sq);
             continue;
         }
 
@@ -226,14 +178,10 @@ unsigned int base::triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& tran
         const auto is_valid_cur = cur_camera_->reproject_to_image(rot_ref_to_cur, trans_ref_to_cur, pos_c_in_ref,
                                                                   reproj_in_cur, x_right_in_cur);
         if (!parallax_is_small && !is_valid_cur) {
-            if (verbose && i < vLimit)
-                spdlog::info("Fail is_valid_cur {}", i);
             continue;
         }
         const float cur_reproj_err_sq = (reproj_in_cur - cur_undist_keypt.pt).squaredNorm();
         if (reproj_err_thr_sq < cur_reproj_err_sq) {
-            if (verbose && i < vLimit)
-                spdlog::info("Fail cur_reproj_err_sq {}", i);
             continue;
         }
 
@@ -248,8 +196,6 @@ unsigned int base::triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& tran
             num_triangulated_pts++;
         }
     }
-    if (verbose)
-    spdlog::info("num_valid_pts {}", num_valid_pts);
 
     if (0 < num_valid_pts) {
         // return the 50th smallest parallax

@@ -121,9 +121,9 @@ bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_lengt
                                     ref.focal_x_baseline_, ref.depth_thr_);
             // Copy the bits that are affected by focal length. NB: camera::perspective's copy and move seem to be deleted
             const_cast<double&>(c->fx_) = alt.fx_;
-            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fy_) = alt.fy_;
             const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
-            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<double&>(c->fy_inv_) = alt.fy_inv_;
             const_cast<cv::Mat&>(c->cv_cam_matrix_) = alt.cv_cam_matrix_;
             const_cast<Mat33_t&>(c->eigen_cam_matrix_) = alt.eigen_cam_matrix_;
             return true;
@@ -142,9 +142,9 @@ bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_lengt
                                 ref.focal_x_baseline_, ref.depth_thr_);
             // Copy the bits that are affected by focal length. NB: camera::fisheye's copy and move seem to be deleted
             const_cast<double&>(c->fx_) = alt.fx_;
-            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fy_) = alt.fy_;
             const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
-            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<double&>(c->fy_inv_) = alt.fy_inv_;
             const_cast<cv::Mat&>(c->cv_cam_matrix_) = alt.cv_cam_matrix_;
             const_cast<Mat33_t&>(c->eigen_cam_matrix_) = alt.eigen_cam_matrix_;
             return true;
@@ -162,9 +162,9 @@ bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_lengt
                                         ref.distortion_, ref.focal_x_baseline_, ref.depth_thr_);
             // Copy the bits that are affected by focal length. NB: camera::radial_division's copy and move seem to be deleted
             const_cast<double&>(c->fx_) = alt.fx_;
-            const_cast<double&>(c->fx_) = alt.fx_;
+            const_cast<double&>(c->fy_) = alt.fy_;
             const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
-            const_cast<double&>(c->fx_inv_) = alt.fx_inv_;
+            const_cast<double&>(c->fy_inv_) = alt.fy_inv_;
             const_cast<cv::Mat&>(c->cv_cam_matrix_) = alt.cv_cam_matrix_;
             const_cast<Mat33_t&>(c->eigen_cam_matrix_) = alt.eigen_cam_matrix_;
             return true;

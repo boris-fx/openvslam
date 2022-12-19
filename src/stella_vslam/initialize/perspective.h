@@ -31,12 +31,7 @@ public:
     ~perspective() override;
 
     //! Initialize with the current frame
-    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache = nullptr) override;
-
-    //! Re-initialize with the current frame
-    bool cached_initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, initialisation_cache* cache) override;
-
-    double temp_parallax_multiplier;
+    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier) override;
 
 private:
     //! Reconstruct the initial map with the H matrix
@@ -51,7 +46,7 @@ private:
     static Mat33_t get_camera_matrix(camera::base* camera);
 
     //! camera matrix of the reference frame
-    Mat33_t ref_cam_matrix_;
+    const Mat33_t ref_cam_matrix_;
     //! camera matrix of the current frame
     Mat33_t cur_cam_matrix_;
 

@@ -154,7 +154,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
 
             bool optimise_focal_length = curr_frm.camera_->autocalibration_parameters_.optimise_focal_length;
             double last_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
-            bool refine_initialisation(false);//(optimise_focal_length);
+            bool refine_initialisation(false); //optimise_focal_length);
             bool destroy_initialiser_in_createMap(!refine_initialisation);
             data::frame start_init_frm, start_curr_frm;
             if (refine_initialisation) {
@@ -162,11 +162,11 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                 start_curr_frm = curr_frm;
             }
 
-            initialize::initialisation_cache init_cache;
-            initialize::initialisation_cache* cache(refine_initialisation ? &init_cache : nullptr);
+            //initialize::initialisation_cache init_cache;
+            //initialize::initialisation_cache* cache(refine_initialisation ? &init_cache : nullptr);
 
             // try to initialize
-            if (!try_initialize_for_monocular(curr_frm, cache)) {
+            if (!try_initialize_for_monocular(curr_frm, 1.0)) {
                // failed
                return false;
             }
@@ -202,8 +202,8 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                    reset(); // reset the initialiser (this)
                    map_db_->clear(); // reset the map_db
                    create_initializer(init_frm); // create a new initialiser
-                   bool ok_initialize = try_initialize_for_monocular(curr_frm, cache); // Reinitialise with the new focal length
-                                                                                       // cache will lower some thresholds
+                   bool ok_initialize = try_initialize_for_monocular(curr_frm, 0.7); // Reinitialise with the new focal length
+                                                                                       // and lower parallax threshold
                    if (ok_initialize)
                        create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
 
@@ -307,7 +307,7 @@ void initializer::create_initializer(data::frame& curr_frm) {
     state_ = initializer_state_t::Initializing;
 }
 
-bool initializer::try_initialize_for_monocular(data::frame& curr_frm, initialize::initialisation_cache* cache) {
+bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier) {
     assert(state_ == initializer_state_t::Initializing);
 
     unsigned int num_matches = 0;
@@ -326,9 +326,10 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, initialize
     // try to initialize with the initial frame and the current frame
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
-    return initializer_->initialize(curr_frm, init_matches_, cache);
+    return initializer_->initialize(curr_frm, init_matches_, parallax_deg_thr_multiplier);
 }
 
+#if 0
 bool initializer::refine_initialize_for_monocular(data::frame& curr_frm, initialize::initialisation_cache* cache) {
 
 
@@ -385,6 +386,7 @@ return init;
     return init;
     #endif
 }
+#endif
 
 bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm, bool destroy_initialiser, bool optimise_focal_length) {
     assert(state_ == initializer_state_t::Initializing);

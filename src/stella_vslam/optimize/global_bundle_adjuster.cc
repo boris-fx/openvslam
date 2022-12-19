@@ -83,7 +83,8 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
 #endif
 
 #if 1
-    return stella_vslam_bfx::setCameraFocalLength(autocalibration_wrapper.camera, focal_length_x_pixels);
+    bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(autocalibration_wrapper.camera, focal_length_x_pixels);
+    return set_f_ok;
 #else
     double par = *autocalibration_wrapper.fy / *autocalibration_wrapper.fx;
     *autocalibration_wrapper.fx = focal_length_x_pixels;
