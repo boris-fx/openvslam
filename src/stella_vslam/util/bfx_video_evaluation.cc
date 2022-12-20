@@ -31,7 +31,14 @@ void MyEllipse(cv::Mat img, double angle) {
                 lineType);
 }
 
-bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName, stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame) {
+bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
+                                 stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame,
+                                 std::map<int, Eigen::Matrix4d> const* videoFrameToCamera)
+{
+    int thickness = 2;
+    int lineType = 8;
+    int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
+
     using namespace std;
     using namespace cv;
     using namespace stella_vslam;
@@ -48,9 +55,12 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
 
     std::map<int, std::shared_ptr<data::keyframe>> sourceFrameToKeyframe;
 
+    camera::base* camera(nullptr);
+
     for (const auto& keyfrm : keyfrms) {
         if (!keyfrm)
             continue;
+        camera = keyfrm->camera_;
         auto f = timestampToVideoFrame.find(keyfrm->timestamp_);
         if (f != timestampToVideoFrame.end())
            sourceFrameToKeyframe[f->second] = keyfrm;
@@ -87,34 +97,49 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
     Mat src, res;
     vector<Mat> spl;
     int srcFrame(0);
+    int cameraCount(0), noCameraCount(0);
     for (;;) //Show the image captured in the window and repeat
     {
-#if 1
         inputVideo >> src; // read
 
         if (src.empty())
             break; // check if at end
 
-        //split(src, spl); // process - extract only the correct channel
-        //for (int i = 0; i < 3; ++i)
-        //  if (i != channel)
-        //    spl[i] = Mat::zeros(S, spl[0].type());
-        //merge(spl, res);
-        //outputVideo->write(res); //save or
+        Eigen::Matrix4d const* frameCamera(nullptr);
+        if (videoFrameToCamera) {
+            auto fCamera = videoFrameToCamera->find(srcFrame);
+            if (fCamera != videoFrameToCamera->end())
+                frameCamera = &fCamera->second;
+        }
+        if (frameCamera) {
+            Vec2_t reproj;
+            float x_right; // ???
+            //using EigenTransform = Eigen::Transform<double, 3, Eigen::TransformTraits::AffineCompact>;
+            using EigenTransform = Eigen::Transform<double, 3, Eigen::TransformTraits::Isometry>;
+            EigenTransform cameraToWorld(*frameCamera);
+           // const Eigen::Matrix3d R(cameraToWorld.rotation().matrix());
+            //const Eigen::Vector3d t(cameraToWorld.translation().data());
+            
+            EigenTransform worldToCamera = cameraToWorld.inverse();
+            const Eigen::Matrix3d R(worldToCamera.rotation().matrix());
+            const Eigen::Vector3d t(worldToCamera.translation().data());
 
-        int thickness = 2;
-        int lineType = 8;
+            for (auto const& landmark : lms) {
+                camera->reproject_to_image(R, t, landmark->get_pos_in_world(), reproj, x_right);
+                cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
+                           cv::Scalar(0, 255, 0), thickness,
+                           lineType, shift);
+            }
+        }
 
         // Find associated keyframe data
         auto foundKeyframe = sourceFrameToKeyframe.find(srcFrame);
         std::shared_ptr<data::keyframe> keyframe;
         if (foundKeyframe != sourceFrameToKeyframe.end())
             keyframe = foundKeyframe->second;
-
         if (keyframe) {
-            int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
-            camera::base* camera = keyframe->camera_;
-
+            
+            
 
             /*
             // Observations - red
@@ -135,16 +160,16 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
             */
 
             // Reprojections - green
-            Vec2_t reproj;
-            float x_right; // ???
-            for (auto const& landmark : lms) {
-                camera->reproject_to_image(keyframe->get_rot_cw(), keyframe->get_trans_cw(), landmark->get_pos_in_world(), reproj, x_right);
-                cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
-                           cv::Scalar(0, 255, 0), thickness,
-                           lineType, shift);
+            if (!frameCamera) { // generic camera takes precedence if there's a generic and keyframe camera
+                Vec2_t reproj;
+                float x_right; // ???
+                for (auto const& landmark : lms) {
+                    camera->reproject_to_image(keyframe->get_rot_cw(), keyframe->get_trans_cw(), landmark->get_pos_in_world(), reproj, x_right);
+                    cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
+                               cv::Scalar(0, 255, 0), thickness,
+                               lineType, shift);
+                }
             }
-
-
         }
 
         //    MyEllipse(src, 90);
@@ -178,26 +203,17 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
         //                       cv::Scalar(0, 0, 255), lineType,
         //                       shift);
 
-        if (keyframe)
+        if (keyframe || frameCamera) {
+            ++cameraCount;
             *outputVideo << src;
-
-#else
-        inputVideo >> src; // read
-        if (src.empty())
-            break;       // check if at end
-        split(src, spl); // process - extract only the correct channel
-        for (int i = 0; i < 3; ++i)
-            if (i != channel)
-                spl[i] = Mat::zeros(S, spl[0].type());
-        merge(spl, res);
-        //outputVideo->write(res); //save or
-        outputVideo << res;
-#endif
+        }
+        else
+            ++noCameraCount;
 
         ++srcFrame;
     }
 
-    spdlog::info("bfx_create_evaluation_video writing video file...");
+    spdlog::info("bfx_create_evaluation_video writing video file, frames {}, missing {}, total {}", cameraCount, noCameraCount, srcFrame);
     outputVideo.reset();
     spdlog::info("bfx_create_evaluation_video wrote file {}", outputVideoName);
 

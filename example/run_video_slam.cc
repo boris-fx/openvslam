@@ -499,10 +499,12 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
     // build a SLAM system
     stella_vslam::system SLAM(cfg, vocab_file_path);
 
+    std::map<int, Eigen::Matrix4d> videoFrameToCamera;
+
     // Create a functor object for creating evaluation videos
     std::map<double, int> timestampToVideoFrame;
     SLAM.camera_->autocalibration_parameters_.writeMapVideo = [&video_file_path, &timestampToVideoFrame](stella_vslam::data::map_database const* map, std::string const& filename) {
-      return stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, filename, map, timestampToVideoFrame);
+      return stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, filename, map, timestampToVideoFrame, nullptr);
     };
 
     // startup the SLAM process
@@ -580,7 +582,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         // Final bundle
         if (true) {
             SLAM.run_loop_BA();
-            std::this_thread::sleep_for(std::chrono::microseconds(1000000));
+            std::this_thread::sleep_for(std::chrono::microseconds(1000000)); // required
         }
 
         // wait until the loop BA is finished
@@ -588,10 +590,60 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
         }
 
+        // Second pass without mapping to fill in non-keyframes
+        std::vector<double> videoFrameToTimestamp(num_frame);
+        for (auto const& tf : timestampToVideoFrame)
+            videoFrameToTimestamp[tf.second] = tf.first;
+        SLAM.disable_mapping_module();
+        video.set(cv::CAP_PROP_POS_FRAMES, 0);
+        is_not_end = true;
+        num_frame = 0;
+        while (is_not_end) {
+            is_not_end = video.read(frame);
+            timestamp = videoFrameToTimestamp[num_frame];
+
+            const auto tp_1 = std::chrono::steady_clock::now();
+
+            if (!frame.empty() && (num_frame % frame_skip == 0)) {
+                // input the current frame and estimate the camera pose
+                auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
+                                       ? &extraPointsPerFrame.at(num_frame)
+                                       : nullptr;
+                auto cameraPosePtr = SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
+                if (cameraPosePtr)
+                    videoFrameToCamera[num_frame] = *cameraPosePtr;
+            }
+
+            const auto tp_2 = std::chrono::steady_clock::now();
+
+            const auto track_time = std::chrono::duration_cast<std::chrono::duration<double>>(tp_2 - tp_1).count();
+            if (num_frame % frame_skip == 0) {
+                track_times.push_back(track_time);
+            }
+
+            // wait until the timestamp of the next frame
+            //if (!no_sleep) {
+            //    const auto wait_time = 1.0 / cfg->camera_->fps_ - track_time;
+            //    if (0.0 < wait_time) {
+            //        std::this_thread::sleep_for(std::chrono::microseconds(static_cast<unsigned int>(wait_time * 1e6)));
+            //    }
+            //}
+
+            ++num_frame;
+
+            // check if the termination of SLAM system is requested or not
+            if (SLAM.terminate_is_requested()) {
+                break;
+            }
+        }
+
+
+
+
 
         stella_vslam::data::map_database* map_db = SLAM.map_db_;
-        //bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db);
-        bool ok = SLAM.camera_->autocalibration_parameters_.writeMapVideo(map_db, std::to_string((int)initialFocalLength));
+        bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db, timestampToVideoFrame, &videoFrameToCamera);
+        //bool ok = SLAM.camera_->autocalibration_parameters_.writeMapVideo(map_db, std::to_string((int)initialFocalLength));
 
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER

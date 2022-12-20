@@ -11,11 +11,15 @@
 
 #include "stella_vslam/exports.h"
 
+#include <Eigen/Core>
+
 namespace stella_vslam::data { class map_database; }
 
 namespace stella_vslam_bfx {
 
-STELLA_VSLAM_API bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName, stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame);
+STELLA_VSLAM_API bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
+                            stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame,
+                            std::map<int, Eigen::Matrix4d> const* videoFrameToCamera);
 
 
 } // namespace stella_vslam_bfx
