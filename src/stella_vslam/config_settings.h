@@ -5,6 +5,9 @@
 #include <ostream>
 #include <array>
 #include <vector>
+#include <functional>
+
+namespace stella_vslam::data { class map_database; }
 
 // Moved from camera/base.h to avoid circular headers
 namespace stella_vslam {
@@ -63,6 +66,7 @@ namespace stella_vslam_bfx {
 struct STELLA_VSLAM_API autocalibration_parameters {
    
     bool optimise_focal_length;
+    std::function<bool(stella_vslam::data::map_database const* map, std::string const& filename)> writeMapVideo; 
 
     friend std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration);
 };

@@ -145,6 +145,9 @@ void tracking_module::reset() {
 }
 
 std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
+    
+   spdlog::info("tracking_module::feed_frame {} {}", curr_frm.id_, curr_frm.timestamp_);
+
     // check if pause is requested
     check_and_execute_pause();
     while (is_paused()) {

@@ -498,6 +498,13 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
 
     // build a SLAM system
     stella_vslam::system SLAM(cfg, vocab_file_path);
+
+    // Create a functor object for creating evaluation videos
+    std::map<double, int> timestampToVideoFrame;
+    SLAM.camera_->autocalibration_parameters_.writeMapVideo = [&video_file_path, &timestampToVideoFrame](stella_vslam::data::map_database const* map, std::string const& filename) {
+      return stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, filename, map, timestampToVideoFrame);
+    };
+
     // startup the SLAM process
     SLAM.startup();
 
@@ -535,6 +542,8 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
 
             //bfxTestDrawFrame(frame);
 
+            timestampToVideoFrame[timestamp] = num_frame;
+
             const auto tp_1 = std::chrono::steady_clock::now();
 
             if (!frame.empty() && (num_frame % frame_skip == 0)) {
@@ -569,7 +578,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         }
 
         // Final bundle
-        if (false) {
+        if (true) {
             SLAM.run_loop_BA();
             std::this_thread::sleep_for(std::chrono::microseconds(1000000));
         }
@@ -581,7 +590,8 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
 
 
         stella_vslam::data::map_database* map_db = SLAM.map_db_;
-        bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db);
+        //bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db);
+        bool ok = SLAM.camera_->autocalibration_parameters_.writeMapVideo(map_db, std::to_string((int)initialFocalLength));
 
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER

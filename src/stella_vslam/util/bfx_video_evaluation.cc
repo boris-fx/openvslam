@@ -31,8 +31,7 @@ void MyEllipse(cv::Mat img, double angle) {
                 lineType);
 }
 
-bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName, stella_vslam::data::map_database* map_db)
-{
+bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName, stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame) {
     using namespace std;
     using namespace cv;
     using namespace stella_vslam;
@@ -52,7 +51,9 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
     for (const auto& keyfrm : keyfrms) {
         if (!keyfrm)
             continue;
-        sourceFrameToKeyframe[keyfrm->src_frm_id_] = keyfrm;
+        auto f = timestampToVideoFrame.find(keyfrm->timestamp_);
+        if (f != timestampToVideoFrame.end())
+           sourceFrameToKeyframe[f->second] = keyfrm;
         //spdlog::info("keyframe id {} source id {} timestamp {}", keyfrm->id_, keyfrm->src_frm_id_, keyfrm->timestamp_);
     }
 

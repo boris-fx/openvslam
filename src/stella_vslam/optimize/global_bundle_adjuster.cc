@@ -325,6 +325,11 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     }
 
     // 6. Extract the result
+    //static int hit(0);
+    //++hit;
+    //if (autocalibration_wrapper() && autocalibration_wrapper.camera) {
+    //    bool ok = autocalibration_wrapper.camera->autocalibration_parameters_.writeMapVideo(map_db_, std::string("bundle_a_") + std::to_string((int)hit));
+    //}
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
     double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
@@ -372,6 +377,10 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
         lm->set_pos_in_world(pos_w);
         lm->update_mean_normal_and_obs_scale_variance();
     }
+
+    //if (autocalibration_wrapper() && autocalibration_wrapper.camera) {
+    //    bool ok = autocalibration_wrapper.camera->autocalibration_parameters_.writeMapVideo(map_db_, std::string("bundle_b_") + std::to_string((int)hit));
+    //}
 }
 
 bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& optimized_keyfrm_ids,

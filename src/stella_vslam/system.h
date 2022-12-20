@@ -212,10 +212,13 @@ private:
 
     //! config
     const std::shared_ptr<config> cfg_;
+
+public:
     //! camera model
     camera::base* camera_ = nullptr;
+private:
 
-    //! camera database
+   //! camera database
     data::camera_database* cam_db_ = nullptr;
 
     //! parameters for orb feature extraction
