@@ -485,6 +485,19 @@ void mesh_points(const std::string& dirpath, std::map<int, stella_vslam_bfx::pre
     closedir(dir);
 }
 
+std::tuple<std::shared_ptr<stella_vslam::data::keyframe>, int> earliest_keyframe(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms,
+                                                                                 std::map<double, int> const& timestampToVideoFrame)
+{
+    if (!keyfrms.empty()) {
+        std::shared_ptr<stella_vslam::data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
+                                                                                        [](const auto& a, const auto& b) { return a->timestamp_ < b->timestamp_; });
+        auto f = timestampToVideoFrame.find(first_keyframe_data->timestamp_);
+        if (f != timestampToVideoFrame.end())
+            return {first_keyframe_data, f->second};
+    }
+    return {nullptr, -1};
+}
+
 void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
                    const std::string& vocab_file_path, const std::string& video_file_path, const std::string& mask_img_path,
                    const unsigned int frame_skip, const bool no_sleep, const bool auto_term,
@@ -551,7 +564,8 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
             if (!frame.empty() && (num_frame % frame_skip == 0)) {
                 // input the current frame and estimate the camera pose
                 auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
-                    ? &extraPointsPerFrame.at(num_frame) : nullptr;
+                                       ? &extraPointsPerFrame.at(num_frame)
+                                       : nullptr;
                 SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
             }
 
@@ -579,10 +593,86 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
             }
         }
 
+        // Map from video frame -> timestamp
+        std::vector<double> videoFrameToTimestamp(num_frame);
+        for (auto const& tf : timestampToVideoFrame)
+            videoFrameToTimestamp[tf.second] = tf.first;
+
+        // Track (with mapping) backwards from the first keyframe
+        auto [first_keyframe_data, first_keyframe] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        if (first_keyframe_data)
+            SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
+
+        //int first_keyframe(-1); // First find the earliest keyframe
+        //auto keyfrms = SLAM.map_db_->get_all_keyframes();
+        //if (!keyfrms.empty()) {
+
+        //   auto [first_keyframe_data, first_keyframe] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+
+
+        //    std::shared_ptr<stella_vslam::data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
+        //                                                                                          [](const auto& a, const auto& b) { return a->timestamp_ < b->timestamp_; });
+        //    auto f = timestampToVideoFrame.find(first_keyframe_data->timestamp_);
+        //    if (f != timestampToVideoFrame.end())
+        //        first_keyframe = f->second;
+
+        //    bool ok = SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
+        //}
+        int frame_count(num_frame);
+        for (num_frame = first_keyframe - 1; num_frame >= 0; --num_frame) {
+        
+            bool ok = video.set(cv::CAP_PROP_POS_FRAMES, num_frame);
+            if (!ok)
+                spdlog::warn("Failed to seek to video frame {}", num_frame);
+
+            bool ok2 = video.read(frame);
+            if (!ok2)
+                spdlog::warn("Failed to read video frame  {}", num_frame);
+
+            timestamp = videoFrameToTimestamp[num_frame];
+        
+                    const auto tp_1 = std::chrono::steady_clock::now();
+
+            if (!frame.empty() && (num_frame % frame_skip == 0)) {
+                // input the current frame and estimate the camera pose
+                auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
+                                       ? &extraPointsPerFrame.at(num_frame)
+                                       : nullptr;
+                auto cameraPosePtr = SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
+                if (cameraPosePtr)
+                    videoFrameToCamera[num_frame] = *cameraPosePtr;
+            }
+
+            const auto tp_2 = std::chrono::steady_clock::now();
+
+            const auto track_time = std::chrono::duration_cast<std::chrono::duration<double>>(tp_2 - tp_1).count();
+            if (num_frame % frame_skip == 0) {
+                track_times.push_back(track_time);
+            }
+
+            // wait until the timestamp of the next frame
+            //if (!no_sleep) {
+            //    const auto wait_time = 1.0 / cfg->camera_->fps_ - track_time;
+            //    if (0.0 < wait_time) {
+            //        std::this_thread::sleep_for(std::chrono::microseconds(static_cast<unsigned int>(wait_time * 1e6)));
+            //    }
+            //}
+
+            // check if the termination of SLAM system is requested or not
+            if (SLAM.terminate_is_requested()) {
+                break;
+            }
+
+            if (num_frame == 0) // the for loop doesn't work because num_frame is unsigned
+                break;
+        }
+        auto [first_keyframe_data_new, first_keyframe_new] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        spdlog::info("Moved earliest keyframe from {} to {}", first_keyframe, first_keyframe_new);
+
         // Final bundle
         if (true) {
             SLAM.run_loop_BA();
-            std::this_thread::sleep_for(std::chrono::microseconds(1000000)); // required
+            std::this_thread::sleep_for(std::chrono::microseconds(1000000)); // required?
         }
 
         // wait until the loop BA is finished
@@ -591,9 +681,6 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         }
 
         // Second pass without mapping to fill in non-keyframes
-        std::vector<double> videoFrameToTimestamp(num_frame);
-        for (auto const& tf : timestampToVideoFrame)
-            videoFrameToTimestamp[tf.second] = tf.first;
         SLAM.disable_mapping_module();
         video.set(cv::CAP_PROP_POS_FRAMES, 0);
         is_not_end = true;
