@@ -9,7 +9,7 @@ namespace stella_vslam {
 namespace camera {
 
 fisheye::fisheye(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
-                 const stella_vslam_bfx::autocalibration_parameters& autocalibration,
+                 const autocalibration_parameters& autocalibration,
                  const unsigned int cols, const unsigned int rows, const double fps,
                  const double fx, const double fy, const double cx, const double cy,
                  const double k1, const double k2, const double k3, const double k4,
@@ -33,7 +33,7 @@ fisheye::fisheye(const std::string& name, const setup_type_t& setup_type, const 
 }
 
 fisheye::fisheye(const stella_vslam_bfx::config_settings& settings)
-    : fisheye("", load_setup_type(settings), load_color_order(settings), settings.autocalibration_parameters_,
+    : fisheye("", load_setup_type(settings), load_color_order(settings), settings.optimise_focal_length_,
               settings.cols_, settings.rows_, settings.fps_,
               settings.fisheye_settings_.fx_, settings.fisheye_settings_.fy_,
               settings.fisheye_settings_.cx_, settings.fisheye_settings_.cy_,

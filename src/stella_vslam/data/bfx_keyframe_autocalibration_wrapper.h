@@ -13,8 +13,11 @@ namespace stella_vslam::data {
 class frame;
 class keyframe;
 class map_database;
-}
-namespace stella_vslam::camera { class base; }
+} // namespace stella_vslam::data
+namespace stella_vslam::camera {
+class base;
+struct autocalibration_parameters;
+} // namespace stella_vslam::camera
 
 namespace stella_vslam_bfx {
 
@@ -24,7 +27,7 @@ struct autocalibration_parameters;
 struct keyframe_autocalibration_wrapper {
     double* fx = nullptr;
     double* fy = nullptr;
-    stella_vslam_bfx::autocalibration_parameters* autocalibration_params = nullptr;
+    stella_vslam::camera::autocalibration_parameters* autocalibration_params = nullptr;
     stella_vslam::camera::base* camera = nullptr;
 
     //! \return true if none of the pointers is nullptr

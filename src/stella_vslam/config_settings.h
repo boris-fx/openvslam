@@ -63,15 +63,6 @@ namespace io {
 
 namespace stella_vslam_bfx {
 
-struct STELLA_VSLAM_API autocalibration_parameters {
-   
-    bool optimise_focal_length;
-    std::function<bool(stella_vslam::data::map_database const* map, std::string const& filename)> writeMapVideo; 
-
-    friend std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration);
-};
-STELLA_VSLAM_API autocalibration_parameters mochaDefaultAutocalibrationParameters();
-
 class STELLA_VSLAM_API config_settings {
 public:
 
@@ -81,8 +72,7 @@ public:
                     stella_vslam::camera::color_order_t colour_order,
                     int cols, int rows, double fps, double fx, double fy,
                     double cx, double cy, double p1, double p2,
-                    double k1, double k2, double k3,
-                    autocalibration_parameters autocalibration = mochaDefaultAutocalibrationParameters());
+                    double k1, double k2, double k3);
     
     //! Constructor for fisheye camera
     config_settings(stella_vslam::camera::model_type_t camera_model,
@@ -90,8 +80,7 @@ public:
                     stella_vslam::camera::color_order_t colour_order,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
-                    double k1, double k2, double k3, double k4,
-                    autocalibration_parameters autocalibration = mochaDefaultAutocalibrationParameters());
+                    double k1, double k2, double k3, double k4);
     
     //! Constructor for radial division camera
     config_settings(stella_vslam::camera::model_type_t camera_model,
@@ -99,8 +88,7 @@ public:
                     stella_vslam::camera::color_order_t colour_order,
                     int cols, int rows, double fps,
                     double fx, double fy, double cx, double cy,
-                    double distortion,
-                    autocalibration_parameters autocalibration = mochaDefaultAutocalibrationParameters());
+                    double distortion);
     
     //! Constructor for equirectangular camera
     config_settings(stella_vslam::camera::model_type_t camera_model,
@@ -119,7 +107,6 @@ public:
     stella_vslam::camera::model_type_t camera_model_;
     stella_vslam::camera::setup_type_t camera_setup_;
     stella_vslam::camera::color_order_t colour_order_;
-    autocalibration_parameters autocalibration_parameters_;
     int cols_;
     int rows_;
     double fps_;
@@ -204,6 +191,7 @@ public:
     float parallax_deg_threshold_ = 1.0f;
     float reprojection_error_threshold_ = 4.0f;
     float scaling_factor_ = 1.0f;
+    bool optimise_focal_length_ = false;
 
     // Loop detector settings
     bool loop_detector_is_enabled_ = true;

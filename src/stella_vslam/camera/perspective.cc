@@ -9,7 +9,7 @@ namespace stella_vslam {
 namespace camera {
 
 perspective::perspective(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
-                         const stella_vslam_bfx::autocalibration_parameters& autocalibration,
+                         const autocalibration_parameters& autocalibration,
                          const unsigned int cols, const unsigned int rows, const double fps,
                          const double fx, const double fy, const double cx, const double cy,
                          const double k1, const double k2, const double p1, const double p2, const double k3,
@@ -33,7 +33,7 @@ perspective::perspective(const std::string& name, const setup_type_t& setup_type
 }
 
 perspective::perspective(const stella_vslam_bfx::config_settings& settings)
-    : perspective("", load_setup_type(settings), load_color_order(settings), settings.autocalibration_parameters_,
+    : perspective("", load_setup_type(settings), load_color_order(settings), settings.optimise_focal_length_,
                   settings.cols_, settings.rows_, settings.fps_,
                   settings.perspective_settings_.fx_, settings.perspective_settings_.fy_,
                   settings.perspective_settings_.cx_, settings.perspective_settings_.cy_,

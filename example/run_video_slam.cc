@@ -88,9 +88,6 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     int rows = camera_node["rows"].as<unsigned int>();
     double fps = camera_node["fps"].as<double>();
     
-    stella_vslam_bfx::autocalibration_parameters autocalibration;
-    autocalibration.optimise_focal_length = true;
-
     switch (camera_model)
     {
         case stella_vslam::camera::model_type_t::Perspective:
@@ -107,7 +104,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
                                                              colour_order, cols, rows, fps,
-                                            fx, fy, cx, cy, p1, p2, k1, k2, k3, autocalibration);
+                                            fx, fy, cx, cy, p1, p2, k1, k2, k3);
             break;
         }
         case stella_vslam::camera::model_type_t::Fisheye:
@@ -123,7 +120,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
                                                              colour_order, cols, rows, fps,
-                                            fx, fy, cx, cy, k1, k2, k3, k4, autocalibration);
+                                            fx, fy, cx, cy, k1, k2, k3, k4);
             break;
         }
         case stella_vslam::camera::model_type_t::RadialDivision:
@@ -136,7 +133,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
             
             settings = new stella_vslam_bfx::config_settings(camera_model, camera_setup,
                                                              colour_order, cols, rows, fps,
-                                            fx, fy, cx, cy, d, autocalibration);
+                                            fx, fy, cx, cy, d);
             break;
         }
         case stella_vslam::camera::model_type_t::Equirectangular:
@@ -248,6 +245,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
         settings->parallax_deg_threshold_= solve_node["parallax_deg_threshold"].as<float>(1.0);
         settings->reprojection_error_threshold_= solve_node["reprojection_error_threshold"].as<float>(4.0);
         settings->scaling_factor_= solve_node["scaling_factor"].as<float>(1.0);
+        settings->optimise_focal_length_ = solve_node["optimise_focal_length"].as<bool>(true);
     }
     
     // Loop detector
@@ -603,6 +601,8 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         if (first_keyframe_data)
             SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
 
+        spdlog::info("First keyframe {}", first_keyframe);
+
         //int first_keyframe(-1); // First find the earliest keyframe
         //auto keyfrms = SLAM.map_db_->get_all_keyframes();
         //if (!keyfrms.empty()) {
@@ -619,52 +619,56 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         //    bool ok = SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
         //}
         int frame_count(num_frame);
-        for (num_frame = first_keyframe - 1; num_frame >= 0; --num_frame) {
-        
-            bool ok = video.set(cv::CAP_PROP_POS_FRAMES, num_frame);
-            if (!ok)
-                spdlog::warn("Failed to seek to video frame {}", num_frame);
 
-            bool ok2 = video.read(frame);
-            if (!ok2)
-                spdlog::warn("Failed to read video frame  {}", num_frame);
+        if (first_keyframe > 0) {
+            for (num_frame = first_keyframe - 1; num_frame >= 0; --num_frame) {
+                spdlog::info("Seeking to frame  {}", num_frame);
 
-            timestamp = videoFrameToTimestamp[num_frame];
-        
-                    const auto tp_1 = std::chrono::steady_clock::now();
+                bool ok = video.set(cv::CAP_PROP_POS_FRAMES, num_frame);
+                if (!ok)
+                    spdlog::warn("Failed to seek to video frame {}", num_frame);
 
-            if (!frame.empty() && (num_frame % frame_skip == 0)) {
-                // input the current frame and estimate the camera pose
-                auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
-                                       ? &extraPointsPerFrame.at(num_frame)
-                                       : nullptr;
-                auto cameraPosePtr = SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
-                if (cameraPosePtr)
-                    videoFrameToCamera[num_frame] = *cameraPosePtr;
+                bool ok2 = video.read(frame);
+                if (!ok2)
+                    spdlog::warn("Failed to read video frame  {}", num_frame);
+
+                timestamp = videoFrameToTimestamp[num_frame];
+
+                const auto tp_1 = std::chrono::steady_clock::now();
+
+                if (!frame.empty() && (num_frame % frame_skip == 0)) {
+                    // input the current frame and estimate the camera pose
+                    auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
+                                           ? &extraPointsPerFrame.at(num_frame)
+                                           : nullptr;
+                    auto cameraPosePtr = SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
+                    if (cameraPosePtr)
+                        videoFrameToCamera[num_frame] = *cameraPosePtr;
+                }
+
+                const auto tp_2 = std::chrono::steady_clock::now();
+
+                const auto track_time = std::chrono::duration_cast<std::chrono::duration<double>>(tp_2 - tp_1).count();
+                if (num_frame % frame_skip == 0) {
+                    track_times.push_back(track_time);
+                }
+
+                // wait until the timestamp of the next frame
+                //if (!no_sleep) {
+                //    const auto wait_time = 1.0 / cfg->camera_->fps_ - track_time;
+                //    if (0.0 < wait_time) {
+                //        std::this_thread::sleep_for(std::chrono::microseconds(static_cast<unsigned int>(wait_time * 1e6)));
+                //    }
+                //}
+
+                // check if the termination of SLAM system is requested or not
+                if (SLAM.terminate_is_requested()) {
+                    break;
+                }
+
+                if (num_frame == 0) // the for loop doesn't work because num_frame is unsigned
+                    break;
             }
-
-            const auto tp_2 = std::chrono::steady_clock::now();
-
-            const auto track_time = std::chrono::duration_cast<std::chrono::duration<double>>(tp_2 - tp_1).count();
-            if (num_frame % frame_skip == 0) {
-                track_times.push_back(track_time);
-            }
-
-            // wait until the timestamp of the next frame
-            //if (!no_sleep) {
-            //    const auto wait_time = 1.0 / cfg->camera_->fps_ - track_time;
-            //    if (0.0 < wait_time) {
-            //        std::this_thread::sleep_for(std::chrono::microseconds(static_cast<unsigned int>(wait_time * 1e6)));
-            //    }
-            //}
-
-            // check if the termination of SLAM system is requested or not
-            if (SLAM.terminate_is_requested()) {
-                break;
-            }
-
-            if (num_frame == 0) // the for loop doesn't work because num_frame is unsigned
-                break;
         }
         auto [first_keyframe_data_new, first_keyframe_new] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
         spdlog::info("Moved earliest keyframe from {} to {}", first_keyframe, first_keyframe_new);
@@ -675,10 +679,12 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
             std::this_thread::sleep_for(std::chrono::microseconds(1000000)); // required?
         }
 
+        spdlog::info("here 1 ");
         // wait until the loop BA is finished
         while (SLAM.loop_BA_is_running()) {
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
         }
+        spdlog::info("here 2 ");
 
         // Second pass without mapping to fill in non-keyframes
         SLAM.disable_mapping_module();
@@ -686,7 +692,11 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         is_not_end = true;
         num_frame = 0;
         while (is_not_end) {
+            
             is_not_end = video.read(frame);
+            
+            spdlog::info("is-not_end {}", is_not_end);
+
             timestamp = videoFrameToTimestamp[num_frame];
 
             const auto tp_1 = std::chrono::steady_clock::now();

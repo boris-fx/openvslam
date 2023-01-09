@@ -1,12 +1,17 @@
 #include "bfx_video_evaluation.h"
 
+#define USE_OPENCV_VIDEO_IO 0
+
 #include <spdlog/spdlog.h>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 #include <opencv2/imgcodecs.hpp>
+
+#if USE_OPENCV_VIDEO_IO
 #include <opencv2/videoio.hpp>
+#endif
 
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/keyframe.h>
@@ -35,6 +40,8 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
                                  stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame,
                                  std::map<int, Eigen::Matrix4d> const* videoFrameToCamera)
 {
+#if USE_OPENCV_VIDEO_IO
+
     int thickness = 2;
     int lineType = 8;
     int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
@@ -88,7 +95,7 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
         outputVideo->open(outputVideoName, ex, inputVideo.get(CAP_PROP_FPS), S, true);
     if (!outputVideo->isOpened()) {
         spdlog::error("bfx_create_evaluation_video could not open the output video: {}", outputVideoName);
-        return -1;
+        return false;
     }
     cout << "Input frame resolution: Width=" << S.width << "  Height=" << S.height
          << " of nr#: " << inputVideo.get(CAP_PROP_FRAME_COUNT) << endl;
@@ -217,7 +224,10 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
     outputVideo.reset();
     spdlog::info("bfx_create_evaluation_video wrote file {}", outputVideoName);
 
-    return 0;
+    return true;
+#else
+    return false;
+#endif
 }
 
 } // namespace stella_vslam_bfx

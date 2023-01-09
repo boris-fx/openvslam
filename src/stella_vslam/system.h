@@ -97,6 +97,15 @@ public:
     //! Get the current frame
     const data::frame& get_current_frame() const;
 
+    //! Get the earliest map kayframe
+    double get_first_map_keyframe_timestamp() const;
+
+    //! Relocalise tracking to the position of the first keyframe
+    bool relocalize_by_first_map_keyframe_pose();
+
+    //! Get the camera focal length in x-direction pixels (where appropriate)
+    double focal_length_x_pixels() const;
+
     //-----------------------------------------
     // module management
 

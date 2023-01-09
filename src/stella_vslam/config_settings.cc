@@ -3,31 +3,15 @@
 
 namespace stella_vslam_bfx {
 
-autocalibration_parameters mochaDefaultAutocalibrationParameters()
-{
-    autocalibration_parameters parameters;
-    
-    parameters.optimise_focal_length = false;
-
-    return parameters;
-}
-
-std::ostream& operator<<(std::ostream& os, const autocalibration_parameters& autocalibration)
-{
-    os << "\tOptimise focal length: " << (autocalibration.optimise_focal_length ? "yes" : "no")
-       << std::endl;
-    return os;
-}
-
 config_settings::config_settings(stella_vslam::camera::model_type_t camera_model,
                                     stella_vslam::camera::setup_type_t camera_setup,
                                     stella_vslam::camera::color_order_t colour_order,
                                     int cols, int rows, double fps, double fx, double fy,
                                     double cx, double cy, double p1, double p2,
-                                 double k1, double k2, double k3, autocalibration_parameters autocalibration)
+                                 double k1, double k2, double k3)
     :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
-    autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
+    cols_(cols), rows_(rows), fps_(fps)
 {
     if (camera_model != stella_vslam::camera::model_type_t::Perspective)
         throw std::runtime_error("Incorrect camera settings for type");
@@ -48,10 +32,10 @@ config_settings::config_settings(stella_vslam::camera::model_type_t camera_model
                                     stella_vslam::camera::color_order_t colour_order,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
-                                 double k1, double k2, double k3, double k4, autocalibration_parameters autocalibration)
+                                 double k1, double k2, double k3, double k4)
     :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
-    autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
+    cols_(cols), rows_(rows), fps_(fps)
 {
     if (camera_model != stella_vslam::camera::model_type_t::Fisheye)
         throw std::runtime_error("Incorrect camera settings for type");
@@ -71,10 +55,10 @@ config_settings::config_settings(stella_vslam::camera::model_type_t camera_model
                                     stella_vslam::camera::color_order_t colour_order,
                                     int cols, int rows, double fps,
                                     double fx, double fy, double cx, double cy,
-                                 double distortion, autocalibration_parameters autocalibration)
+                                 double distortion)
     :
     camera_model_(camera_model), camera_setup_(camera_setup), colour_order_(colour_order),
-    autocalibration_parameters_(autocalibration), cols_(cols), rows_(rows), fps_(fps)
+    cols_(cols), rows_(rows), fps_(fps)
 {
     if (camera_model != stella_vslam::camera::model_type_t::RadialDivision)
         throw std::runtime_error("Incorrect camera settings for type");
@@ -110,7 +94,6 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     os << "\tColor order: " <<
         stella_vslam::camera::color_order_to_string[static_cast<unsigned>(settings.colour_order_)]
         << std::endl;
-    os << settings.autocalibration_parameters_;
 
     os << "\tCols: " << settings.cols_ << std::endl;
     os << "\tRows: " << settings.rows_ << std::endl;
@@ -221,6 +204,7 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     os << "\tParallax deg threshold: " << settings.parallax_deg_threshold_ << std::endl;
     os << "\tReprojection error threshold: " << settings.reprojection_error_threshold_ << std::endl;
     os << "\tScaling factor: " << settings.scaling_factor_ << std::endl;
+    os << "\tOptimise focal length: " << settings.optimise_focal_length_ << std::endl;
 
     os << "LoopDetector\n";
     os << "\tLoop detector is enabled: " << settings.loop_detector_is_enabled_ << std::endl;

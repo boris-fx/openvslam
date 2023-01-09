@@ -6,6 +6,7 @@
 
 #include <string>
 #include <limits>
+#include <functional>
 
 #include <opencv2/core/types.hpp>
 #include <nlohmann/json_fwd.hpp>
@@ -28,11 +29,19 @@ struct image_bounds {
     float max_y_ = 0.0;
 };
 
+struct autocalibration_parameters {
+
+    bool optimise_focal_length;
+    std::function<bool(stella_vslam::data::map_database const* map, std::string const& filename)> writeMapVideo;
+
+    autocalibration_parameters(bool optimise_focal_length=false);
+};
+
 class base {
 public:
     //! Constructor
     base(const std::string& name, const setup_type_t setup_type, const model_type_t model_type,
-         const color_order_t color_order, stella_vslam_bfx::autocalibration_parameters autocalibration,
+         const color_order_t color_order, autocalibration_parameters autocalibration,
          const unsigned int cols, const unsigned int rows, const double fps,
          const double focal_x_baseline, const double true_baseline, const double depth_thr,
          const unsigned int num_grid_cols = 64, const unsigned int num_grid_rows = 48);
@@ -70,7 +79,7 @@ public:
     //! Load color order from string
     static color_order_t load_color_order(const std::string& color_order_str);
 
-    stella_vslam_bfx::autocalibration_parameters autocalibration_parameters_;
+    autocalibration_parameters autocalibration_parameters_;
 
     //! Show common parameters along camera models
     void show_common_parameters() const;

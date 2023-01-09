@@ -7,8 +7,13 @@
 namespace stella_vslam {
 namespace camera {
 
+autocalibration_parameters::autocalibration_parameters(bool optimise_focal_length)
+: optimise_focal_length(optimise_focal_length)
+{
+}
+
 base::base(const std::string& name, const setup_type_t setup_type, const model_type_t model_type,
-           const color_order_t color_order, stella_vslam_bfx::autocalibration_parameters autocalibration,
+           const color_order_t color_order, autocalibration_parameters autocalibration,
            const unsigned int cols, const unsigned int rows, const double fps,
            const double focal_x_baseline, const double true_baseline, const double depth_thr,
            const unsigned int num_grid_cols, const unsigned int num_grid_rows)

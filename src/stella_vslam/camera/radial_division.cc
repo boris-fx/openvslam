@@ -11,7 +11,7 @@ namespace stella_vslam {
 namespace camera {
 
 radial_division::radial_division(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
-                                 const stella_vslam_bfx::autocalibration_parameters& autocalibration,
+                                 const autocalibration_parameters& autocalibration,
                                  const unsigned int cols, const unsigned int rows, const double fps,
                                  const double fx, const double fy, const double cx, const double cy,
                                  const double distortion, const double focal_x_baseline, const double depth_thr)
@@ -32,7 +32,7 @@ radial_division::radial_division(const std::string& name, const setup_type_t& se
 }
 
 radial_division::radial_division(const stella_vslam_bfx::config_settings& settings)
-    : radial_division("", load_setup_type(settings), load_color_order(settings), settings.autocalibration_parameters_,
+    : radial_division("", load_setup_type(settings), load_color_order(settings), settings.optimise_focal_length_,
                       settings.cols_, settings.rows_, settings.fps_,
                       settings.radial_division_settings_.fx_, settings.radial_division_settings_.fy_,
                       settings.radial_division_settings_.cx_, settings.radial_division_settings_.cy_,

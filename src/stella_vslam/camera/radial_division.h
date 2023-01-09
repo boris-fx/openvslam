@@ -19,7 +19,7 @@ namespace camera {
 class radial_division final : public base {
 public:
     radial_division(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
-                    const stella_vslam_bfx::autocalibration_parameters& autocalibration,
+                    const autocalibration_parameters& autocalibration,
                     const unsigned int cols, const unsigned int rows, const double fps,
                     const double fx, const double fy, const double cx, const double cy,
                     const double distortion, const double focal_x_baseline = 0.0, const double depth_thr = 0.0);

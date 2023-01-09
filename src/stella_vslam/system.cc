@@ -13,6 +13,7 @@
 #include "stella_vslam/data/bow_database.h"
 #include "stella_vslam/data/bow_vocabulary.h"
 #include "stella_vslam/data/marker2d.h"
+#include "stella_vslam/data/bfx_keyframe_autocalibration_wrapper.h"
 #include "stella_vslam/marker_detector/aruco.h"
 #include "stella_vslam/match/stereo.h"
 #include "stella_vslam/feature/orb_extractor.h"
@@ -314,6 +315,57 @@ const std::shared_ptr<publish::frame_publisher> system::get_frame_publisher() co
 const data::frame& system::get_current_frame() const
 {
     return tracker_->curr_frm_;
+}
+
+double system::get_first_map_keyframe_timestamp() const
+{
+    if (map_db_) {
+        auto keyfrms = map_db_->get_all_keyframes();
+        if (!keyfrms.empty()) {
+            std::shared_ptr<stella_vslam::data::keyframe> first_keyframe = *std::min_element(keyfrms.begin(), keyfrms.end(),
+               [](const auto& a, const auto& b) { return a->timestamp_ < b->timestamp_; });
+            return first_keyframe->timestamp_;
+        }
+    }
+    return -1.0;
+}
+
+bool system::relocalize_by_first_map_keyframe_pose() {
+    if (map_db_) {
+        auto keyfrms = map_db_->get_all_keyframes();
+        if (!keyfrms.empty()) {
+            std::shared_ptr<stella_vslam::data::keyframe> first_keyframe = *std::min_element(keyfrms.begin(), keyfrms.end(),
+                                                                                             [](const auto& a, const auto& b) { return a->timestamp_ < b->timestamp_; });
+            relocalize_by_pose(first_keyframe->get_pose_wc());
+            return true;
+        }
+    }
+    return false;
+}
+
+double system::focal_length_x_pixels() const {
+    if (map_db_) {
+        auto keyfrms = map_db_->get_all_keyframes();
+        if (!keyfrms.empty()) {
+
+            // Get the shared camera from a keyframe
+            stella_vslam::camera::base* camera(nullptr);
+            for (const auto& keyfrm : keyfrms) {
+                if (!keyfrm) {
+                    continue;
+                }
+                if (keyfrm->will_be_erased()) {
+                    continue;
+                }
+                camera = keyfrm->camera_;
+                break;
+            }
+
+            if (camera)
+               return stella_vslam_bfx::getCameraFocalLengthXPixels(camera);
+        }
+    }
+    return -1.0;
 }
 
 void system::enable_mapping_module() {
