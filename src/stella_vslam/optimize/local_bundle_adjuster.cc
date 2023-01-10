@@ -227,7 +227,7 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
             const auto sqrt_chi_sq = (keyfrm->camera_->setup_type_ == camera::setup_type_t::Monocular)
                                          ? sqrt_chi_sq_2D
                                          : sqrt_chi_sq_3D;
-            internal::bfx_camera_intrinsics_vertex* null_camera_intrinsics_vtx(nullptr); // NB: Intrinsics are never optimised locally
+            internal::camera_intrinsics_vertex* null_camera_intrinsics_vtx(nullptr); // NB: Intrinsics are never optimised locally
             auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx, null_camera_intrinsics_vtx,
                                                         idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
                                                         inv_sigma_sq, sqrt_chi_sq);

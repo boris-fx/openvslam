@@ -13,7 +13,7 @@
 #include "stella_vslam/data/bow_database.h"
 #include "stella_vslam/data/bow_vocabulary.h"
 #include "stella_vslam/data/marker2d.h"
-#include "stella_vslam/data/bfx_keyframe_autocalibration_wrapper.h"
+#include "stella_vslam/data/keyframe_autocalibration_wrapper.h"
 #include "stella_vslam/marker_detector/aruco.h"
 #include "stella_vslam/match/stereo.h"
 #include "stella_vslam/feature/orb_extractor.h"

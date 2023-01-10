@@ -8,7 +8,7 @@
 #include "stella_vslam/type.h"
 #include "stella_vslam/optimize/internal/landmark_vertex.h"
 #include "stella_vslam/optimize/internal/se3/shot_vertex.h"
-#include "stella_vslam/optimize/internal/bfx_camera_intrinsics_vertex.h"
+#include "stella_vslam/optimize/internal/camera_intrinsics_vertex.h"
 
 #include <g2o/core/base_binary_edge.h>
 #include <g2o/core/base_unary_edge.h>
@@ -51,11 +51,11 @@ namespace se3 {
  *
  * Used mono_perspective_reproj_edge as a base. Some functions are identical: read(), write(), depth_is_positive()
  */
-class bfx_mono_perspective_reproj_tri_edge final : public g2o::BaseTertiaryEdge<2, Vec2_t, landmark_vertex, shot_vertex, bfx_camera_intrinsics_vertex> {
+class mono_perspective_reproj_tri_edge final : public g2o::BaseTertiaryEdge<2, Vec2_t, landmark_vertex, shot_vertex, camera_intrinsics_vertex> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    bfx_mono_perspective_reproj_tri_edge();
+    mono_perspective_reproj_tri_edge();
 
     bool read(std::istream& is) override;
 
@@ -72,10 +72,10 @@ public:
     double par_, cx_, cy_;
 };
 
-inline bfx_mono_perspective_reproj_tri_edge::bfx_mono_perspective_reproj_tri_edge()
-    : g2o::BaseTertiaryEdge<2, Vec2_t, landmark_vertex, shot_vertex, bfx_camera_intrinsics_vertex>() {}
+inline mono_perspective_reproj_tri_edge::mono_perspective_reproj_tri_edge()
+    : g2o::BaseTertiaryEdge<2, Vec2_t, landmark_vertex, shot_vertex, camera_intrinsics_vertex>() {}
 
-inline bool bfx_mono_perspective_reproj_tri_edge::read(std::istream& is) {
+inline bool mono_perspective_reproj_tri_edge::read(std::istream& is) {
     for (unsigned int i = 0; i < 2; ++i) {
         is >> _measurement(i);
     }
@@ -86,7 +86,7 @@ inline bool bfx_mono_perspective_reproj_tri_edge::read(std::istream& is) {
     return true;
 }
 
-inline bool bfx_mono_perspective_reproj_tri_edge::write(std::ostream& os) const {
+inline bool mono_perspective_reproj_tri_edge::write(std::ostream& os) const {
     for (unsigned int i = 0; i < 2; ++i) {
         os << measurement()(i) << " ";
     }
@@ -96,10 +96,10 @@ inline bool bfx_mono_perspective_reproj_tri_edge::write(std::ostream& os) const 
     return os.good();
 }
 
-inline void bfx_mono_perspective_reproj_tri_edge::computeError() {
+inline void mono_perspective_reproj_tri_edge::computeError() {
     const auto v1 = static_cast<const shot_vertex*>(_vertices.at(1));
     const auto v2 = static_cast<const landmark_vertex*>(_vertices.at(0));
-    const auto v3 = static_cast<const bfx_camera_intrinsics_vertex*>(_vertices.at(2));
+    const auto v3 = static_cast<const camera_intrinsics_vertex*>(_vertices.at(2));
     const Vec2_t obs(_measurement);
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
     _error = obs - cam_project(v1->estimate().map(v2->estimate()), v3->estimate()(0));
@@ -108,7 +108,7 @@ inline void bfx_mono_perspective_reproj_tri_edge::computeError() {
 #endif
 }
 
-inline void bfx_mono_perspective_reproj_tri_edge::linearizeOplus() {
+inline void mono_perspective_reproj_tri_edge::linearizeOplus() {
     auto vj = static_cast<shot_vertex*>(_vertices.at(1));
     const g2o::SE3Quat& cam_pose_cw = vj->shot_vertex::estimate();
 
@@ -116,11 +116,11 @@ inline void bfx_mono_perspective_reproj_tri_edge::linearizeOplus() {
     const Vec3_t& pos_w = vi->landmark_vertex::estimate();
     const Vec3_t pos_c = cam_pose_cw.map(pos_w);
 
-    auto v3 = static_cast<bfx_camera_intrinsics_vertex*>(_vertices.at(2));
+    auto v3 = static_cast<camera_intrinsics_vertex*>(_vertices.at(2));
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
-    double fx = v3->bfx_camera_intrinsics_vertex::estimate()(0);
+    double fx = v3->camera_intrinsics_vertex::estimate()(0);
 #else
-    double fx = v3->bfx_camera_intrinsics_vertex::estimate();
+    double fx = v3->camera_intrinsics_vertex::estimate();
 #endif
     double fy = par_ * fx; 
 
@@ -165,13 +165,13 @@ inline void bfx_mono_perspective_reproj_tri_edge::linearizeOplus() {
 
 }
 
-inline bool bfx_mono_perspective_reproj_tri_edge::depth_is_positive() const {
+inline bool mono_perspective_reproj_tri_edge::depth_is_positive() const {
     const auto v1 = static_cast<const shot_vertex*>(_vertices.at(1));
     const auto v2 = static_cast<const landmark_vertex*>(_vertices.at(0));
     return 0.0 < (v1->estimate().map(v2->estimate()))(2);
 }
 
-inline Vec2_t bfx_mono_perspective_reproj_tri_edge::cam_project(const Vec3_t& pos_c, double focal_length_x_pix) const {
+inline Vec2_t mono_perspective_reproj_tri_edge::cam_project(const Vec3_t& pos_c, double focal_length_x_pix) const {
     return {focal_length_x_pix * pos_c(0) / pos_c(2) + cx_, focal_length_x_pix * par_ * pos_c(1) / pos_c(2) + cy_};
 }
 

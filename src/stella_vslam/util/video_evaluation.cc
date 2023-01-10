@@ -1,4 +1,4 @@
-#include "bfx_video_evaluation.h"
+#include "video_evaluation.h"
 
 #define USE_OPENCV_VIDEO_IO 0
 
@@ -16,7 +16,7 @@
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/landmark.h>
-#include <stella_vslam/util/bfx_video_evaluation.h>
+#include <stella_vslam/util/video_evaluation.h>
 
 namespace stella_vslam_bfx {
 
@@ -36,7 +36,7 @@ void MyEllipse(cv::Mat img, double angle) {
                 lineType);
 }
 
-bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
+bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
                                  stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame,
                                  std::map<int, Eigen::Matrix4d> const* videoFrameToCamera)
 {
@@ -74,11 +74,11 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
         //spdlog::info("keyframe id {} source id {} timestamp {}", keyfrm->id_, keyfrm->src_frm_id_, keyfrm->timestamp_);
     }
 
-    spdlog::info("bfx_create_evaluation_video {} cameras, {} points", numCameras, numLocators);
+    spdlog::info("create_evaluation_video {} cameras, {} points", numCameras, numLocators);
 
     cv::VideoCapture inputVideo(trackedVideoName); // Open input
     if (!inputVideo.isOpened()) {
-        spdlog::error("bfx_create_evaluation_video could not open the input video: {}", trackedVideoName);
+        spdlog::error("create_evaluation_video could not open the input video: {}", trackedVideoName);
         return false;
     }
     string::size_type pAt = trackedVideoName.find_last_of('.');                // Find extension point
@@ -94,7 +94,7 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
     else
         outputVideo->open(outputVideoName, ex, inputVideo.get(CAP_PROP_FPS), S, true);
     if (!outputVideo->isOpened()) {
-        spdlog::error("bfx_create_evaluation_video could not open the output video: {}", outputVideoName);
+        spdlog::error("create_evaluation_video could not open the output video: {}", outputVideoName);
         return false;
     }
     cout << "Input frame resolution: Width=" << S.width << "  Height=" << S.height
@@ -220,9 +220,9 @@ bool bfx_create_evaluation_video(std::string const& trackedVideoName, std::strin
         ++srcFrame;
     }
 
-    spdlog::info("bfx_create_evaluation_video writing video file, frames {}, missing {}, total {}", cameraCount, noCameraCount, srcFrame);
+    spdlog::info("create_evaluation_video writing video file, frames {}, missing {}, total {}", cameraCount, noCameraCount, srcFrame);
     outputVideo.reset();
-    spdlog::info("bfx_create_evaluation_video wrote file {}", outputVideoName);
+    spdlog::info("create_evaluation_video wrote file {}", outputVideoName);
 
     return true;
 #else

@@ -1,4 +1,4 @@
-#include "stella_vslam/data/bfx_keyframe_autocalibration_wrapper.h"
+#include "stella_vslam/data/keyframe_autocalibration_wrapper.h"
 
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>

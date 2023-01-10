@@ -2,7 +2,7 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
-#include "stella_vslam/data/bfx_keyframe_autocalibration_wrapper.h"
+#include "stella_vslam/data/keyframe_autocalibration_wrapper.h"
 #include "stella_vslam/marker_model/base.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
 #include "stella_vslam/optimize/terminate_action.h"
@@ -35,7 +35,7 @@ namespace stella_vslam {
 namespace optimize {
 
 /** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
-internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
+internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
                                                                         std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
 {
     stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
@@ -45,14 +45,14 @@ internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const st
         return nullptr;
 
     // Convert the camera intrinsics to a g2o vertex
-    auto vtx = new internal::bfx_camera_intrinsics_vertex();
+    auto vtx = new internal::camera_intrinsics_vertex();
 
     const auto vtx_id = *offset;
     (*offset)++;
 
     vtx->setId(vtx_id);
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
-    vtx->setEstimate(internal::bfx_camera_intrinsics_vertex_type(*autocalibration_wrapper.fx, 0.0, 0.0));
+    vtx->setEstimate(internal::camera_intrinsics_vertex_type(*autocalibration_wrapper.fx, 0.0, 0.0));
 #else
     vtx->setEstimate(*autocalibration_wrapper.fx);
 #endif
@@ -65,7 +65,7 @@ internal::bfx_camera_intrinsics_vertex* create_camera_intrinsics_vertex(const st
 
 /** Populate the shared keyframe camera from a camera intrinsics vertex **/
 bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms,
-                                 internal::bfx_camera_intrinsics_vertex *vertex)
+                                 internal::camera_intrinsics_vertex *vertex)
 {
     if (!vertex)
         return false;
@@ -101,7 +101,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
                    internal::se3::shot_vertex_container& keyfrm_vtx_container,
                    internal::landmark_vertex_container& lm_vtx_container,
                    internal::marker_vertex_container& marker_vtx_container,
-                   internal::bfx_camera_intrinsics_vertex* camera_intrinsics_vtx,
+                   internal::camera_intrinsics_vertex* camera_intrinsics_vtx,
                    unsigned int num_iter,
                    bool use_huber_kernel,
                    bool* const force_stop_flag) {
@@ -309,7 +309,7 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
     // Camera intrinsics vertex
-    internal::bfx_camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
+    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
 
     g2o::SparseOptimizer optimizer;
 
@@ -402,7 +402,7 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
     // Camera intrinsics vertex
-    internal::bfx_camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
+    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
 
     g2o::SparseOptimizer optimizer;
 

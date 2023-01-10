@@ -6,9 +6,9 @@
 #include "stella_vslam/camera/equirectangular.h"
 #include "stella_vslam/camera/radial_division.h"
 #include "stella_vslam/optimize/internal/se3/perspective_reproj_edge.h"
-#include "stella_vslam/optimize/internal/se3/bfx_perspective_reproj_tri_edge.h"
+#include "stella_vslam/optimize/internal/se3/perspective_reproj_tri_edge.h"
 #include "stella_vslam/optimize/internal/se3/equirectangular_reproj_edge.h"
-#include "stella_vslam/optimize/internal/bfx_camera_intrinsics_vertex.h"
+#include "stella_vslam/optimize/internal/camera_intrinsics_vertex.h"
 
 #include <g2o/core/robust_kernel_impl.h>
 
@@ -31,7 +31,7 @@ public:
 
     reproj_edge_wrapper(const std::shared_ptr<T>& shot, shot_vertex* shot_vtx,
                         const std::shared_ptr<data::landmark>& lm, landmark_vertex* lm_vtx,
-                        bfx_camera_intrinsics_vertex *camera_vtx, // NB: camera object is in shot->camera_ 
+                        camera_intrinsics_vertex *camera_vtx, // NB: camera object is in shot->camera_ 
                         const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
                         const float inv_sigma_sq, const float sqrt_chi_sq, const bool use_huber_loss = true);
 
@@ -59,7 +59,7 @@ public:
 template<typename T>
 inline reproj_edge_wrapper<T>::reproj_edge_wrapper(const std::shared_ptr<T>& shot, shot_vertex* shot_vtx,
                                                    const std::shared_ptr<data::landmark>& lm, landmark_vertex* lm_vtx,
-                                                   bfx_camera_intrinsics_vertex* camera_vtx,
+                                                   camera_intrinsics_vertex* camera_vtx,
                                                    const unsigned int idx, const float obs_x, const float obs_y, const float obs_x_right,
                                                    const float inv_sigma_sq, const float sqrt_chi_sq, const bool use_huber_loss)
     : camera_(shot->camera_), shot_(shot), lm_(lm), idx_(idx), is_monocular_(obs_x_right < 0) {
@@ -70,7 +70,7 @@ inline reproj_edge_wrapper<T>::reproj_edge_wrapper(const std::shared_ptr<T>& sho
             if (is_monocular_) {
 
                 if (camera_->autocalibration_parameters_.optimise_focal_length && camera_vtx) {
-                    auto edge = new bfx_mono_perspective_reproj_tri_edge();
+                    auto edge = new mono_perspective_reproj_tri_edge();
 
                     const Vec2_t obs{obs_x, obs_y};
                     edge->setMeasurement(obs);

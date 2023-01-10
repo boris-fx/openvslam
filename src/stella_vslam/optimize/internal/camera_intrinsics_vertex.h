@@ -19,11 +19,11 @@ namespace internal {
  * 
  * Used landmark_vertex as a starting point
  */
-class bfx_camera_intrinsics_vertex_1 final : public g2o::BaseVertex<1, double> {
+class camera_intrinsics_vertex_1 final : public g2o::BaseVertex<1, double> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    bfx_camera_intrinsics_vertex_1();
+    camera_intrinsics_vertex_1();
 
     bool read(std::istream& is) override;
 
@@ -34,25 +34,25 @@ public:
     void oplusImpl(const double* update) override;
 };
 
-inline bfx_camera_intrinsics_vertex_1::bfx_camera_intrinsics_vertex_1()
+inline camera_intrinsics_vertex_1::camera_intrinsics_vertex_1()
     : g2o::BaseVertex<1, double>() {}
 
-inline bool bfx_camera_intrinsics_vertex_1::read(std::istream& is) {
+inline bool camera_intrinsics_vertex_1::read(std::istream& is) {
     is >> _estimate;
     return true;
 }
 
-inline bool bfx_camera_intrinsics_vertex_1::write(std::ostream& os) const {
+inline bool camera_intrinsics_vertex_1::write(std::ostream& os) const {
     const double focalLengthXPixels = estimate();
     os << focalLengthXPixels << " ";
     return os.good();
 }
 
-inline void bfx_camera_intrinsics_vertex_1::setToOriginImpl() {
+inline void camera_intrinsics_vertex_1::setToOriginImpl() {
     _estimate = 0.0; // g2o says "sets the node to the origin (used in the multilevel stuff)"
 }
 
-inline void bfx_camera_intrinsics_vertex_1::oplusImpl(const double* update) {
+inline void camera_intrinsics_vertex_1::oplusImpl(const double* update) {
     _estimate += *update;
 }
 
@@ -63,11 +63,11 @@ inline void bfx_camera_intrinsics_vertex_1::oplusImpl(const double* update) {
  * 
  * Used landmark_vertex as a starting point (search '3', replace with '2')
  */
-class bfx_camera_intrinsics_vertex_2 final : public g2o::BaseVertex<3, Vec3_t> {
+class camera_intrinsics_vertex_2 final : public g2o::BaseVertex<3, Vec3_t> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    bfx_camera_intrinsics_vertex_2();
+    camera_intrinsics_vertex_2();
 
     bool read(std::istream& is) override;
 
@@ -78,10 +78,10 @@ public:
     void oplusImpl(const double* update) override;
 };
 
-inline bfx_camera_intrinsics_vertex_2::bfx_camera_intrinsics_vertex_2()
+inline camera_intrinsics_vertex_2::camera_intrinsics_vertex_2()
     : g2o::BaseVertex<3, Vec3_t>() {}
 
-inline bool bfx_camera_intrinsics_vertex_2::read(std::istream& is) {
+inline bool camera_intrinsics_vertex_2::read(std::istream& is) {
     Vec3_t lv;
     for (unsigned int i = 0; i < 3; ++i) {
         is >> _estimate(i);
@@ -89,7 +89,7 @@ inline bool bfx_camera_intrinsics_vertex_2::read(std::istream& is) {
     return true;
 }
 
-inline bool bfx_camera_intrinsics_vertex_2::write(std::ostream& os) const {
+inline bool camera_intrinsics_vertex_2::write(std::ostream& os) const {
     const Vec3_t pos_w = estimate();
     for (unsigned int i = 0; i < 3; ++i) {
         os << pos_w(i) << " ";
@@ -97,11 +97,11 @@ inline bool bfx_camera_intrinsics_vertex_2::write(std::ostream& os) const {
     return os.good();
 }
 
-inline void bfx_camera_intrinsics_vertex_2::setToOriginImpl() {
+inline void camera_intrinsics_vertex_2::setToOriginImpl() {
     _estimate.fill(0);  // g2o says "sets the node to the origin (used in the multilevel stuff)"
 }
 
-inline void bfx_camera_intrinsics_vertex_2::oplusImpl(const double* update) {
+inline void camera_intrinsics_vertex_2::oplusImpl(const double* update) {
     Eigen::Map<const Vec3_t> v(update);
     _estimate += v;
 }
@@ -110,18 +110,18 @@ inline void bfx_camera_intrinsics_vertex_2::oplusImpl(const double* update) {
 
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
 // temp
-using bfx_camera_intrinsics_vertex = bfx_camera_intrinsics_vertex_2;
-using bfx_camera_intrinsics_vertex_type = Vec3_t;
+using camera_intrinsics_vertex = camera_intrinsics_vertex_2;
+using camera_intrinsics_vertex_type = Vec3_t;
 
 
 
 //#include "landmark_vertex.h"
-//using bfx_camera_intrinsics_vertex = landmark_vertex;
-//using bfx_camera_intrinsics_vertex_type = Vec3_t;
+//using camera_intrinsics_vertex = landmark_vertex;
+//using camera_intrinsics_vertex_type = Vec3_t;
 
 #else
 // temp
-using bfx_camera_intrinsics_vertex = bfx_camera_intrinsics_vertex_1;
+using camera_intrinsics_vertex = camera_intrinsics_vertex_1;
 
 #endif
 

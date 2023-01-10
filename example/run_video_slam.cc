@@ -7,7 +7,7 @@
 #include "stella_vslam/system.h"
 #include "stella_vslam/config.h"
 #include "stella_vslam/util/yaml.h"
-#include "stella_vslam/util/bfx_video_evaluation.h"
+#include "stella_vslam/util/video_evaluation.h"
 #include "util/tinyxml2.h"
 
 
@@ -515,7 +515,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
     // Create a functor object for creating evaluation videos
     std::map<double, int> timestampToVideoFrame;
     SLAM.camera_->autocalibration_parameters_.writeMapVideo = [&video_file_path, &timestampToVideoFrame](stella_vslam::data::map_database const* map, std::string const& filename) {
-      return stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, filename, map, timestampToVideoFrame, nullptr);
+      return stella_vslam_bfx::create_evaluation_video(video_file_path, filename, map, timestampToVideoFrame, nullptr);
     };
 
     // startup the SLAM process
@@ -739,7 +739,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
 
 
         stella_vslam::data::map_database* map_db = SLAM.map_db_;
-        bool ok = stella_vslam_bfx::bfx_create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db, timestampToVideoFrame, &videoFrameToCamera);
+        bool ok = stella_vslam_bfx::create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db, timestampToVideoFrame, &videoFrameToCamera);
         //bool ok = SLAM.camera_->autocalibration_parameters_.writeMapVideo(map_db, std::to_string((int)initialFocalLength));
 
         // automatically close the viewer
