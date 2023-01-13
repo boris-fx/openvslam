@@ -8,8 +8,8 @@
 namespace stella_vslam {
 namespace util {
 
-stereo_rectifier::stereo_rectifier(const std::shared_ptr<stella_vslam::config>& cfg)
-    : stereo_rectifier(cfg->camera_, cfg->settings_) {}
+stereo_rectifier::stereo_rectifier(const std::shared_ptr<stella_vslam::config>& cfg, camera::base* camera)
+    : stereo_rectifier(camera, cfg->settings_) {}
 
 stereo_rectifier::stereo_rectifier(camera::base* camera, const stella_vslam_bfx::config_settings& settings)
     : model_type_(load_model_type(settings)) {

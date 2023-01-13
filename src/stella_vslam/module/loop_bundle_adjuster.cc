@@ -29,7 +29,7 @@ bool loop_bundle_adjuster::is_running() const {
     return loop_BA_is_running_;
 }
 
-void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
+void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_keyfrm, int num_iter, bool general_bundle) {
     spdlog::info("start loop bundle adjustment");
 
     {
@@ -42,11 +42,12 @@ void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
     std::unordered_set<unsigned int> optimized_landmark_ids;
     eigen_alloc_unord_map<unsigned int, Vec3_t> lm_to_pos_w_after_global_BA;
     eigen_alloc_unord_map<unsigned int, Mat44_t> keyfrm_to_pose_cw_after_global_BA;
-    const auto global_BA = optimize::global_bundle_adjuster(map_db_, num_iter_, false);
-    bool camera_was_modified;
-    bool ok = global_BA.optimizeGlobal(optimized_keyfrm_ids, optimized_landmark_ids,
-                                       lm_to_pos_w_after_global_BA,
-                                       keyfrm_to_pose_cw_after_global_BA, &abort_loop_BA_, num_iter, general_bundle, &camera_was_modified);
+    const auto global_BA = optimize::global_bundle_adjuster(num_iter_, false);
+    bool ok = global_BA.optimize(curr_keyfrm->graph_node_->get_keyframes_from_root(),
+                                 optimized_keyfrm_ids, optimized_landmark_ids,
+                                 lm_to_pos_w_after_global_BA,
+                                 keyfrm_to_pose_cw_after_global_BA, &abort_loop_BA_,
+								 num_iter, general_bundle, &camera_was_modified);
 
     {
         std::lock_guard<std::mutex> lock1(mtx_thread_);
@@ -64,18 +65,15 @@ void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
 
         // stop mapping module
         auto future_pause = mapper_->async_pause();
-        while (future_pause.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
-            while (mapper_->is_terminated()) {
-                break;
-            }
-        }
+        spdlog::debug("loop_bundle_adjuster::optimize: wait for mapper_->async_pause");
+        future_pause.get();
 
         std::lock_guard<std::mutex> lock2(data::map_database::mtx_database_);
 
+        spdlog::debug("update the camera pose along the spanning tree from the root");
         eigen_alloc_unord_map<unsigned int, Mat44_t> keyfrm_to_cam_pose_cw_before_BA;
-        // update the camera pose along the spanning tree from the origin
         std::list<std::shared_ptr<data::keyframe>> keyfrms_to_check;
-        keyfrms_to_check.push_back(map_db_->origin_keyfrm_);
+        keyfrms_to_check.push_back(curr_keyfrm->graph_node_->get_spanning_root());
         while (!keyfrms_to_check.empty()) {
             auto parent = keyfrms_to_check.front();
             const Mat44_t cam_pose_wp = parent->get_pose_wc();
@@ -106,9 +104,28 @@ void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
             keyfrms_to_check.pop_front();
         }
 
-        // update the positions of the landmarks
-        const auto landmarks = map_db_->get_all_landmarks();
-        for (const auto& lm : landmarks) {
+        spdlog::debug("update the positions of the landmarks");
+        auto keyfrms = curr_keyfrm->graph_node_->get_keyframes_from_root();
+        std::unordered_set<unsigned int> already_found_landmark_ids;
+        std::vector<std::shared_ptr<data::landmark>> lms;
+        for (const auto& keyfrm : keyfrms) {
+            for (const auto& lm : keyfrm->get_landmarks()) {
+                if (!lm) {
+                    continue;
+                }
+                if (lm->will_be_erased()) {
+                    continue;
+                }
+                if (already_found_landmark_ids.count(lm->id_)) {
+                    continue;
+                }
+
+                already_found_landmark_ids.insert(lm->id_);
+                lms.push_back(lm);
+            }
+        }
+
+        for (const auto& lm : lms) {
             if (lm->will_be_erased()) {
                 continue;
             }
@@ -139,6 +156,7 @@ void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
                 const Vec3_t trans_wc = cam_pose_wc.block<3, 1>(0, 3);
                 lm->set_pos_in_world(rot_wc * pos_c + trans_wc);
             }
+            lm->update_mean_normal_and_obs_scale_variance();
         }
 
         mapper_->resume();

@@ -1,6 +1,7 @@
 #include "stella_vslam/camera/base.h"
 
 #include <iostream>
+#include <opencv2/core/mat.hpp>
 
 #include <spdlog/spdlog.h>
 
@@ -64,6 +65,10 @@ color_order_t base::load_color_order(const std::string& color_order_str) {
     return static_cast<color_order_t>(std::distance(color_order_to_string.begin(), itr));
 }
 
+bool base::is_valid_shape(const cv::Mat& img) const {
+    return static_cast<int>(cols_) == img.cols && static_cast<int>(rows_) == img.rows;
+}
+
 void base::show_common_parameters() const {
     std::cout << "- name: " << name_ << std::endl;
     std::cout << "- setup: " << get_setup_type_string() << std::endl;
@@ -114,11 +119,13 @@ void base::undistort_keypoints(const std::vector<cv::KeyPoint>& dist_keypts, std
 }
 
 void base::convert_points_to_bearings(const std::vector<cv::Point2f>& undist_pts, eigen_alloc_vector<Vec3_t>& bearings) const {
+    assert(bearings.size() == 0);
     std::transform(undist_pts.begin(), undist_pts.end(), std::back_inserter(bearings),
                    [this](const cv::Point2f& undist_pt) { return convert_point_to_bearing(undist_pt); });
 }
 
 void base::convert_keypoints_to_bearings(const std::vector<cv::KeyPoint>& undist_keypts, eigen_alloc_vector<Vec3_t>& bearings) const {
+    assert(bearings.size() == 0);
     std::transform(undist_keypts.begin(), undist_keypts.end(), std::back_inserter(bearings),
                    [this](const cv::KeyPoint& undist_keypt) { return convert_point_to_bearing(undist_keypt.pt); });
 }

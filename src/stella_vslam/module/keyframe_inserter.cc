@@ -66,9 +66,9 @@ bool keyframe_inserter::new_keyframe_is_needed(data::map_database* map_db,
     if (max_interval_ > 0.0) {
         max_interval_elapsed = last_inserted_keyfrm && last_inserted_keyfrm->timestamp_ + max_interval_ <= curr_frm.timestamp_;
     }
-    bool min_interval_elapsed = false;
+    bool min_interval_elapsed = true;
     if (min_interval_ > 0.0) {
-        min_interval_elapsed = last_inserted_keyfrm && last_inserted_keyfrm->timestamp_ + min_interval_ <= curr_frm.timestamp_;
+        min_interval_elapsed = !last_inserted_keyfrm || last_inserted_keyfrm->timestamp_ + min_interval_ <= curr_frm.timestamp_;
     }
     bool max_distance_traveled = false;
     if (max_distance_ > 0.0) {
@@ -85,6 +85,17 @@ bool keyframe_inserter::new_keyframe_is_needed(data::map_database* map_db,
     constexpr unsigned int num_tracked_lms_thr_unstable = 15;
     bool tracking_is_unstable = num_tracked_lms < num_tracked_lms_thr_unstable;
     bool almost_all_lms_are_tracked = num_reliable_lms > num_reliable_lms_ref * lms_ratio_thr_almost_all_lms_are_tracked_;
+    SPDLOG_TRACE("keyframe_inserter: num_reliable_lms_ref={}", num_reliable_lms_ref);
+    SPDLOG_TRACE("keyframe_inserter: num_reliable_lms={}", num_reliable_lms);
+    SPDLOG_TRACE("keyframe_inserter: max_interval_elapsed={}", max_interval_elapsed);
+    SPDLOG_TRACE("keyframe_inserter: max_distance_traveled={}", max_distance_traveled);
+    SPDLOG_TRACE("keyframe_inserter: view_changed={}", view_changed);
+    SPDLOG_TRACE("keyframe_inserter: not_enough_lms={}", not_enough_lms);
+    SPDLOG_TRACE("keyframe_inserter: enough_keyfrms={}", enough_keyfrms);
+    SPDLOG_TRACE("keyframe_inserter: min_interval_elapsed={}", min_interval_elapsed);
+    SPDLOG_TRACE("keyframe_inserter: tracking_is_unstable={}", tracking_is_unstable);
+    SPDLOG_TRACE("keyframe_inserter: almost_all_lms_are_tracked={}", almost_all_lms_are_tracked);
+    SPDLOG_TRACE("keyframe_inserter: mapper_is_skipping_localBA={}", mapper_is_skipping_localBA);
     return (max_interval_elapsed || max_distance_traveled || view_changed || not_enough_lms)
            && (!enough_keyfrms || min_interval_elapsed)
            && !tracking_is_unstable
@@ -94,13 +105,8 @@ bool keyframe_inserter::new_keyframe_is_needed(data::map_database* map_db,
 
 std::shared_ptr<data::keyframe> keyframe_inserter::insert_new_keyframe(data::map_database* map_db,
                                                                        data::frame& curr_frm) {
-    // Do not pause mapping_module to let this keyframe process
-    if (!mapper_->prevent_pause_if_not_paused()) {
-        // If it is already paused, exit
-        return nullptr;
-    }
-
-    auto keyfrm = data::keyframe::make_keyframe(curr_frm);
+    auto keyfrm = data::keyframe::make_keyframe(map_db->next_keyframe_id_++, curr_frm);
+    keyfrm->update_landmarks();
 
     for (const auto& id_mkr2d : keyfrm->markers_2d_) {
         auto marker = map_db->get_marker(id_mkr2d.first);
@@ -158,7 +164,7 @@ std::shared_ptr<data::keyframe> keyframe_inserter::insert_new_keyframe(data::map
 
         // Stereo-triangulation cannot be performed if the 3D point has been already associated to the keypoint index
         {
-            const auto& lm = curr_frm.landmarks_.at(idx);
+            const auto& lm = curr_frm.get_landmark(idx);
             if (lm) {
                 assert(lm->has_observation());
                 continue;
@@ -167,11 +173,10 @@ std::shared_ptr<data::keyframe> keyframe_inserter::insert_new_keyframe(data::map
 
         // Stereo-triangulation can be performed if the 3D point is not yet associated to the keypoint index
         const Vec3_t pos_w = curr_frm.triangulate_stereo(idx);
-        auto lm = std::make_shared<data::landmark>(pos_w, keyfrm);
+        auto lm = std::make_shared<data::landmark>(map_db->next_landmark_id_++, pos_w, keyfrm);
 
-        lm->add_observation(keyfrm, idx);
-        keyfrm->add_landmark(lm, idx);
-        curr_frm.landmarks_.at(idx) = lm;
+        lm->connect_to_keyframe(keyfrm, idx);
+        curr_frm.add_landmark(lm, idx);
 
         lm->compute_descriptor();
         lm->update_mean_normal_and_obs_scale_variance();
@@ -186,7 +191,6 @@ std::shared_ptr<data::keyframe> keyframe_inserter::insert_new_keyframe(data::map
 
 void keyframe_inserter::queue_keyframe(const std::shared_ptr<data::keyframe>& keyfrm) {
     mapper_->queue_keyframe(keyfrm);
-    mapper_->stop_prevent_pause();
 }
 
 } // namespace module

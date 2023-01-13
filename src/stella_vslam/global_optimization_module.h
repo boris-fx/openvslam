@@ -25,6 +25,11 @@ class bow_database;
 class map_database;
 } // namespace data
 
+struct loop_closure_request {
+    unsigned int keyfrm1_id_;
+    unsigned int keyfrm2_id_;
+};
+
 class global_optimization_module {
 public:
     //! Constructor
@@ -67,13 +72,13 @@ public:
     // management for reset process
 
     //! Request to reset the global optimization module
-    std::future<void> async_reset();
+    std::shared_future<void> async_reset();
 
     //-----------------------------------------
     // management for pause process
 
     //! Request to pause the global optimization module
-    std::future<void> async_pause();
+    std::shared_future<void> async_pause();
 
     //! Check if the global optimization module is requested to be paused or not
     bool pause_is_requested() const;
@@ -88,7 +93,7 @@ public:
     // management for terminate process
 
     //! Request to terminate the global optimization module
-    std::future<void> async_terminate();
+    std::shared_future<void> async_terminate();
 
     //! Check if the global optimization module is terminated or not
     bool is_terminated() const;
@@ -105,6 +110,11 @@ public:
     //! Abort the loop BA externally
     //! (NOTE: this function does not wait for abort)
     void abort_loop_BA();
+
+    //-----------------------------------------
+    // management for loop closure request
+
+    bool request_loop_closure(unsigned int keyfrm1_id, unsigned int keyfrm2_id);
 
 private:
     //-----------------------------------------
@@ -144,8 +154,11 @@ private:
     //! mutex for access to reset procedure
     mutable std::mutex mtx_reset_;
 
-    //! promises for reset
-    std::vector<std::promise<void>> promises_reset_;
+    //! promise for reset
+    std::promise<void> promise_reset_;
+
+    //! future for reset
+    std::shared_future<void> future_reset_;
 
     //! Check and execute reset
     bool reset_is_requested() const;
@@ -162,8 +175,11 @@ private:
     //! mutex for access to pause procedure
     mutable std::mutex mtx_pause_;
 
-    //! promises for pause
-    std::vector<std::promise<void>> promises_pause_;
+    //! promise for pause
+    std::promise<void> promise_pause_;
+
+    //! future for pause
+    std::shared_future<void> future_pause_;
 
     //! Pause the global optimizer
     void pause();
@@ -179,8 +195,11 @@ private:
     //! mutex for access to terminate procedure
     mutable std::mutex mtx_terminate_;
 
-    //! promises for terminate
-    std::vector<std::promise<void>> promises_terminate_;
+    //! promise for terminate
+    std::promise<void> promise_terminate_;
+
+    //! future for terminate
+    std::shared_future<void> future_terminate_;
 
     //! Check if termination is requested or not
     bool terminate_is_requested() const;
@@ -192,6 +211,24 @@ private:
     bool terminate_is_requested_ = false;
     //! flag which indicates whether the main loop is terminated or not
     bool is_terminated_ = true;
+
+    //-----------------------------------------
+    // management for loop closure request
+
+    //! Mutex for loop closure request
+    mutable std::mutex mtx_loop_closure_request_;
+    //! Loop closure is requested or not
+    bool loop_closure_is_requested();
+    //! Get loop closure request
+    loop_closure_request& get_loop_closure_request();
+    //! Finish loop closure request
+    void finish_loop_closure_request();
+    //! Process loop closure request
+    bool loop_closure(const loop_closure_request& request);
+    //! Indicator of loop closure request
+    bool loop_closure_is_requested_ = false;
+    //! Request
+    loop_closure_request loop_closure_request_;
 
     //-----------------------------------------
     // modules

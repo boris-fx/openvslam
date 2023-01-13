@@ -81,6 +81,8 @@ public:
 
     autocalibration_parameters autocalibration_parameters_;
 
+    //! Return whether the image size specified by the camera matches the size of the input image
+    bool is_valid_shape(const cv::Mat& img) const;
     //! Show common parameters along camera models
     void show_common_parameters() const;
 

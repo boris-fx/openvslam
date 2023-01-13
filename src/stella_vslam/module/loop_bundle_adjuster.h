@@ -1,11 +1,14 @@
 #ifndef STELLA_VSLAM_MODULE_LOOP_BUNDLE_ADJUSTER_H
 #define STELLA_VSLAM_MODULE_LOOP_BUNDLE_ADJUSTER_H
 
+#include <mutex>
+
 namespace stella_vslam {
 
 class mapping_module;
 
 namespace data {
+class keyframe;
 class map_database;
 } // namespace data
 
@@ -41,7 +44,7 @@ public:
     /**
      * Run loop BA
      */
-    void optimize(int num_iter=10, bool general_bundle=false);
+	void optimize(const std::shared_ptr<data::keyframe>& curr_keyfrm, int num_iter=10, bool general_bundle=false);
 
     int num_iter() const { return num_iter_; }
     void set_num_iter(int num_iter) { num_iter_ = num_iter; }

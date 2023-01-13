@@ -5,7 +5,7 @@
 #include "stella_vslam/data/keyframe.h"
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/match/projection.h"
-#include "stella_vslam/match/angle_checker.h"
+#include "stella_vslam/util/angle.h"
 
 namespace stella_vslam {
 namespace match {
@@ -54,7 +54,8 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm,
                 continue;
             }
 
-            if (frm.landmarks_.at(idx) && frm.landmarks_.at(idx)->has_observation()) {
+            const auto& lm = frm.get_landmark(idx);
+            if (lm && lm->has_observation()) {
                 continue;
             }
 
@@ -89,7 +90,7 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm,
             }
 
             // Add the matching information
-            frm.landmarks_.at(best_idx) = local_lm;
+            frm.add_landmark(local_lm, best_idx);
             ++num_matches;
         }
     }
@@ -99,8 +100,6 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm,
 
 unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, const data::frame& last_frm, const float margin) const {
     unsigned int num_matches = 0;
-
-    angle_checker<int> angle_checker;
 
     const Mat33_t rot_cw = curr_frm.get_rot_cw();
     const Vec3_t trans_cw = curr_frm.get_trans_cw();
@@ -131,8 +130,11 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
             continue;
         }
 
-        auto& lm = last_frm.landmarks_.at(idx_last);
+        const auto& lm = last_frm.get_landmark(idx_last);
         if (!lm) {
+            continue;
+        }
+        if (lm->will_be_erased()) {
             continue;
         }
 
@@ -178,7 +180,8 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
         int best_idx = -1;
 
         for (const auto curr_idx : indices) {
-            if (curr_frm.landmarks_.at(curr_idx) && curr_frm.landmarks_[curr_idx]->has_observation()) {
+            const auto& curr_lm = curr_frm.get_landmark(curr_idx);
+            if (curr_lm && curr_lm->has_observation()) {
                 continue;
             }
 
@@ -187,6 +190,10 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
                 if (margin * curr_frm.orb_params_->scale_factors_.at(last_scale_level) < reproj_error) {
                     continue;
                 }
+            }
+
+            if (check_orientation_ && std::abs(util::angle::diff(last_frm.frm_obs_.undist_keypts_.at(idx_last).angle, curr_frm.frm_obs_.undist_keypts_.at(curr_idx).angle)) > 30.0) {
+                continue;
             }
 
             const auto& desc = curr_frm.frm_obs_.descriptors_.row(curr_idx);
@@ -204,22 +211,8 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
         }
 
         // The matching is valid
-        curr_frm.landmarks_.at(best_idx) = lm;
+        curr_frm.add_landmark(lm, best_idx);
         ++num_matches;
-
-        if (check_orientation_) {
-            const auto delta_angle
-                = last_frm.frm_obs_.undist_keypts_.at(idx_last).angle - curr_frm.frm_obs_.undist_keypts_.at(best_idx).angle;
-            angle_checker.append_delta_angle(delta_angle, best_idx);
-        }
-    }
-
-    if (check_orientation_) {
-        const auto invalid_matches = angle_checker.get_invalid_matches();
-        for (const auto invalid_idx : invalid_matches) {
-            curr_frm.landmarks_.at(invalid_idx) = nullptr;
-            --num_matches;
-        }
     }
 
     return num_matches;
@@ -227,7 +220,10 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
 
 unsigned int projection::match_frame_and_keyframe(data::frame& curr_frm, const std::shared_ptr<data::keyframe>& keyfrm, const std::set<std::shared_ptr<data::landmark>>& already_matched_lms,
                                                   const float margin, const unsigned int hamm_dist_thr) const {
-    return match_frame_and_keyframe(curr_frm.get_pose_cw(), curr_frm.camera_, curr_frm.frm_obs_, curr_frm.orb_params_, curr_frm.landmarks_, keyfrm, already_matched_lms, margin, hamm_dist_thr);
+    auto lms = curr_frm.get_landmarks();
+    auto num_matches = match_frame_and_keyframe(curr_frm.get_pose_cw(), curr_frm.camera_, curr_frm.frm_obs_, curr_frm.orb_params_, lms, keyfrm, already_matched_lms, margin, hamm_dist_thr);
+    curr_frm.set_landmarks(lms);
+    return num_matches;
 }
 
 unsigned int projection::match_frame_and_keyframe(const Mat44_t& cam_pose_cw,
@@ -239,8 +235,6 @@ unsigned int projection::match_frame_and_keyframe(const Mat44_t& cam_pose_cw,
                                                   const std::set<std::shared_ptr<data::landmark>>& already_matched_lms,
                                                   const float margin, const unsigned int hamm_dist_thr) const {
     unsigned int num_matches = 0;
-
-    angle_checker<int> angle_checker;
 
     const Mat33_t rot_cw = cam_pose_cw.block<3, 3>(0, 0);
     const Vec3_t trans_cw = cam_pose_cw.block<3, 1>(0, 3);
@@ -321,6 +315,10 @@ unsigned int projection::match_frame_and_keyframe(const Mat44_t& cam_pose_cw,
                 continue;
             }
 
+            if (check_orientation_ && std::abs(util::angle::diff(keyfrm->frm_obs_.undist_keypts_.at(idx).angle, frm_obs.undist_keypts_.at(curr_idx).angle)) > 30.0) {
+                continue;
+            }
+
             const auto& desc = frm_obs.descriptors_.row(curr_idx);
 
             const auto hamm_dist = compute_descriptor_distance_32(lm_desc, desc);
@@ -338,20 +336,6 @@ unsigned int projection::match_frame_and_keyframe(const Mat44_t& cam_pose_cw,
         // The matching is valid
         frm_landmarks.at(best_idx) = lm;
         num_matches++;
-
-        if (check_orientation_) {
-            const auto delta_angle
-                = keyfrm->frm_obs_.undist_keypts_.at(idx).angle - frm_obs.undist_keypts_.at(best_idx).angle;
-            angle_checker.append_delta_angle(delta_angle, best_idx);
-        }
-    }
-
-    if (check_orientation_) {
-        const auto invalid_matches = angle_checker.get_invalid_matches();
-        for (const auto invalid_idx : invalid_matches) {
-            frm_landmarks.at(invalid_idx) = nullptr;
-            --num_matches;
-        }
     }
 
     return num_matches;

@@ -16,6 +16,11 @@
 namespace stella_vslam {
 
 class config;
+namespace data {
+class keyframe;
+class landmark;
+} // namespace data
+
 class system;
 
 namespace publish {
@@ -36,7 +41,8 @@ public:
      * @param frame_publisher
      * @param map_publisher
      */
-    viewer(const YAML::Node& yaml_node, stella_vslam::system* system,
+    viewer(const YAML::Node& yaml_node,
+           const std::shared_ptr<stella_vslam::system>& system,
            const std::shared_ptr<stella_vslam::publish::frame_publisher>& frame_publisher,
            const std::shared_ptr<stella_vslam::publish::map_publisher>& map_publisher);
 
@@ -87,14 +93,25 @@ private:
     void draw_current_cam_pose(const pangolin::OpenGlMatrix& gl_cam_pose_wc);
 
     /**
-     * Get and draw keyframes via the map publisher
+     * Draw keyframes
      */
-    void draw_keyframes();
+    void draw_keyframes(std::vector<std::shared_ptr<stella_vslam::data::keyframe>>& keyfrms);
 
     /**
-     * Get and draw landmarks via the map publisher
+     * Draw covisibility edges
      */
-    void draw_landmarks();
+    void draw_covisibility_edges(std::vector<std::shared_ptr<stella_vslam::data::keyframe>>& keyfrms);
+
+    /**
+     * Draw spanning tree edges
+     */
+    void draw_spanning_tree_edges(std::vector<std::shared_ptr<stella_vslam::data::keyframe>>& keyfrms);
+
+    /**
+     * Draw landmarks
+     */
+    void draw_landmarks(std::vector<std::shared_ptr<stella_vslam::data::landmark>>& landmarks,
+                        std::set<std::shared_ptr<stella_vslam::data::landmark>>& local_landmarks);
 
     /**
      * Draw the camera frustum of the specified camera pose
@@ -112,15 +129,9 @@ private:
 
     /**
      * Draw a frustum of a camera
-     * @param w
+     * @param width
      */
-    void draw_frustum(const float w) const;
-
-    /**
-     * Draw a line between two 3D points
-     */
-    void draw_line(const float x1, const float y1, const float z1,
-                   const float x2, const float y2, const float z2) const;
+    void draw_frustum(const float width) const;
 
     /**
      * Reset the states
@@ -133,7 +144,7 @@ private:
     void check_state_transition();
 
     //! system
-    stella_vslam::system* system_;
+    const std::shared_ptr<stella_vslam::system> system_;
     //! frame publisher
     const std::shared_ptr<stella_vslam::publish::frame_publisher> frame_publisher_;
     //! map publisher
@@ -149,6 +160,7 @@ private:
     const float point_size_;
     const float camera_size_;
     const float camera_line_width_;
+    const unsigned int menu_width_;
 
     const color_scheme cs_;
 
@@ -159,12 +171,17 @@ private:
     std::unique_ptr<pangolin::Var<bool>> menu_show_lms_;
     std::unique_ptr<pangolin::Var<bool>> menu_show_local_map_;
     std::unique_ptr<pangolin::Var<bool>> menu_show_graph_;
+    std::unique_ptr<pangolin::Var<bool>> menu_show_essential_graph_;
+    std::unique_ptr<pangolin::Var<bool>> menu_show_image_;
     std::unique_ptr<pangolin::Var<bool>> menu_mapping_mode_;
     std::unique_ptr<pangolin::Var<bool>> menu_loop_detection_mode_;
     std::unique_ptr<pangolin::Var<bool>> menu_pause_;
     std::unique_ptr<pangolin::Var<bool>> menu_reset_;
     std::unique_ptr<pangolin::Var<bool>> menu_terminate_;
+    std::unique_ptr<pangolin::Var<int>> menu_min_shared_lms_;
+    std::unique_ptr<pangolin::Var<std::string>> menu_kf_id_;
     std::unique_ptr<pangolin::Var<float>> menu_frm_size_;
+    std::unique_ptr<pangolin::Var<float>> menu_keyfrm_size_;
     std::unique_ptr<pangolin::Var<float>> menu_lm_size_;
 
     // camera renderer
@@ -203,12 +220,6 @@ private:
     //! flag which indicates whether the main loop is terminated or not
     bool is_terminated_ = true;
 };
-
-inline void viewer::draw_line(const float x1, const float y1, const float z1,
-                              const float x2, const float y2, const float z2) const {
-    glVertex3f(x1, y1, z1);
-    glVertex3f(x2, y2, z2);
-}
 
 } // namespace pangolin_viewer
 

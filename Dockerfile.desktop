@@ -34,7 +34,8 @@ RUN set -x && \
     libavformat-dev \
     libavutil-dev \
     libswscale-dev \
-    libavresample-dev && \
+    libavresample-dev \
+    libtbb-dev && \
   : "backward-cpp dependencies" && \
   apt install -y -qq binutils-dev && \
   : "other dependencies" && \
@@ -95,7 +96,7 @@ RUN set -x && \
     -DG2O_USE_CHOLMOD=OFF \
     -DG2O_USE_CSPARSE=ON \
     -DG2O_USE_OPENGL=OFF \
-    -DG2O_USE_OPENMP=ON \
+    -DG2O_USE_OPENMP=OFF \
     -DG2O_BUILD_APPS=OFF \
     -DG2O_BUILD_EXAMPLES=OFF \
     -DG2O_BUILD_LINKED_APPS=OFF \
@@ -140,6 +141,7 @@ RUN set -x && \
     -DENABLE_FAST_MATH=ON \
     -DWITH_EIGEN=ON \
     -DWITH_FFMPEG=ON \
+    -DWITH_TBB=ON \
     -DWITH_OPENMP=ON \
     -DOPENCV_EXTRA_MODULES_PATH=/tmp/extra \
     .. && \
@@ -150,13 +152,12 @@ RUN set -x && \
 ENV OpenCV_DIR=${CMAKE_INSTALL_PREFIX}/lib/cmake/opencv4
 
 # Pangolin
-ARG PANGOLIN_COMMIT=ad8b5f83222291c51b4800d5a5873b0e90a0cf81
+ARG PANGOLIN_COMMIT=eab3d3449a33a042b1ee7225e1b8b593b1b21e3e
 WORKDIR /tmp
 RUN set -x && \
   git clone https://github.com/stevenlovegrove/Pangolin.git && \
   cd Pangolin && \
   git checkout ${PANGOLIN_COMMIT} && \
-  sed -i -e "193,198d" ./src/utils/file_utils.cpp && \
   mkdir -p build && \
   cd build && \
   cmake \
@@ -169,8 +170,6 @@ RUN set -x && \
     -DBUILD_PANGOLIN_LIBJPEG=OFF \
     -DBUILD_PANGOLIN_LIBOPENEXR=OFF \
     -DBUILD_PANGOLIN_LIBPNG=OFF \
-    -DBUILD_PANGOLIN_LIBREALSENSE=OFF \
-    -DBUILD_PANGOLIN_LIBREALSENSE2=OFF \
     -DBUILD_PANGOLIN_LIBTIFF=OFF \
     -DBUILD_PANGOLIN_LIBUVC=OFF \
     -DBUILD_PANGOLIN_LZ4=OFF \
@@ -179,12 +178,9 @@ RUN set -x && \
     -DBUILD_PANGOLIN_PLEORA=OFF \
     -DBUILD_PANGOLIN_PYTHON=OFF \
     -DBUILD_PANGOLIN_TELICAM=OFF \
-    -DBUILD_PANGOLIN_TOON=OFF \
     -DBUILD_PANGOLIN_UVC_MEDIAFOUNDATION=OFF \
     -DBUILD_PANGOLIN_V4L=OFF \
-    -DBUILD_PANGOLIN_VIDEO=OFF \
     -DBUILD_PANGOLIN_ZSTD=OFF \
-    -DBUILD_PYPANGOLIN_MODULE=OFF \
     .. && \
   make -j${NUM_THREADS} && \
   make install && \

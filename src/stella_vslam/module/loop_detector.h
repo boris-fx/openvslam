@@ -10,6 +10,8 @@
 #include <atomic>
 #include <memory>
 
+#include <yaml-cpp/yaml.h>
+
 namespace stella_vslam {
 
 namespace data {
@@ -54,6 +56,11 @@ public:
      * Detect loop candidates using BoW vocabulary
      */
     bool detect_loop_candidates();
+
+    /**
+     * Add loop candidate
+     */
+    void add_loop_candidate(const std::shared_ptr<data::keyframe>& keyfrm);
 
     /**
      * Validate loop candidates selected in detect_loop_candidate()
@@ -124,7 +131,8 @@ private:
     //! transform optimizer
     const optimize::transform_optimizer transform_optimizer_;
 
-    const optimize::pose_optimizer pose_optimizer_;
+    //! pose optimizer
+    std::unique_ptr<optimize::pose_optimizer> pose_optimizer_ = nullptr;
 
     //! flag which indicates the loop detector is enabled or not
     std::atomic<bool> loop_detector_is_enabled_{true};

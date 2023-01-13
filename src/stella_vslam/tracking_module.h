@@ -37,7 +37,7 @@ struct pose_request {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     bool mode_2d_;
-    Mat44_t pose_;
+    Mat44_t pose_cw_;
     Vec3_t normal_vector_;
 };
 
@@ -46,7 +46,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     //! Constructor
-    tracking_module(const std::shared_ptr<config>& cfg, data::map_database* map_db,
+    tracking_module(const std::shared_ptr<config>& cfg, camera::base* camera, data::map_database* map_db,
                     data::bow_vocabulary* bow_vocab, data::bow_database* bow_db);
 
     //! Destructor
@@ -59,21 +59,21 @@ public:
     void set_global_optimization_module(global_optimization_module* global_optimizer);
 
     //-----------------------------------------
+    // interfaces for mapping module and global optimization module
+
+    //! Replace the landmarks in last frame
+    void replace_landmarks_in_last_frm(nondeterministic::unordered_map<std::shared_ptr<data::landmark>, std::shared_ptr<data::landmark>>& replaced_lms);
+
+    //-----------------------------------------
     // interfaces
-
-    //! Set mapping module status
-    void set_mapping_module_status(const bool mapping_is_enabled);
-
-    //! Get mapping module status
-    bool get_mapping_module_status() const;
 
     //! Main stream of the tracking module
     std::shared_ptr<Mat44_t> feed_frame(data::frame frame);
 
     //! Request to update the pose to a given one.
     //! Return failure in case if previous request was not finished yet.
-    bool request_relocalize_by_pose(const Mat44_t& pose);
-    bool request_relocalize_by_pose_2d(const Mat44_t& pose, const Vec3_t& normal_vector);
+    bool request_relocalize_by_pose(const Mat44_t& pose_cw);
+    bool request_relocalize_by_pose_2d(const Mat44_t& pose_cw, const Vec3_t& normal_vector);
 
     //-----------------------------------------
     // management for reset process
@@ -82,10 +82,19 @@ public:
     void reset();
 
     //-----------------------------------------
+    // management for stop keyframe insertion process
+
+    //! Request to stop keyframe insertion in tracking module
+    std::future<void> async_stop_keyframe_insertion();
+
+    //! Request to start keyframe insertion in tracking module
+    std::future<void> async_start_keyframe_insertion();
+
+    //-----------------------------------------
     // management for pause process
 
     //! Request to pause the tracking module
-    std::future<void> async_pause();
+    std::shared_future<void> async_pause();
 
     //! Check if the pause of the tracking module is requested or not
     bool pause_is_requested() const;
@@ -111,6 +120,9 @@ public:
 
     //! If true, use robust_matcher for relocalization request
     bool use_robust_matcher_for_relocalization_request_ = false;
+
+    //! Max number of local keyframes for tracking
+    unsigned int max_num_local_keyfrms_ = 60;
 
     //-----------------------------------------
     // variables
@@ -142,9 +154,6 @@ protected:
 
     //! Update the motion model using the current and last frames
     void update_motion_model();
-
-    //! Replace the landmarks if the `replaced` member has the valid pointer
-    void apply_landmark_replace();
 
     //! Update the camera pose of the last frame
     void update_last_frame();
@@ -185,14 +194,14 @@ protected:
     //! initializer
     module::initializer initializer_;
 
+    //! pose optimizer
+    std::shared_ptr<optimize::pose_optimizer> pose_optimizer_ = nullptr;
+
     //! frame tracker for current frame
     const module::frame_tracker frame_tracker_;
 
     //! relocalizer
     module::relocalizer relocalizer_;
-
-    //! pose optimizer
-    const optimize::pose_optimizer pose_optimizer_;
 
     //! keyframe inserter
     module::keyframe_inserter keyfrm_inserter_;
@@ -204,6 +213,9 @@ protected:
 
     //! last frame
     data::frame last_frm_;
+
+    //! mutex for pause process
+    mutable std::mutex mtx_last_frm_;
 
     //! ID of latest frame which succeeded in relocalization
     unsigned int last_reloc_frm_id_ = 0;
@@ -220,13 +232,12 @@ protected:
     Mat44_t last_cam_pose_from_ref_keyfrm_;
 
     //-----------------------------------------
-    // mapping module status
+    // management for stop_keyframe_insertion process
 
-    //! mutex for mapping module status
-    mutable std::mutex mtx_mapping_;
+    //! mutex for stop_keyframe_insertion process
+    mutable std::mutex mtx_stop_keyframe_insertion_;
 
-    //! mapping module is enabled or not
-    bool mapping_is_enabled_ = true;
+    bool is_stopped_keyframe_insertion_ = false;
 
     //-----------------------------------------
     // management for pause process
@@ -235,10 +246,13 @@ protected:
     mutable std::mutex mtx_pause_;
 
     //! promise for pause
-    std::vector<std::promise<void>> promises_pause_;
+    std::promise<void> promise_pause_;
+
+    //! future for pause
+    std::shared_future<void> future_pause_;
 
     //! Check the request frame and pause the tracking module
-    bool check_and_execute_pause();
+    bool pause_if_requested();
 
     //! the tracking module is paused or not
     bool is_paused_ = false;

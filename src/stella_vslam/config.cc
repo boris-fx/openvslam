@@ -1,8 +1,4 @@
 #include "stella_vslam/config.h"
-#include "stella_vslam/camera/perspective.h"
-#include "stella_vslam/camera/fisheye.h"
-#include "stella_vslam/camera/equirectangular.h"
-#include "stella_vslam/camera/radial_division.h"
 #include "stella_vslam/marker_model/aruco.h"
 #include "stella_vslam/util/string.h"
 
@@ -93,12 +89,6 @@ config::config(const stella_vslam_bfx::config_settings& settings)
 }
 
 config::~config() {
-    delete camera_;
-    camera_ = nullptr;
-
-    delete orb_params_;
-    orb_params_ = nullptr;
-
     spdlog::debug("DESTRUCT: config");
 }
 

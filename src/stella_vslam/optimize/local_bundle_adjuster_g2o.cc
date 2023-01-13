@@ -3,7 +3,8 @@
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/marker_model/base.h"
-#include "stella_vslam/optimize/local_bundle_adjuster.h"
+#include "stella_vslam/optimize/local_bundle_adjuster_g2o.h"
+#include "stella_vslam/optimize/terminate_action.h"
 #include "stella_vslam/optimize/internal/landmark_vertex_container.h"
 #include "stella_vslam/optimize/internal/marker_vertex_container.h"
 #include "stella_vslam/optimize/internal/se3/shot_vertex_container.h"
@@ -26,14 +27,14 @@
 namespace stella_vslam {
 namespace optimize {
 
-local_bundle_adjuster::local_bundle_adjuster(const stella_vslam_bfx::config_settings& settings,
+local_bundle_adjuster_g2o::local_bundle_adjuster_g2o(const stella_vslam_bfx::config_settings& settings,
                                              const unsigned int num_first_iter,
                                              const unsigned int num_second_iter)
     : num_first_iter_(num_first_iter), num_second_iter_(num_second_iter),
       use_additional_keyframes_for_monocular_(settings.use_additional_keyframes_for_monocular_) {}
 
-void local_bundle_adjuster::optimize(data::map_database* map_db,
-                                     const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
+void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
+                                         const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
     // 1. Aggregate the local and fixed keyframes, and local landmarks
 
    //spdlog::warn("local_bundle_adjuster::optimize - current keyframe: {}", curr_keyfrm->id_);
@@ -51,7 +52,7 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
         if (local_keyfrm->will_be_erased()) {
             continue;
         }
-        if (local_keyfrm->id_ == 0) {
+        if (local_keyfrm->graph_node_->is_spanning_root()) {
             continue;
         }
 
@@ -152,6 +153,9 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
     auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
 
     g2o::SparseOptimizer optimizer;
+    auto terminateAction = new terminate_action;
+    terminateAction->setGainThreshold(1e-3);
+    optimizer.addPostIterationAction(terminateAction);
     optimizer.setAlgorithm(algorithm);
 
     if (force_stop_flag) {
@@ -204,12 +208,16 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
 
     for (const auto& id_local_lm_pair : local_lms) {
         const auto local_lm = id_local_lm_pair.second;
+        const auto observations = local_lm->get_observations();
+        if (observations.empty()) {
+            spdlog::warn("empty observation");
+            continue;
+        }
 
         // Convert the landmark to the g2o vertex, then set to the optimizer
         auto lm_vtx = lm_vtx_container.create_vertex(local_lm, false);
         optimizer.addVertex(lm_vtx);
 
-        const auto observations = local_lm->get_observations();
         for (const auto& obs : observations) {
             const auto keyfrm = obs.first.lock();
             auto idx = obs.second;
@@ -217,6 +225,9 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
                 continue;
             }
             if (keyfrm->will_be_erased()) {
+                continue;
+            }
+            if (!keyfrm_vtx_container.contain(keyfrm)) {
                 continue;
             }
 
@@ -321,6 +332,8 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
         optimizer.optimize(num_second_iter_);
     }
 
+    delete terminateAction;
+
     // 7. Count the outliers
 
     std::vector<std::pair<std::shared_ptr<data::keyframe>, std::shared_ptr<data::landmark>>> outlier_observations;
@@ -356,6 +369,10 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
             const auto& lm = outlier_obs.second;
             keyfrm->erase_landmark(lm);
             lm->erase_observation(map_db, keyfrm);
+            if (!lm->will_be_erased()) {
+                lm->compute_descriptor();
+                lm->update_mean_normal_and_obs_scale_variance();
+            }
         }
 
         for (const auto& id_local_keyfrm_pair : local_keyfrms) {
@@ -367,6 +384,9 @@ void local_bundle_adjuster::optimize(data::map_database* map_db,
 
         for (const auto& id_local_lm_pair : local_lms) {
             const auto& local_lm = id_local_lm_pair.second;
+            if (local_lm->will_be_erased()) {
+                continue;
+            }
 
             auto lm_vtx = lm_vtx_container.get_vertex(local_lm);
             local_lm->set_pos_in_world(lm_vtx->estimate());

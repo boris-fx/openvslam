@@ -33,7 +33,8 @@ RUN set -x && \
     libavformat-dev \
     libavutil-dev \
     libswscale-dev \
-    libavresample-dev && \
+    libavresample-dev \
+    libtbb-dev && \
   : "backward-cpp dependencies" && \
   apt install -y -qq binutils-dev && \
   : "other dependencies" && \
@@ -91,7 +92,7 @@ RUN set -x && \
     -DG2O_USE_CHOLMOD=OFF \
     -DG2O_USE_CSPARSE=ON \
     -DG2O_USE_OPENGL=OFF \
-    -DG2O_USE_OPENMP=ON \
+    -DG2O_USE_OPENMP=OFF \
     -DG2O_BUILD_APPS=OFF \
     -DG2O_BUILD_EXAMPLES=OFF \
     -DG2O_BUILD_LINKED_APPS=OFF \
@@ -136,6 +137,7 @@ RUN set -x && \
     -DENABLE_FAST_MATH=ON \
     -DWITH_EIGEN=ON \
     -DWITH_FFMPEG=ON \
+    -DWITH_TBB=ON \
     -DWITH_OPENMP=ON \
     -DOPENCV_EXTRA_MODULES_PATH=/tmp/extra \
     .. && \

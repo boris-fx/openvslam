@@ -39,7 +39,12 @@ public:
      * Update tracking information
      * NOTE: should be accessed from system thread
      */
-    void update(tracking_module* tracker, std::vector<cv::KeyPoint>& keypts, const cv::Mat& img, double elapsed_ms);
+    void update(const std::vector<std::shared_ptr<data::landmark>>& curr_lms,
+                bool mapping_is_enabled,
+                tracker_state_t tracking_state,
+                std::vector<cv::KeyPoint>& keypts,
+                const cv::Mat& img,
+                double elapsed_ms);
 
     /**
      * Get the current image with tracking information
@@ -49,7 +54,8 @@ public:
 
 protected:
     unsigned int draw_tracked_points(cv::Mat& img, const std::vector<cv::KeyPoint>& curr_keypts,
-                                     const std::vector<bool>& is_tracked, const bool mapping_is_enabled,
+                                     const std::vector<std::shared_ptr<data::landmark>>& curr_lms,
+                                     const bool mapping_is_enabled,
                                      const float mag = 1.0) const;
 
     // colors (BGR)
@@ -81,8 +87,7 @@ protected:
     //! mapping module status
     bool mapping_is_enabled_;
 
-    //! tracking flag for each current keypoint
-    std::vector<bool> is_tracked_;
+    std::vector<std::shared_ptr<data::landmark>> curr_lms_;
 };
 
 } // namespace publish

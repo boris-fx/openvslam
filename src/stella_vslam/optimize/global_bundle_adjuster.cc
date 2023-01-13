@@ -94,9 +94,9 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
 }
 
 void optimize_impl(g2o::SparseOptimizer& optimizer,
-                   std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
-                   std::vector<std::shared_ptr<data::landmark>>& lms,
-                   std::vector<std::shared_ptr<data::marker>>& markers,
+                   const std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
+                   const std::vector<std::shared_ptr<data::landmark>>& lms,
+                   const std::vector<std::shared_ptr<data::marker>>& markers,
                    std::vector<bool>& is_optimized_lm,
                    internal::se3::shot_vertex_container& keyfrm_vtx_container,
                    internal::landmark_vertex_container& lm_vtx_container,
@@ -144,7 +144,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
             continue;
         }
 
-        auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, keyfrm->id_ == 0);
+        auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, keyfrm->graph_node_->is_spanning_root());
         optimizer.addVertex(keyfrm_vtx);
     }
 
@@ -291,14 +291,13 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
     }
 }
 
-global_bundle_adjuster::global_bundle_adjuster(data::map_database* map_db, const unsigned int num_iter, const bool use_huber_kernel)
-    : map_db_(map_db), num_iter_(num_iter), use_huber_kernel_(use_huber_kernel) {}
+global_bundle_adjuster::global_bundle_adjuster(const unsigned int num_iter, const bool use_huber_kernel)
+    : num_iter_(num_iter), use_huber_kernel_(use_huber_kernel) {}
 
-void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_flag, bool *camera_was_modified) const {
-    // 1. Collect the dataset
-    auto keyfrms = map_db_->get_all_keyframes();
-    auto lms = map_db_->get_all_landmarks();
-    auto markers = map_db_->get_all_markers();
+void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
+                                                         const std::vector<std::shared_ptr<data::landmark>>& lms,
+                                                         const std::vector<std::shared_ptr<data::marker>>& markers,
+                                                         bool* const force_stop_flag, bool *camera_was_modified) const {
     std::vector<bool> is_optimized_lm(lms.size(), true);
 
     auto vtx_id_offset = std::make_shared<unsigned int>(0);
@@ -324,7 +323,7 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
         return;
     }
 
-    // 6. Extract the result
+    // Extract the result
     //static int hit(0);
     //++hit;
     //if (autocalibration_wrapper() && autocalibration_wrapper.camera) {
@@ -383,15 +382,48 @@ void global_bundle_adjuster::optimize_for_initialization(bool* const force_stop_
     //}
 }
 
-bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& optimized_keyfrm_ids,
+bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
+                                      std::unordered_set<unsigned int>& optimized_keyfrm_ids,
                                       std::unordered_set<unsigned int>& optimized_landmark_ids,
                                       eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                                       eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,
-                                            bool* const force_stop_flag, int num_iter, bool general_bundle, bool* camera_was_modified) const {
-    // 1. Collect the dataset
-    auto keyfrms = map_db_->get_all_keyframes();
-    auto lms = map_db_->get_all_landmarks();
-    auto markers = map_db_->get_all_markers();
+                                      bool* const force_stop_flag,
+									  int num_iter, bool general_bundle, bool* camera_was_modified) const {
+    std::unordered_set<unsigned int> already_found_landmark_ids;
+    std::vector<std::shared_ptr<data::landmark>> lms;
+    for (const auto& keyfrm : keyfrms) {
+        for (const auto& lm : keyfrm->get_landmarks()) {
+            if (!lm) {
+                continue;
+            }
+            if (lm->will_be_erased()) {
+                continue;
+            }
+            if (already_found_landmark_ids.count(lm->id_)) {
+                continue;
+            }
+
+            already_found_landmark_ids.insert(lm->id_);
+            lms.push_back(lm);
+        }
+    }
+
+    std::unordered_set<unsigned int> already_found_marker_ids;
+    std::vector<std::shared_ptr<data::marker>> markers;
+    for (const auto& keyfrm : keyfrms) {
+        for (const auto& mkr : keyfrm->get_markers()) {
+            if (!mkr) {
+                continue;
+            }
+            if (already_found_marker_ids.count(mkr->id_)) {
+                continue;
+            }
+
+            already_found_marker_ids.insert(mkr->id_);
+            markers.push_back(mkr);
+        }
+    }
+
     std::vector<bool> is_optimized_lm(lms.size(), true);
 
     auto vtx_id_offset = std::make_shared<unsigned int>(0);
@@ -425,7 +457,9 @@ bool global_bundle_adjuster::optimizeGlobal(std::unordered_set<unsigned int>& op
         return false;
     }
 
-    // 6. Extract the result
+    delete terminateAction;
+
+    // Extract the result
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
     double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;

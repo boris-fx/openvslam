@@ -3,7 +3,7 @@
 #include "stella_vslam/tracking_module.h"
 #include "stella_vslam/mapping_module.h"
 #include "stella_vslam/global_optimization_module.h"
-#include "stella_vslam/camera/base.h"
+#include "stella_vslam/camera/camera_factory.h"
 #include "stella_vslam/data/camera_database.h"
 #include "stella_vslam/data/common.h"
 #include "stella_vslam/data/landmark.h"
@@ -18,8 +18,7 @@
 #include "stella_vslam/match/stereo.h"
 #include "stella_vslam/feature/orb_extractor.h"
 #include "stella_vslam/io/trajectory_io.h"
-#include "stella_vslam/io/map_database_io_msgpack.h"
-#include "stella_vslam/io/map_database_io_sqlite3.h"
+#include "stella_vslam/io/map_database_io_factory.h"
 #include "stella_vslam/publish/map_publisher.h"
 #include "stella_vslam/publish/frame_publisher.h"
 #include "stella_vslam/util/converter.h"
@@ -109,25 +108,8 @@ system::system(const std::shared_ptr<config>& cfg, std::ifstream & vocab_data)
 
 void system::init(const config * cfg)
 {
-    std::ostringstream message_stream;
-
-    message_stream << std::endl;
-    message_stream << "original version of OpenVSLAM," << std::endl;
-    message_stream << "Copyright (C) 2019," << std::endl;
-    message_stream << "National Institute of Advanced Industrial Science and Technology (AIST)" << std::endl;
-    message_stream << "All rights reserved." << std::endl;
-    message_stream << "stella_vslam (the changes after forking from OpenVSLAM)," << std::endl;
-    message_stream << "Copyright (C) 2022, stella-cv, All rights reserved." << std::endl;
-    message_stream << std::endl;
-    message_stream << "This is free software," << std::endl;
-    message_stream << "and you are welcome to redistribute it under certain conditions." << std::endl;
-    message_stream << "See the LICENSE file." << std::endl;
-    message_stream << std::endl;
-
-    // show configuration
-    message_stream << *cfg << std::endl;
-
-    spdlog::info(message_stream.str());
+    spdlog::debug("CONSTRUCT: system");
+    print_info();
 
     // reset static data
     data::frame::reset_next_id();
@@ -135,64 +117,67 @@ void system::init(const config * cfg)
     data::landmark::reset_next_id();
 
     // database
-    cam_db_ = new data::camera_database(camera_);
-    map_db_ = new data::map_database();
+    cam_db_ = new data::camera_database();
+    cam_db_->add_camera(camera_);
+    map_db_ = new data::map_database(system_params["min_num_shared_lms"].as<unsigned int>(15));
     bow_db_ = new data::bow_database(bow_vocab_);
+    orb_params_db_ = new data::orb_params_database();
+    orb_params_db_->add_orb_params(orb_params_);
 
     // frame and map publisher
     frame_publisher_ = std::make_shared<publish::frame_publisher>(cfg_, map_db_);
     map_publisher_ = std::make_shared<publish::map_publisher>(cfg_, map_db_);
 
     // map I/O
-    if (cfg_->settings_.map_format_ == stella_vslam::io::map_format_t::SQLite3) {
-#ifdef USE_SQLITE
-        map_database_io_ = std::make_shared<io::map_database_io_sqlite3>();
-#else
-        throw std::runtime_error("Map format: " +
-            stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]
-            + " is disabled");
-#endif
-    }
-    else if (cfg_->settings_.map_format_ == stella_vslam::io::map_format_t::Msgpack) {
-        map_database_io_ = std::make_shared<io::map_database_io_msgpack>();
-    }
-    else {
-        throw std::runtime_error("Invalid map format: " + 
-            stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]);
-    }
+    auto map_format = system_params["map_format"].as<std::string>("msgpack");
+    map_database_io_ = io::map_database_io_factory::create(map_format);
 
     // tracking module
-    tracker_ = new tracking_module(cfg_, map_db_, bow_vocab_, bow_db_);
+    tracker_ = new tracking_module(cfg_, camera_, map_db_, bow_vocab_, bow_db_);
     // mapping module
     mapper_ = new mapping_module(cfg_->settings_, map_db_, bow_db_, bow_vocab_);
     // global optimization module
     global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->settings_, camera_->setup_type_ != camera::setup_type_t::Monocular);
 
     // preprocessing modules
+//<<<<<<< HEAD
     depthmap_factor_ = get_depthmap_factor(camera_, cfg_->settings_);
-    auto mask_rectangles = cfg->settings_.mask_rectangles_;
-    for (const auto& v : mask_rectangles) {
-        if (v.size() != 4) {
-            throw std::runtime_error("mask rectangle must contain four parameters");
-        }
-        if (v.at(0) >= v.at(1)) {
-            throw std::runtime_error("x_max must be greater than x_min");
-        }
-        if (v.at(2) >= v.at(3)) {
-            throw std::runtime_error("y_max must be greater than x_min");
-        }
-    }
+    // auto mask_rectangles = cfg->settings_.mask_rectangles_;
+    // for (const auto& v : mask_rectangles) {
+        // if (v.size() != 4) {
+            // throw std::runtime_error("mask rectangle must contain four parameters");
+        // }
+        // if (v.at(0) >= v.at(1)) {
+            // throw std::runtime_error("x_max must be greater than x_min");
+        // }
+        // if (v.at(2) >= v.at(3)) {
+            // throw std::runtime_error("y_max must be greater than x_min");
+// =======
+    // const auto preprocessing_params = util::yaml_optional_ref(cfg->yaml_node_, "Preprocessing");
+    // if (camera_->setup_type_ == camera::setup_type_t::RGBD) {
+        // depthmap_factor_ = preprocessing_params["depthmap_factor"].as<double>(depthmap_factor_);
+        // if (depthmap_factor_ < 0.) {
+            // throw std::runtime_error("depthmap_factor must be greater than 0");
+// >>>>>>> upstream/main
+    //    }
+    //}
+    auto mask_rectangles = util::get_rectangles(preprocessing_params["mask_rectangles"]);
 
-    orb_params_db_ = new data::orb_params_database(orb_params_);
+// <<<<<<< HEAD
+    // orb_params_db_ = new data::orb_params_database(orb_params_);
 
-    const auto max_num_keypoints = cfg->settings_.max_num_keypoints_;
-    extractor_left_ = new feature::orb_extractor(orb_params_, max_num_keypoints, mask_rectangles);
-    if (camera_->setup_type_ == camera::setup_type_t::Monocular) {
-        const auto ini_max_num_keypoints = std::max(cfg->settings_.ini_max_num_keypoints_, 2 * extractor_left_->get_max_num_keypoints());
-        ini_extractor_left_ = new feature::orb_extractor(orb_params_, ini_max_num_keypoints, mask_rectangles);
-    }
+    // const auto max_num_keypoints = cfg->settings_.max_num_keypoints_;
+    // extractor_left_ = new feature::orb_extractor(orb_params_, max_num_keypoints, mask_rectangles);
+    // if (camera_->setup_type_ == camera::setup_type_t::Monocular) {
+        // const auto ini_max_num_keypoints = std::max(cfg->settings_.ini_max_num_keypoints_, 2 * extractor_left_->get_max_num_keypoints());
+        // ini_extractor_left_ = new feature::orb_extractor(orb_params_, ini_max_num_keypoints, mask_rectangles);
+    // }
+// =======
+    const auto min_size = cfg->settings_.min_size;
+    extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
+//>>>>>>> upstream/main
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
-        extractor_right_ = new feature::orb_extractor(orb_params_, max_num_keypoints, mask_rectangles);
+        extractor_right_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
     }
 
     if (cfg->marker_model_) {
@@ -239,8 +224,6 @@ system::~system() {
     extractor_left_ = nullptr;
     delete extractor_right_;
     extractor_right_ = nullptr;
-    delete ini_extractor_left_;
-    ini_extractor_left_ = nullptr;
 
     delete marker_detector_;
     marker_detector_ = nullptr;
@@ -249,6 +232,28 @@ system::~system() {
     orb_params_db_ = nullptr;
 
     spdlog::debug("DESTRUCT: system");
+}
+
+void system::print_info() {
+    std::ostringstream message_stream;
+
+    message_stream << std::endl;
+    message_stream << "original version of OpenVSLAM," << std::endl;
+    message_stream << "Copyright (C) 2019," << std::endl;
+    message_stream << "National Institute of Advanced Industrial Science and Technology (AIST)" << std::endl;
+    message_stream << "All rights reserved." << std::endl;
+    message_stream << "stella_vslam (the changes after forking from OpenVSLAM)," << std::endl;
+    message_stream << "Copyright (C) 2022, stella-cv, All rights reserved." << std::endl;
+    message_stream << std::endl;
+    message_stream << "This is free software," << std::endl;
+    message_stream << "and you are welcome to redistribute it under certain conditions." << std::endl;
+    message_stream << "See the LICENSE file." << std::endl;
+    message_stream << std::endl;
+
+    // show configuration
+    message_stream << *cfg_ << std::endl;
+
+    spdlog::info(message_stream.str());
 }
 
 void system::startup(const bool need_initialize) {
@@ -294,12 +299,14 @@ void system::save_keyframe_trajectory(const std::string& path, const std::string
 
 void system::load_map_database(const std::string& path) const {
     pause_other_threads();
+    spdlog::debug("load_map_database: {}", path);
     map_database_io_->load(path, cam_db_, orb_params_db_, map_db_, bow_db_, bow_vocab_);
     resume_other_threads();
 }
 
 void system::save_map_database(const std::string& path) const {
     pause_other_threads();
+    spdlog::debug("save_map_database: {}", path);
     map_database_io_->save(path, cam_db_, orb_params_db_, map_db_);
     resume_other_threads();
 }
@@ -375,8 +382,6 @@ void system::enable_mapping_module() {
     }
     // resume the mapping module
     mapper_->resume();
-    // inform to the tracking module
-    tracker_->set_mapping_module_status(true);
 }
 
 void system::disable_mapping_module() {
@@ -388,8 +393,6 @@ void system::disable_mapping_module() {
     auto future_pause = mapper_->async_pause();
     // wait until it stops
     future_pause.get();
-    // inform to the tracking module
-    tracker_->set_mapping_module_status(false);
 }
 
 bool system::mapping_module_is_enabled() const {
@@ -408,6 +411,10 @@ void system::disable_loop_detector() {
 
 bool system::loop_detector_is_enabled() const {
     return global_optimizer_->loop_detector_is_enabled();
+}
+
+bool system::request_loop_closure(int keyfrm1_id, int keyfrm2_id) {
+    return global_optimizer_->request_loop_closure(keyfrm1_id, keyfrm2_id);
 }
 
 bool system::loop_BA_is_running() const {
@@ -461,23 +468,25 @@ void system::store_prematched_points(const stella_vslam_bfx::prematched_points* 
 data::frame system::create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask,
                                             const stella_vslam_bfx::prematched_points* extra_keypoints) {
     // color conversion
+    if (!camera_->is_valid_shape(img)) {
+        spdlog::warn("preprocess: Input image size is invalid");
+    }
     cv::Mat img_gray = img;
     util::convert_to_grayscale(img_gray, camera_->color_order_);
-
-    bool is_init = tracker_->tracking_state_ == tracker_state_t::Initializing;
 
     data::frame_observation frm_obs;
 
     keypts_.clear();
     if (use_orb_features_) {
         // Extract ORB feature
-        auto extractor = is_init ? ini_extractor_left_ : extractor_left_;
-        extractor->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+        extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
     }
-
     // Add the prematched points to the input vector for undistorting
     if (undistort_prematches_) {
         store_prematched_points(extra_keypoints, keypts_, frm_obs);
+    frm_obs.num_keypts_ = keypts_.size();
+    if (keypts_.empty()) {
+        spdlog::warn("preprocess: cannot extract any keypoints");
     }
 
     // Undistort keypoints
@@ -526,6 +535,12 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
 
 data::frame system::create_stereo_frame(const cv::Mat& left_img, const cv::Mat& right_img, const double timestamp, const cv::Mat& mask) {
     // color conversion
+    if (!camera_->is_valid_shape(left_img)) {
+        spdlog::warn("preprocess: Input image size is invalid");
+    }
+    if (!camera_->is_valid_shape(right_img)) {
+        spdlog::warn("preprocess: Input image size is invalid");
+    }
     cv::Mat img_gray = left_img;
     cv::Mat right_img_gray = right_img;
     util::convert_to_grayscale(img_gray, camera_->color_order_);
@@ -579,6 +594,12 @@ data::frame system::create_stereo_frame(const cv::Mat& left_img, const cv::Mat& 
 
 data::frame system::create_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask) {
     // color and depth scale conversion
+    if (!camera_->is_valid_shape(rgb_img)) {
+        spdlog::warn("preprocess: Input image size is invalid");
+    }
+    if (!camera_->is_valid_shape(depthmap)) {
+        spdlog::warn("preprocess: Input image size is invalid");
+    }
     cv::Mat img_gray = rgb_img;
     cv::Mat img_depth = depthmap;
     util::convert_to_grayscale(img_gray, camera_->color_order_);
@@ -637,16 +658,28 @@ data::frame system::create_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& dep
 std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask,
                                                         const stella_vslam_bfx::prematched_points* extra_keypoints) {
     assert(camera_->setup_type_ == camera::setup_type_t::Monocular);
+    if (img.empty()) {
+        spdlog::warn("preprocess: empty image");
+        return nullptr;
+    }
     return feed_frame(create_monocular_frame(img, timestamp, mask, extra_keypoints), img);
 }
 
 std::shared_ptr<Mat44_t> system::feed_stereo_frame(const cv::Mat& left_img, const cv::Mat& right_img, const double timestamp, const cv::Mat& mask) {
     assert(camera_->setup_type_ == camera::setup_type_t::Stereo);
+    if (left_img.empty() || right_img.empty()) {
+        spdlog::warn("preprocess: empty image");
+        return nullptr;
+    }
     return feed_frame(create_stereo_frame(left_img, right_img, timestamp, mask), left_img);
 }
 
 std::shared_ptr<Mat44_t> system::feed_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask) {
     assert(camera_->setup_type_ == camera::setup_type_t::RGBD);
+    if (rgb_img.empty() || depthmap.empty()) {
+        spdlog::warn("preprocess: empty image");
+        return nullptr;
+    }
     return feed_frame(create_RGBD_frame(rgb_img, depthmap, timestamp, mask), rgb_img);
 }
 
@@ -660,7 +693,12 @@ std::shared_ptr<Mat44_t> system::feed_frame(const data::frame& frm, const cv::Ma
     const auto end = std::chrono::system_clock::now();
     double elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    frame_publisher_->update(tracker_, keypts_, img, elapsed_ms);
+    frame_publisher_->update(tracker_->curr_frm_.get_landmarks(),
+                             !mapper_->is_paused(),
+                             tracker_->tracking_state_,
+                             keypts_,
+                             img,
+                             elapsed_ms);
     if (tracker_->tracking_state_ == tracker_state_t::Tracking && cam_pose_wc) {
         map_publisher_->set_current_cam_pose(util::converter::inverse_pose(*cam_pose_wc));
     }
@@ -721,6 +759,10 @@ void system::request_terminate() {
 bool system::terminate_is_requested() const {
     std::lock_guard<std::mutex> lock(mtx_terminate_);
     return terminate_is_requested_;
+}
+
+camera::base* system::get_camera() const {
+    return camera_;
 }
 
 void system::check_reset_request() {

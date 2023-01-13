@@ -6,6 +6,9 @@ set(spdlog_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/spdlog/include)
 # json
 set(json_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/json/include)
 
+# tinycolormap
+set(tinycolormap_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/tinycolormap/include)
+
 # sqlite3
 if(USE_SQLITE)
     find_package(SQLite3 REQUIRED)
@@ -26,8 +29,20 @@ find_package(g2o REQUIRED
              g2o::csparse_extension
              g2o::csparse)
 
-if(TARGET OpenMP::OpenMP_CXX)
-    set(OPENMP_CXX_LIBRARY OpenMP::OpenMP_CXX)
+#if(TARGET OpenMP::OpenMP_CXX)
+#    set(OPENMP_CXX_LIBRARY OpenMP::OpenMP_CXX)
+#endif()
+
+# gtsam
+set(USE_GTSAM ON CACHE BOOL "Enable gtsam")
+unset(GTSAM_INCLUDE_DIRS CACHE)
+find_path(GTSAM_INCLUDE_DIRS NAMES gtsam
+          PATHS /usr/local/include/)
+if(USE_GTSAM AND GTSAM_INCLUDE_DIRS)
+    message(STATUS "gtsam: enabled (Found in ${GTSAM_INCLUDE_DIRS})")
+else()
+    set(USE_GTSAM OFF)
+    message(STATUS "gtsam: disabled")
 endif()
 
 # Check first if CSparse is built from g2o
@@ -99,6 +114,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 # ----- Compile configuration -----
 
+# gtsam
+if (USE_GTSAM)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC USE_GTSAM)
+endif()
+
 # OpenMP
 set(USE_OPENMP OFF CACHE BOOL "Use OpenMP")
 if(USE_OPENMP)
@@ -150,6 +170,18 @@ if(USE_ARUCO)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USE_ARUCO)
 endif()
 
+# Trace level log
+set (ENABLE_TRACE_LEVEL_LOG OFF CACHE BOOL "Enable trace level log")
+if (ENABLE_TRACE_LEVEL_LOG)
+    # Remove SPDLOG_TRACE macro at compile time by switching SPDLOG_ACTIVE_LEVEL.
+    # NOTE: SPDLOG_ACTIVE_LEVEL has no effect on `spdlog::debug(...)`, `spdlog::trace(...)`, etc.
+    target_compile_definitions(${PROJECT_NAME} PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+    message(STATUS "trace level log: ENABLED")
+else()
+    target_compile_definitions(${PROJECT_NAME} PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
+    message(STATUS "trace level log: DISABLED")
+endif()
+
 # Determinism
 set (DETERMINISTIC ON CACHE BOOL "Use deterministic code")
 if (DETERMINISTIC)
@@ -174,6 +206,7 @@ endif()
 target_include_directories(${PROJECT_NAME}
                            PUBLIC
                            "$<BUILD_INTERFACE:${json_INCLUDE_DIR}>"
+                           "$<BUILD_INTERFACE:${tinycolormap_INCLUDE_DIR}>"
                            "$<BUILD_INTERFACE:${spdlog_INCLUDE_DIR}>"
                            "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/>"
                            "$<INSTALL_INTERFACE:include/stella_vslam/3rd/json/include>"
@@ -197,8 +230,9 @@ target_link_libraries(${PROJECT_NAME}
                       g2o::types_sim3
                       g2o::solver_dense
                       g2o::solver_eigen
-                      ${G2O_SOLVER_CSPARSE_LIBRARY}
-                      ${G2O_SOLVER_CSPARSE_EXTENSION_LIBRARY}
+                      g2o::solver_csparse
+                      g2o::csparse_extension
+                      "$<$<BOOL:${USE_GTSAM}>:gtsam>"
                       ${CXSPARSE_LIBRARIES}
                       ${SUITESPARSE_LIBRARIES}
                       ${BoW_LIBRARY}
@@ -232,6 +266,8 @@ install(FILES ${HEADERS}
 # Install 3rd party headers
 install(FILES ${json_INCLUDE_DIR}/nlohmann/json.hpp ${json_INCLUDE_DIR}/nlohmann/json_fwd.hpp
         DESTINATION ${STELLA_VSLAM_INCLUDE_INSTALL_DIR}/3rd/json/include/nlohmann)
+install(DIRECTORY ${tinycolormap_INCLUDE_DIR}
+        DESTINATION ${STELLA_VSLAM_INCLUDE_INSTALL_DIR}/3rd/tinycolormap)
 install(DIRECTORY ${spdlog_INCLUDE_DIR}
         DESTINATION ${STELLA_VSLAM_INCLUDE_INSTALL_DIR}/3rd/spdlog)
 

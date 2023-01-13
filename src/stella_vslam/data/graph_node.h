@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_GRAPH_NODE_H
 #define STELLA_VSLAM_DATA_GRAPH_NODE_H
 
+#include <atomic>
 #include <mutex>
 #include <vector>
 #include <map>
@@ -17,7 +18,7 @@ public:
     /**
      * Constructor
      */
-    explicit graph_node(std::shared_ptr<keyframe>& keyfrm, const bool spanning_parent_is_not_set = true);
+    explicit graph_node(std::shared_ptr<keyframe>& keyfrm);
 
     /**
      * Destructor
@@ -28,9 +29,9 @@ public:
     // covisibility graph
 
     /**
-     * Add connection between myself and specified keyframes with the weight
+     * Add connection between myself and specified keyframes with the number of shared landmarks
      */
-    void add_connection(const std::shared_ptr<keyframe>& keyfrm, const unsigned int weight);
+    void add_connection(const std::shared_ptr<keyframe>& keyfrm, const unsigned int num_shared_lms);
 
     /**
      * Erase connection between myself and specified keyframes
@@ -45,7 +46,7 @@ public:
     /**
      * Update the connections and the covisibilities by referring landmark observations
      */
-    void update_connections();
+    void update_connections(unsigned int min_num_shared_lms);
 
     /**
      * Update the order of the covisibilities
@@ -69,21 +70,21 @@ public:
     std::vector<std::shared_ptr<keyframe>> get_top_n_covisibilities(const unsigned int num_covisibilities) const;
 
     /**
-     * Get the covisibility keyframes which have weights over the threshold with myself
+     * Get the covisibility keyframes which have shared landmarks over the threshold
      */
-    std::vector<std::shared_ptr<keyframe>> get_covisibilities_over_weight(const unsigned int weight) const;
+    std::vector<std::shared_ptr<keyframe>> get_covisibilities_over_min_num_shared_lms(const unsigned int min_num_shared_lms) const;
 
     /**
-     * Get the weight between this and specified keyframe
+     * Get the number of shared landmarks between this and specified keyframe
      */
-    unsigned int get_weight(const std::shared_ptr<keyframe>& keyfrm) const;
+    unsigned int get_num_shared_landmarks(const std::shared_ptr<keyframe>& keyfrm) const;
 
     //-----------------------------------------
     // spanning tree
 
     /**
      * Set the parent node of spanning tree
-     * (NOTE: this functions will be only used for map loading)
+     * (NOTE: this functions will be only used for map loading or initialization)
      */
     void set_spanning_parent(const std::shared_ptr<keyframe>& keyfrm);
 
@@ -140,6 +141,17 @@ public:
      */
     bool has_loop_edge() const;
 
+    //-----------------------------------------
+    // root
+
+    std::shared_ptr<keyframe> get_spanning_root();
+
+    bool is_spanning_root() const;
+
+    void set_spanning_root(std::shared_ptr<keyframe>& keyfrm);
+
+    std::vector<std::shared_ptr<keyframe>> get_keyframes_from_root();
+
 private:
     /**
      * Update the order of the covisibilities (without mutex)
@@ -153,25 +165,30 @@ private:
     template<typename T, typename U>
     static std::vector<std::shared_ptr<keyframe>> extract_intersection(const T& keyfrms_1, const U& keyfrms_2);
 
+    //-----------------------------------------
+    // implementation
+
+    std::shared_ptr<keyframe> get_spanning_root_impl();
+
+    bool is_spanning_root_impl() const;
+
     //! keyframe of this node
     std::weak_ptr<keyframe> const owner_keyfrm_;
 
-    //! all connected keyframes and their weights
-    id_ordered_map<std::weak_ptr<keyframe>, unsigned int> connected_keyfrms_and_weights_;
+    //! all connected keyframes and the number of shared landmarks between the keyframes
+    id_ordered_map<std::weak_ptr<keyframe>, unsigned int> connected_keyfrms_and_num_shared_lms_;
 
-    //! minimum threshold for covisibility graph connection
-    static constexpr unsigned int weight_thr_ = 15;
-    //! covisibility keyframe in descending order ot weights
+    //! covisibility keyframe in descending order of the number of shared landmarks
     std::vector<std::weak_ptr<keyframe>> ordered_covisibilities_;
-    //! weights in descending order
-    std::vector<unsigned int> ordered_weights_;
+    //! number of shared landmarks in descending order
+    std::vector<unsigned int> ordered_num_shared_lms_;
 
     //! parent of spanning tree
     std::weak_ptr<keyframe> spanning_parent_;
     //! children of spanning tree
     id_ordered_set<std::weak_ptr<keyframe>> spanning_children_;
-    //! flag which indicates spanning tree is not set yet or not
-    bool spanning_parent_is_not_set_;
+    //! root keyframe of spanning tree
+    std::weak_ptr<keyframe> spanning_root_;
 
     //! loop edges
     id_ordered_set<std::weak_ptr<keyframe>> loop_edges_;
