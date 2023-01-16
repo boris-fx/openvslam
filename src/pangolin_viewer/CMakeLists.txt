@@ -20,10 +20,10 @@ set_target_properties(pangolin_viewer PROPERTIES
                       OUTPUT_NAME pangolin_viewer
                       ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
                       LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-if(${Pangolin_VERSION} VERSION_GREATER 0.5)
+#if(${Pangolin_VERSION} VERSION_GREATER 0.5)
     message(STATUS "Build pangolin_viewer with c++17")
     set_property(TARGET pangolin_viewer PROPERTY CXX_STANDARD 17)
-endif()
+#endif()
 
 #message("Pangolin_INCLUDE_DIR: ${Pangolin_INCLUDE_DIR}")
 

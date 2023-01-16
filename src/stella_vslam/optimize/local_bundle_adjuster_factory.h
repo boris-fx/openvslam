@@ -14,10 +14,10 @@ namespace optimize {
 
 class local_bundle_adjuster_factory {
 public:
-    static std::unique_ptr<local_bundle_adjuster> create(const YAML::Node& yaml_node) {
-        const auto& backend = yaml_node["backend"].as<std::string>("g2o");
+    static std::unique_ptr<local_bundle_adjuster> create(const stella_vslam_bfx::config_settings& settings) {
+        const auto& backend = settings.optimizer_backend_;
         if (backend == "g2o") {
-            return std::unique_ptr<local_bundle_adjuster>(new local_bundle_adjuster_g2o(yaml_node));
+            return std::unique_ptr<local_bundle_adjuster>(new local_bundle_adjuster_g2o(settings));
         }
         else if (backend == "gtsam") {
 #ifdef USE_GTSAM

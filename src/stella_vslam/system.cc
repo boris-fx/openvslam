@@ -85,7 +85,7 @@ data::bow_vocabulary * loadOrbVocabulary(const std::string &vocab_file_path)
 namespace stella_vslam {
 
 system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file_path)
-    : cfg_(cfg), camera_(cfg->camera_), orb_params_(cfg->orb_params_),
+    : cfg_(cfg),
       use_orb_features_(cfg->settings_.use_orb_features_),
       undistort_prematches_(cfg->settings_.undistort_prematches_) {
     spdlog::debug("CONSTRUCT: system");
@@ -96,7 +96,7 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
 }
 
 system::system(const std::shared_ptr<config>& cfg, std::ifstream & vocab_data)
-    : cfg_(cfg), camera_(cfg->camera_), orb_params_(cfg->orb_params_),
+    : cfg_(cfg),
     use_orb_features_(cfg->settings_.use_orb_features_),
     undistort_prematches_(cfg->settings_.undistort_prematches_) {
     spdlog::debug("CONSTRUCT: system");
@@ -113,13 +113,15 @@ void system::init(const config * cfg)
 
     // reset static data
     data::frame::reset_next_id();
-    data::keyframe::reset_next_id();
-    data::landmark::reset_next_id();
+
+    camera_ = camera::camera_factory::create(cfg_->settings_);
+    orb_params_ = new feature::orb_params(cfg_->settings_);
+    spdlog::info("load orb_params \"{}\"", orb_params_->name_);
 
     // database
     cam_db_ = new data::camera_database();
     cam_db_->add_camera(camera_);
-    map_db_ = new data::map_database(system_params["min_num_shared_lms"].as<unsigned int>(15));
+    map_db_ = new data::map_database(cfg_->settings_.min_num_bow_matches_);
     bow_db_ = new data::bow_database(bow_vocab_);
     orb_params_db_ = new data::orb_params_database();
     orb_params_db_->add_orb_params(orb_params_);
@@ -129,8 +131,7 @@ void system::init(const config * cfg)
     map_publisher_ = std::make_shared<publish::map_publisher>(cfg_, map_db_);
 
     // map I/O
-    auto map_format = system_params["map_format"].as<std::string>("msgpack");
-    map_database_io_ = io::map_database_io_factory::create(map_format);
+    map_database_io_ = io::map_database_io_factory::create(cfg_->settings_.map_format_);
 
     // tracking module
     tracker_ = new tracking_module(cfg_, camera_, map_db_, bow_vocab_, bow_db_);
@@ -161,7 +162,7 @@ void system::init(const config * cfg)
 // >>>>>>> upstream/main
     //    }
     //}
-    auto mask_rectangles = util::get_rectangles(preprocessing_params["mask_rectangles"]);
+    auto mask_rectangles = cfg->settings_.mask_rectangles_;
 
 // <<<<<<< HEAD
     // orb_params_db_ = new data::orb_params_database(orb_params_);
@@ -173,7 +174,8 @@ void system::init(const config * cfg)
         // ini_extractor_left_ = new feature::orb_extractor(orb_params_, ini_max_num_keypoints, mask_rectangles);
     // }
 // =======
-    const auto min_size = cfg->settings_.min_size;
+    // In stella 0.3.8 this is called max_num_keypoints in orb_extractor.h, and min_size here and in orb_extractor.cc
+    const auto min_size = cfg->settings_.max_num_keypoints_; // In stella 0.3.8 this is called max_num_keypoints in orb_extract.h and min_size here and in orb_extract.cc
     extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
 //>>>>>>> upstream/main
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
@@ -482,7 +484,7 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
         extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
     }
     // Add the prematched points to the input vector for undistorting
-    if (undistort_prematches_) {
+    if (undistort_prematches_)
         store_prematched_points(extra_keypoints, keypts_, frm_obs);
     frm_obs.num_keypts_ = keypts_.size();
     if (keypts_.empty()) {

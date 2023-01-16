@@ -155,9 +155,9 @@ bool frame_tracker::prematch_based_track(data::frame& curr_frm, const data::fram
     // Pose optimization
     // The initial value is the pose of the previous frame
     curr_frm.set_pose_cw(last_frm.get_pose_cw());
-    g2o::SE3Quat optimized_pose;
+    Mat44_t optimized_pose;
     std::vector<bool> outlier_flags;
-    pose_optimizer_.optimize(curr_frm, optimized_pose, outlier_flags);
+    pose_optimizer_->optimize(curr_frm, optimized_pose, outlier_flags);
     curr_frm.set_pose_cw(optimized_pose);
 
     // Discard the outliers

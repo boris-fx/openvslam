@@ -295,10 +295,14 @@ void global_optimization_module::run_forced_loop_bundle()
 
     // 5. launch loop BA
 
+
+    // 5. launch loop BA
+    SPDLOG_TRACE("global_optimization_module: wait for loop BA");
     while (loop_bundle_adjuster_->is_running()) {
         std::this_thread::sleep_for(std::chrono::microseconds(1000));
     }
     if (thread_for_loop_BA_) {
+        SPDLOG_TRACE("global_optimization_module: wait for last loop BA");
         thread_for_loop_BA_->join();
         thread_for_loop_BA_.reset(nullptr);
     }
@@ -307,11 +311,9 @@ void global_optimization_module::run_forced_loop_bundle()
     loop_bundle_adjuster_->set_num_iter(100);
     int num_iter = 100;
     bool general_bundle = true;
-    //thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get(), num_iter, general_bundle));
-    //thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get()));
     
-    std::function<void(stella_vslam::module::loop_bundle_adjuster *, int, bool)> optimizeFunction = [](stella_vslam::module::loop_bundle_adjuster* ba, int num_iter, bool general_bundle) {
-        ba->optimize(num_iter, general_bundle);
+    std::function<void(stella_vslam::module::loop_bundle_adjuster *, int, bool)> optimizeFunction = [&](stella_vslam::module::loop_bundle_adjuster* ba, int num_iter, bool general_bundle) {
+        ba->optimize(cur_keyfrm_, num_iter, general_bundle);
     };
     thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(optimizeFunction, loop_bundle_adjuster_.get(), num_iter, general_bundle));
     
@@ -417,7 +419,7 @@ void global_optimization_module::correct_loop() {
     }
 
     SPDLOG_TRACE("global_optimization_module: launch loop BA");
-    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get(), cur_keyfrm_));
+    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread([=]() { loop_bundle_adjuster_->optimize(cur_keyfrm_); }));
 
     // 6. post-processing
 

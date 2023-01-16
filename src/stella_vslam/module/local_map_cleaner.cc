@@ -12,7 +12,7 @@ local_map_cleaner::local_map_cleaner(const stella_vslam_bfx::config_settings& se
       redundant_obs_ratio_thr_(settings.redundant_obs_ratio_thr_),
       observed_ratio_thr_(settings.observed_ratio_thr_),
       num_reliable_keyfrms_(settings.num_reliable_keyfrms_),
-	  top_n_covisibilities_to_search_(ysettings.top_n_covisibilities_to_search) {}
+	  top_n_covisibilities_to_search_(settings.top_n_covisibilities_to_search) {}
 
 void local_map_cleaner::reset() {
     fresh_landmarks_.clear();

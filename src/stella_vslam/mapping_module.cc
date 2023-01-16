@@ -21,12 +21,12 @@ namespace stella_vslam {
 mapping_module::mapping_module(const stella_vslam_bfx::config_settings& settings, data::map_database* map_db, data::bow_database* bow_db, data::bow_vocabulary* bow_vocab)
     : local_map_cleaner_(new module::local_map_cleaner(settings, map_db, bow_db)),
       map_db_(map_db), bow_db_(bow_db), bow_vocab_(bow_vocab),
-      use_orb_features_(settings.use_orb_features_)
+      use_orb_features_(settings.use_orb_features_),
       local_bundle_adjuster_(optimize::local_bundle_adjuster_factory::create(settings)),
       enable_interruption_of_landmark_generation_(settings.enable_interruption_of_landmark_generation_),
       enable_interruption_before_local_BA_(settings.enable_interruption_before_local_BA_),
       num_covisibilities_for_landmark_generation_(settings.num_covisibilities_for_landmark_generation_),
-      num_covisibilities_for_landmark_fusion_(settings.num_covisibilities_for_landmark_fusion_)) {
+      num_covisibilities_for_landmark_fusion_(settings.num_covisibilities_for_landmark_fusion_) {
 
     spdlog::debug("CONSTRUCT: mapping_module");
 

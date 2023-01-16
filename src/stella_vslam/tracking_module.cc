@@ -43,12 +43,12 @@ namespace stella_vslam {
 
 tracking_module::tracking_module(const std::shared_ptr<config>& cfg, camera::base* camera, data::map_database* map_db,
                                  data::bow_vocabulary* bow_vocab, data::bow_database* bow_db)
-    : camera_(cfg->camera_),
+    : camera_(camera),
       reloc_distance_threshold_(get_reloc_distance_threshold(cfg->settings_)),
       reloc_angle_threshold_(get_reloc_angle_threshold(cfg->settings_)),
       enable_auto_relocalization_(get_enable_auto_relocalization(cfg->settings_)),
       use_robust_matcher_for_relocalization_request_(get_use_robust_matcher_for_relocalization_request(cfg->settings_)),
-	  max_num_local_keyfrms_(cfg->settings.max_num_local_keyfrms),
+	   max_num_local_keyfrms_(cfg->settings_.max_num_local_keyfrms_),
       map_db_(map_db), bow_vocab_(bow_vocab), bow_db_(bow_db),
       initializer_(map_db, bow_db, cfg->settings_),
       frame_tracker_(camera_, pose_optimizer_, 10, initializer_.get_use_fixed_seed()),

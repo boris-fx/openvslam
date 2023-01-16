@@ -161,6 +161,7 @@ public:
     bool use_robust_matcher_for_relocalization_request_ = false;
     double reloc_distance_threshold_ = 0.2;
     double reloc_angle_threshold_ = 0.45;
+    unsigned max_num_local_keyfrms_ = 60;
 
     // Mapping parameters
     bool use_baseline_dist_thr_ratio_ = false;
@@ -173,6 +174,12 @@ public:
     double baseline_dist_thr_ratio_ = 0.02;
     double redundant_obs_ratio_thr_ = 0.9;
     double observed_ratio_thr_ = 0.3;
+    unsigned min_num_shared_lms_ = 15;
+    unsigned top_n_covisibilities_to_search = 30;
+    unsigned enable_interruption_of_landmark_generation_ = true;
+    unsigned enable_interruption_before_local_BA_ = true;
+    unsigned num_covisibilities_for_landmark_generation_ = 10;
+    unsigned num_covisibilities_for_landmark_fusion_ = 10;
 
     // Keyframe settings
     unsigned enough_lms_thr_ = 100;
@@ -194,6 +201,7 @@ public:
     bool optimise_focal_length_ = false;
 
     // Loop detector settings
+    std::string optimizer_backend_ = "g2o";
     bool loop_detector_is_enabled_ = true;
     bool loop_detector_use_fixed_seed_ = true;
     bool reject_by_graph_distance_ = false;
@@ -217,8 +225,7 @@ public:
     std::vector<double> K_left_, K_right_, R_left_, R_right_, D_left_, D_right_;
 
     // System/IO
-    stella_vslam::io::map_format_t map_format_ =
-                stella_vslam::io::map_format_t::Msgpack;
+    std::string map_format_ = "msgpack";
 };
 
 } // namespace stella_vslam_bfx

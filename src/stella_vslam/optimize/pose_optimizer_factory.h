@@ -15,8 +15,8 @@ namespace optimize {
 
 class pose_optimizer_factory {
 public:
-    static std::unique_ptr<pose_optimizer> create(const YAML::Node& yaml_node) {
-        const auto& backend = yaml_node["backend"].as<std::string>("g2o");
+    static std::unique_ptr<pose_optimizer> create(const stella_vslam_bfx::config_settings& settings) {
+        const auto& backend = settings.optimizer_backend_;
         if (backend == "g2o") {
             return std::unique_ptr<pose_optimizer>(new pose_optimizer_g2o());
         }

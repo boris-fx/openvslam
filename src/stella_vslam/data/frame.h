@@ -193,13 +193,14 @@ public:
     bow_vector bow_vec_;
     bow_feature_vector bow_feat_vec_;
 
+    //! landmarks, whose nullptr indicates no-association
+    std::vector<std::shared_ptr<landmark>> landmarks_;
+    std::unordered_map<std::shared_ptr<landmark>, unsigned int> landmarks_idx_map_;
+
     //! reference keyframe for tracking
     std::shared_ptr<keyframe> ref_keyfrm_ = nullptr;
 
 private:
-    //! landmarks, whose nullptr indicates no-association
-    std::vector<std::shared_ptr<landmark>> landmarks_;
-    std::unordered_map<std::shared_ptr<landmark>, unsigned int> landmarks_idx_map_;
 
     //! camera pose: world -> camera
     bool pose_is_valid_ = false;

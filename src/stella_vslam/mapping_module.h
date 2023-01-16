@@ -279,6 +279,9 @@ private:
 
     //! Number of keyframes used for landmark fusion
     const unsigned int num_covisibilities_for_landmark_fusion_ = 10;
+
+    //! Use ORB features if true
+    const bool use_orb_features_;
 };
 
 } // namespace stella_vslam

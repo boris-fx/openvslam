@@ -230,8 +230,8 @@ target_link_libraries(${PROJECT_NAME}
                       g2o::types_sim3
                       g2o::solver_dense
                       g2o::solver_eigen
-                      g2o::solver_csparse
-                      g2o::csparse_extension
+                      ${G2O_SOLVER_CSPARSE_LIBRARY}
+                      ${G2O_SOLVER_CSPARSE_EXTENSION_LIBRARY}
                       "$<$<BOOL:${USE_GTSAM}>:gtsam>"
                       ${CXSPARSE_LIBRARIES}
                       ${SUITESPARSE_LIBRARIES}

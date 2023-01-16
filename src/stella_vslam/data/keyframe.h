@@ -18,7 +18,6 @@
 
 #include <g2o/types/sba/types_six_dof_expmap.h>
 #include <nlohmann/json_fwd.hpp>
-#include <sqlite3.h>
 
 namespace stella_vslam {
 
@@ -41,8 +40,6 @@ class STELLA_VSLAM_API keyframe : public std::enable_shared_from_this<keyframe> 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     
-    static void reset_next_id() { next_id_ = 0; }
-
     /**
      * Constructor for building from a frame
      */
@@ -65,11 +62,6 @@ public:
         const double timestamp, const Mat44_t& pose_cw, camera::base* camera,
         const feature::orb_params* orb_params, const frame_observation& frm_obs,
         const bow_vector& bow_vec, const bow_feature_vector& bow_feat_vec);
-    static std::shared_ptr<keyframe> from_stmt(sqlite3_stmt* stmt,
-                                               camera_database* cam_db,
-                                               orb_params_database* orb_params_db,
-                                               bow_vocabulary* bow_vocab,
-                                               unsigned int next_keyframe_id);
 
     // operator overrides
     bool operator==(const keyframe& keyfrm) const { return id_ == keyfrm.id_; }
@@ -83,24 +75,6 @@ public:
      * Encode this keyframe information as JSON
      */
     nlohmann::json to_json() const;
-
-    /**
-     * Save this keyframe information to db
-     */
-    static std::vector<std::pair<std::string, std::string>> columns() {
-        return std::vector<std::pair<std::string, std::string>>{
-            {"src_frm_id", "INTEGER"}, // removed
-            {"ts", "REAL"},
-            {"cam", "BLOB"},
-            {"orb_params", "BLOB"},
-            {"pose_cw", "BLOB"},
-            {"n_keypts", "INTEGER"},
-            {"undist_keypts", "BLOB"},
-            {"x_rights", "BLOB"},
-            {"depths", "BLOB"},
-            {"descs", "BLOB"}};
-    };
-    bool bind_to_stmt(sqlite3* db, sqlite3_stmt* stmt) const;
 
     //-----------------------------------------
     // camera pose

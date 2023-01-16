@@ -30,7 +30,7 @@ namespace optimize {
 local_bundle_adjuster_g2o::local_bundle_adjuster_g2o(const stella_vslam_bfx::config_settings& settings,
                                              const unsigned int num_first_iter,
                                              const unsigned int num_second_iter)
-    : num_first_iter_(num_first_iter), num_second_iter_(num_second_iter),
+    : local_bundle_adjuster(settings), num_first_iter_(num_first_iter), num_second_iter_(num_second_iter),
       use_additional_keyframes_for_monocular_(settings.use_additional_keyframes_for_monocular_) {}
 
 void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,

@@ -28,12 +28,13 @@ initializer::initializer(data::map_database* map_db, data::bow_database* bow_db,
     : map_db_(map_db), bow_db_(bow_db),
       num_ransac_iters_(settings.num_ransac_iterations_),
       min_num_valid_pts_(settings.min_num_valid_pts_),
-      min_num_triangulated_(settings.min_num_triangulated_pts_),
+      min_num_triangulated_pts_(settings.min_num_triangulated_pts_),
       parallax_deg_thr_(settings.parallax_deg_threshold_),
       reproj_err_thr_(settings.reprojection_error_threshold_),
       num_ba_iters_(settings.num_ba_iterations_),
       scaling_factor_(settings.scaling_factor_),
-      use_fixed_seed_(settings.use_fixed_seed_) {
+      use_fixed_seed_(settings.use_fixed_seed_),
+      use_orb_features_(settings.use_orb_features_) {
     spdlog::debug("CONSTRUCT: module::initializer");
 }
 

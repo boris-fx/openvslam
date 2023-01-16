@@ -11,7 +11,6 @@
 
 #include <opencv2/core/mat.hpp>
 #include <nlohmann/json_fwd.hpp>
-#include <sqlite3.h>
 
 namespace stella_vslam {
 namespace data {
@@ -26,8 +25,6 @@ class STELLA_VSLAM_API landmark : public std::enable_shared_from_this<landmark> 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    static void reset_next_id() { next_id_ = 0; }
-
     //! Data structure for sorting keyframes by ID for consistent results in local map cleaning/BA
     using observations_t = std::map<std::weak_ptr<keyframe>, unsigned int, id_less<std::weak_ptr<keyframe>>>;
 
@@ -40,25 +37,6 @@ public:
              const unsigned int num_visible, const unsigned int num_found);
 
     virtual ~landmark();
-
-    // Factory method for create landmark
-    static std::shared_ptr<landmark> from_stmt(sqlite3_stmt* stmt,
-                                               std::unordered_map<unsigned int, std::shared_ptr<stella_vslam::data::keyframe>>& keyframes,
-                                               unsigned int next_landmark_id,
-                                               unsigned int next_keyframe_id);
-
-    /**
-     * Save this landmark information to db
-     */
-    static std::vector<std::pair<std::string, std::string>> columns() {
-        return std::vector<std::pair<std::string, std::string>>{
-            {"first_keyfrm", "INTEGER"},
-            {"pos_w", "BLOB"},
-            {"ref_keyfrm", "INTEGER"},
-            {"n_vis", "INTEGER"},
-            {"n_fnd", "INTEGER"}};
-    };
-    bool bind_to_stmt(sqlite3* db, sqlite3_stmt* stmt) const;
 
     //! set world coordinates of this landmark
     void set_pos_in_world(const Vec3_t& pos_w);

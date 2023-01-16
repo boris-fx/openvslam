@@ -400,7 +400,7 @@ bool graph_node::has_loop_edge() const {
 }
 
 std::shared_ptr<keyframe> graph_node::get_spanning_root() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return get_spanning_root_impl();
 }
 
@@ -422,7 +422,7 @@ std::shared_ptr<keyframe> graph_node::get_spanning_root_impl() {
 }
 
 bool graph_node::is_spanning_root() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return is_spanning_root_impl();
 }
 
@@ -434,7 +434,7 @@ bool graph_node::is_spanning_root_impl() const {
 }
 
 void graph_node::set_spanning_root(std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_root_ = keyfrm;
 }
 

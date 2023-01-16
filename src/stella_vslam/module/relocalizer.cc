@@ -17,12 +17,11 @@ relocalizer::relocalizer(const std::shared_ptr<optimize::pose_optimizer>& pose_o
                          const double bow_match_lowe_ratio, const double proj_match_lowe_ratio,
                          const double robust_match_lowe_ratio,
                          const unsigned int min_num_bow_matches, const unsigned int min_num_valid_obs,
-                         const bool use_fixed_seed)
+                         const bool use_fixed_seed, const bool use_orb_features)
     : min_num_bow_matches_(min_num_bow_matches), min_num_valid_obs_(min_num_valid_obs),
       bow_matcher_(bow_match_lowe_ratio, false), proj_matcher_(proj_match_lowe_ratio, false),
       robust_matcher_(robust_match_lowe_ratio, false),
-
-      pose_optimizer_(pose_optimiser), use_fixed_seed_(use_fixed_seed) {
+      pose_optimizer_(pose_optimizer), use_fixed_seed_(use_fixed_seed), use_orb_features_(use_orb_features) {
     spdlog::debug("CONSTRUCT: module::relocalizer");
 }
 
