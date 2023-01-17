@@ -1,6 +1,6 @@
 #include "video_evaluation.h"
 
-#define USE_OPENCV_VIDEO_IO 1
+#define USE_OPENCV_VIDEO_IO 0
 
 #include <spdlog/spdlog.h>
 
