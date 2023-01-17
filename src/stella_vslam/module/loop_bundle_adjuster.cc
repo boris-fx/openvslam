@@ -29,7 +29,7 @@ bool loop_bundle_adjuster::is_running() const {
     return loop_BA_is_running_;
 }
 
-void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_keyfrm, int num_iter, bool general_bundle) {
+void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_keyfrm, int num_iter, bool general_bundle, bool* camera_was_modified) {
     spdlog::info("start loop bundle adjustment");
 
     {
@@ -47,7 +47,7 @@ void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_
                                  optimized_keyfrm_ids, optimized_landmark_ids,
                                  lm_to_pos_w_after_global_BA,
                                  keyfrm_to_pose_cw_after_global_BA, &abort_loop_BA_,
-								 num_iter, general_bundle, &camera_was_modified);
+								 num_iter, general_bundle, camera_was_modified);
 
     {
         std::lock_guard<std::mutex> lock1(mtx_thread_);

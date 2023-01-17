@@ -16,7 +16,7 @@ namespace optimize {
 
 class local_bundle_adjuster {
 public:
-    explicit local_bundle_adjuster(const stella_vslam_bfx::config_settings& settings);
+    //explicit local_bundle_adjuster(const stella_vslam_bfx::config_settings& settings);
 
      /**
      * Perform optimization

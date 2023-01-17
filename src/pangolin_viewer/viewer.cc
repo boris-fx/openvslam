@@ -11,6 +11,17 @@
 #include <opencv2/highgui.hpp>
 #include <tinycolormap.hpp>
 
+// NB : This shouldn't be neccessary if pangolin (opengl) is built with HAVE_EIGEN
+namespace pangolin {
+template<>
+struct GlFormatTraits<Eigen::Vector3f> {
+    static const GLint glinternalformat = GL_RGB32F;
+    static const GLenum glformat = GL_RGB;
+    static const GLenum gltype = GL_FLOAT;
+    static const size_t components = 3;
+};
+} // namespace pangolin
+
 namespace {
 int parse_int(const std::string& msg) {
     int ret = -1;

@@ -235,7 +235,8 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     os << "\tD_right: "; for (auto el : settings.D_right_) os << el << " "; os << std::endl;
 
     os << "System\n";
-    os << "\tMap format: " << settings.map_format_ << std::endl;
+    os << "\tMap format: " << stella_vslam::io::map_format_to_string[static_cast<unsigned>(settings.map_format_)]
+       << std::endl;
     return os;
 }
 

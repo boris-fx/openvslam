@@ -311,9 +311,10 @@ void global_optimization_module::run_forced_loop_bundle()
     loop_bundle_adjuster_->set_num_iter(100);
     int num_iter = 100;
     bool general_bundle = true;
+    bool camera_was_modified;
     
     std::function<void(stella_vslam::module::loop_bundle_adjuster *, int, bool)> optimizeFunction = [&](stella_vslam::module::loop_bundle_adjuster* ba, int num_iter, bool general_bundle) {
-        ba->optimize(cur_keyfrm_, num_iter, general_bundle);
+        ba->optimize(cur_keyfrm_, num_iter, general_bundle, &camera_was_modified);
     };
     thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(optimizeFunction, loop_bundle_adjuster_.get(), num_iter, general_bundle));
     
@@ -419,7 +420,8 @@ void global_optimization_module::correct_loop() {
     }
 
     SPDLOG_TRACE("global_optimization_module: launch loop BA");
-    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread([=]() { loop_bundle_adjuster_->optimize(cur_keyfrm_); }));
+    bool camera_was_modified;
+    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread([=, &camera_was_modified]() { loop_bundle_adjuster_->optimize(cur_keyfrm_, 10, false, &camera_was_modified); }));
 
     // 6. post-processing
 

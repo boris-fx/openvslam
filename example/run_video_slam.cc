@@ -509,12 +509,8 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
                    const std::string& eval_log_dir,
                    const std::string& map_db_path,
                    const double start_timestamp,
-				   const std::string& planar_path, const std::string& mesh_path, 
+				       const std::string& planar_path, const std::string& mesh_path, 
                    unsigned gridSize, YAML::Node yaml_node) {
-					   
-    // startup the SLAM process
-    slam->startup();
-					   
     // load the mask image
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
 
@@ -524,7 +520,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
 
     // Create a functor object for creating evaluation videos
     std::map<double, int> timestampToVideoFrame;
-    SLAM.camera_->autocalibration_parameters_.writeMapVideo = [&video_file_path, &timestampToVideoFrame](stella_vslam::data::map_database const* map, std::string const& filename) {
+    slam->camera_->autocalibration_parameters_.writeMapVideo = [&video_file_path, &timestampToVideoFrame](stella_vslam::data::map_database const* map, std::string const& filename) {
       return stella_vslam_bfx::create_evaluation_video(video_file_path, filename, map, timestampToVideoFrame, nullptr);
     };
 
@@ -532,10 +528,10 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
     // and pass the frame_publisher and the map_publisher
 #ifdef USE_PANGOLIN_VIEWER
     pangolin_viewer::viewer viewer(
-        stella_vslam::util::yaml_optional_ref(yaml_node, "PangolinViewer"), slam, slam->get_frame_publisher(), SLAM.get_map_publisher());
+        stella_vslam::util::yaml_optional_ref(yaml_node, "PangolinViewer"), slam, slam->get_frame_publisher(), slam->get_map_publisher());
 #elif USE_SOCKET_PUBLISHER
     socket_publisher::publisher publisher(
-        stella_vslam::util::yaml_optional_ref(yaml_node, "SocketPublisher"), slam, slam->.get_frame_publisher(), SLAM.get_map_publisher());
+        stella_vslam::util::yaml_optional_ref(yaml_node, "SocketPublisher"), slam, slam->.get_frame_publisher(), slam->get_map_publisher());
 #endif
 
     auto video = cv::VideoCapture(video_file_path, cv::CAP_FFMPEG);
@@ -616,17 +612,17 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
             videoFrameToTimestamp[tf.second] = tf.first;
 
         // Track (with mapping) backwards from the first keyframe
-        auto [first_keyframe_data, first_keyframe] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        auto [first_keyframe_data, first_keyframe] = earliest_keyframe(slam->map_db_->get_all_keyframes(), timestampToVideoFrame);
         if (first_keyframe_data)
-            SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
+            slam->relocalize_by_pose(first_keyframe_data->get_pose_wc());
 
         spdlog::info("First keyframe {}", first_keyframe);
 
         //int first_keyframe(-1); // First find the earliest keyframe
-        //auto keyfrms = SLAM.map_db_->get_all_keyframes();
+        //auto keyfrms = slam->map_db_->get_all_keyframes();
         //if (!keyfrms.empty()) {
 
-        //   auto [first_keyframe_data, first_keyframe] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        //   auto [first_keyframe_data, first_keyframe] = earliest_keyframe(slam->map_db_->get_all_keyframes(), timestampToVideoFrame);
 
 
         //    std::shared_ptr<stella_vslam::data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
@@ -635,7 +631,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
         //    if (f != timestampToVideoFrame.end())
         //        first_keyframe = f->second;
 
-        //    bool ok = SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
+        //    bool ok = slam->relocalize_by_pose(first_keyframe_data->get_pose_wc());
         //}
         int frame_count(num_frame);
 
@@ -660,7 +656,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
                     auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
                                            ? &extraPointsPerFrame.at(num_frame)
                                            : nullptr;
-                    auto cameraPosePtr = SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
+                    auto cameraPosePtr = slam->feed_monocular_frame(frame, timestamp, mask, extraPoints);
                     if (cameraPosePtr)
                         videoFrameToCamera[num_frame] = *cameraPosePtr;
                 }
@@ -681,7 +677,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
                 //}
 
                 // check if the termination of SLAM system is requested or not
-                if (SLAM.terminate_is_requested()) {
+                if (slam->terminate_is_requested()) {
                     break;
                 }
 
@@ -689,12 +685,12 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
                     break;
             }
         }
-        auto [first_keyframe_data_new, first_keyframe_new] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        auto [first_keyframe_data_new, first_keyframe_new] = earliest_keyframe(slam->map_db_->get_all_keyframes(), timestampToVideoFrame);
         spdlog::info("Moved earliest keyframe from {} to {}", first_keyframe, first_keyframe_new);
 
         // Final bundle
         if (true) {
-            SLAM.run_loop_BA();
+            slam->run_loop_BA();
             std::this_thread::sleep_for(std::chrono::microseconds(1000000)); // required?
         }
 
@@ -706,7 +702,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
         spdlog::info("here 2 ");
 
         // Second pass without mapping to fill in non-keyframes
-        SLAM.disable_mapping_module();
+        slam->disable_mapping_module();
         video.set(cv::CAP_PROP_POS_FRAMES, 0);
         is_not_end = true;
         num_frame = 0;
@@ -725,7 +721,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
                 auto extraPoints = useExtraPoints && extraPointsPerFrame.find(num_frame) != extraPointsPerFrame.end() && !extraPointsPerFrame.at(num_frame).first.empty()
                                        ? &extraPointsPerFrame.at(num_frame)
                                        : nullptr;
-                auto cameraPosePtr = SLAM.feed_monocular_frame(frame, timestamp, mask, extraPoints);
+                auto cameraPosePtr = slam->feed_monocular_frame(frame, timestamp, mask, extraPoints);
                 if (cameraPosePtr)
                     videoFrameToCamera[num_frame] = *cameraPosePtr;
             }
@@ -748,7 +744,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
             ++num_frame;
 
             // check if the termination of SLAM system is requested or not
-            if (SLAM.terminate_is_requested()) {
+            if (slam->terminate_is_requested()) {
                 break;
             }
         }
@@ -757,9 +753,9 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
 
 
 
-        stella_vslam::data::map_database* map_db = SLAM.map_db_;
+        stella_vslam::data::map_database* map_db = slam->map_db_;
         bool ok = stella_vslam_bfx::create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db, timestampToVideoFrame, &videoFrameToCamera);
-        //bool ok = SLAM.camera_->autocalibration_parameters_.writeMapVideo(map_db, std::to_string((int)initialFocalLength));
+        //bool ok = slam->camera_->autocalibration_parameters_.writeMapVideo(map_db, std::to_string((int)initialFocalLength));
 
         // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER
@@ -834,7 +830,7 @@ int main(int argc, char* argv[]) {
     auto disable_mapping = op.add<popl::Switch>("", "disable-mapping", "disable mapping");
     auto start_timestamp = op.add<popl::Value<double>>("t", "start-timestamp", "timestamp of the start of the video capture");
     auto planar_file_path = op.add<popl::Value<std::string>>("l", "planar", "planar tracks file path", "");
-    auto mesh_file_path = op.add<popl::Value<std::string>>("s", "mesh", "mesh tracks file path", "");
+    auto mesh_file_path = op.add<popl::Value<std::string>>("", "mesh", "mesh tracks file path", "");
     auto grid_size = op.add<popl::Value<unsigned int>>("g", "grid-size", "grid size for extending planar points", 5);
     try {
         op.parse(argc, argv);
@@ -886,7 +882,7 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<stella_vslam::config> cfg = std::make_shared<stella_vslam::config>(*settings);
 
 #ifdef USE_GOOGLE_PERFTOOLS
-    ProfilerStart("slam.prof");
+    ProfilerStart("slam->prof");
 #endif
 
     // You cannot get timestamps of images with this input format.
@@ -906,21 +902,22 @@ int main(int argc, char* argv[]) {
     }
 
     // build a slam system
-    auto slam = std::make_shared<stella_vslam::system>(cfg, vocab_file_path);
+    auto slam = std::make_shared<stella_vslam::system>(cfg, vocab_file_path->value());
     bool need_initialize = true;
     if (map_db_path_in->is_set()) {
         need_initialize = false;
-        const auto path = fs::path(map_db_path_in->value());
-        if (path.extension() == ".yaml") {
-            YAML::Node node = YAML::LoadFile(path);
-            for (const auto& map_path : node["maps"].as<std::vector<std::string>>()) {
-                slam->load_map_database(path.parent_path() / map_path);
-            }
-        }
-        else {
-            // load the prebuilt map
-            slam->load_map_database(path);
-        }
+        //const auto path = fs::path(map_db_path_in->value());
+        //if (path.extension() == ".yaml") {
+        //    YAML::Node node = YAML::LoadFile(path);
+        //    for (const auto& map_path : node["maps"].as<std::vector<std::string>>()) {
+        //        slam->load_map_database(path.parent_path() / map_path);
+        //    }
+        //}
+        //else {
+        //    // load the prebuilt map
+        //    slam->load_map_database(path);
+        //}
+        slam->load_map_database(map_db_path_in->value());
     }
     slam->startup(need_initialize);
     if (disable_mapping->is_set()) {
@@ -942,7 +939,7 @@ int main(int argc, char* argv[]) {
                       map_db_path_out->value(),
                       timestamp,
 					  planar_file_path->value(), mesh_file_path->value(),
-                      grid_size->value());
+                      grid_size->value(), yaml_node);
 
     // // run tracking
     // if (cfg->camera_->setup_type_ == stella_vslam::camera::setup_type_t::Monocular) {

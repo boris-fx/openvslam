@@ -44,7 +44,7 @@ public:
     /**
      * Run loop BA
      */
-	void optimize(const std::shared_ptr<data::keyframe>& curr_keyfrm, int num_iter=10, bool general_bundle=false);
+    void optimize(const std::shared_ptr<data::keyframe>& curr_keyfrm, int num_iter, bool general_bundle, bool* camera_was_modified);
 
     int num_iter() const { return num_iter_; }
     void set_num_iter(int num_iter) { num_iter_ = num_iter; }

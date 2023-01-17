@@ -225,7 +225,7 @@ public:
     std::vector<double> K_left_, K_right_, R_left_, R_right_, D_left_, D_right_;
 
     // System/IO
-    std::string map_format_ = "msgpack";
+    stella_vslam::io::map_format_t map_format_ = stella_vslam::io::map_format_t::Msgpack;
 };
 
 } // namespace stella_vslam_bfx

@@ -131,7 +131,7 @@ void system::init(const config * cfg)
     map_publisher_ = std::make_shared<publish::map_publisher>(cfg_, map_db_);
 
     // map I/O
-    map_database_io_ = io::map_database_io_factory::create(cfg_->settings_.map_format_);
+    map_database_io_ = io::map_database_io_factory::create(stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]);
 
     // tracking module
     tracker_ = new tracking_module(cfg_, camera_, map_db_, bow_vocab_, bow_db_);
