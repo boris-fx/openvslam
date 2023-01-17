@@ -187,7 +187,7 @@ public:
     double min_interval_ = 0.1;
     double max_distance_ = -1.0;
     double lms_ratio_thr_almost_all_lms_are_tracked_ = 0.9;
-    double lms_ratio_thr_view_changed_ = 0.8;
+    double lms_ratio_thr_view_changed_ = 0.5;
 
     // Solve/initializer settings
     bool use_fixed_seed_ = true;

@@ -446,9 +446,6 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
     stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
     double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
 
-//bool force_stop_flag2 = false;
-//const_cast<bool*>(force_stop_flag) = &force_stop_flag2;
-
     // NB: Uses num_iter, not num_iter_
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
                   marker_vtx_container, camera_intrinsics_vtx,

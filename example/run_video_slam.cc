@@ -694,12 +694,12 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
             std::this_thread::sleep_for(std::chrono::microseconds(1000000)); // required?
         }
 
-        spdlog::info("here 1 ");
+        spdlog::info("run_video_slam here 1 ");
         // wait until the loop BA is finished
         while (slam->loop_BA_is_running()) {
             std::this_thread::sleep_for(std::chrono::microseconds(5000));
         }
-        spdlog::info("here 2 ");
+        spdlog::info("run_video_slam here 2 ");
 
         // Second pass without mapping to fill in non-keyframes
         slam->disable_mapping_module();
@@ -828,7 +828,7 @@ int main(int argc, char* argv[]) {
     auto map_db_path_in = op.add<popl::Value<std::string>>("i", "map-db-in", "load a map from this path", "");
     auto map_db_path_out = op.add<popl::Value<std::string>>("o", "map-db-out", "store a map database at this path after slam", "");
     auto disable_mapping = op.add<popl::Switch>("", "disable-mapping", "disable mapping");
-    auto start_timestamp = op.add<popl::Value<double>>("t", "start-timestamp", "timestamp of the start of the video capture");
+    auto start_timestamp = op.add<popl::Value<double>>("t", "start-timestamp", "timestamp of the start of the video capture", 0.0);
     auto planar_file_path = op.add<popl::Value<std::string>>("l", "planar", "planar tracks file path", "");
     auto mesh_file_path = op.add<popl::Value<std::string>>("", "mesh", "mesh tracks file path", "");
     auto grid_size = op.add<popl::Value<unsigned int>>("g", "grid-size", "grid size for extending planar points", 5);
@@ -890,12 +890,12 @@ int main(int argc, char* argv[]) {
     // If not specified, the current system time is used instead.
     double timestamp = 0.0;
     if (!start_timestamp->is_set()) {
-        std::cerr << "--start-timestamp is not set. using system timestamp." << std::endl;
-        if (no_sleep->is_set()) {
-            std::cerr << "If --no-sleep is set without --start-timestamp, timestamps may overlap between multiple runs." << std::endl;
-        }
-        std::chrono::system_clock::time_point start_time_system = std::chrono::system_clock::now();
-        timestamp = std::chrono::duration_cast<std::chrono::duration<double>>(start_time_system.time_since_epoch()).count();
+        //std::cerr << "--start-timestamp is not set. using system timestamp." << std::endl;
+        //if (no_sleep->is_set()) {
+        //    std::cerr << "If --no-sleep is set without --start-timestamp, timestamps may overlap between multiple runs." << std::endl;
+        //}
+        //std::chrono::system_clock::time_point start_time_system = std::chrono::system_clock::now();
+        //timestamp = std::chrono::duration_cast<std::chrono::duration<double>>(start_time_system.time_since_epoch()).count();
     }
     else {
         timestamp = start_timestamp->value();
