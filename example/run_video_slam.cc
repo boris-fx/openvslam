@@ -483,17 +483,51 @@ void mesh_points(const std::string& dirpath, std::map<int, stella_vslam_bfx::pre
     closedir(dir);
 }
 
-std::tuple<std::shared_ptr<stella_vslam::data::keyframe>, int> earliest_keyframe(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms,
+std::tuple<std::shared_ptr<stella_vslam::data::keyframe>, int> earliest_valid_keyframe(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms,
                                                                                  std::map<double, int> const& timestampToVideoFrame)
 {
     if (!keyfrms.empty()) {
         std::shared_ptr<stella_vslam::data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
-                                                                                        [](const auto& a, const auto& b) { return a->timestamp_ < b->timestamp_; });
+                                                                                        [](const auto& a, const auto& b) { // earliest above landmark threshold
+                                                                                                  int landmarkThreshold(10);
+                                                                                                  bool validLandmarksA(a->get_valid_landmarks().size()>=landmarkThreshold);
+                                                                                                  bool validLandmarksB(b->get_valid_landmarks().size()>=landmarkThreshold);
+                                                                                                  if (!validLandmarksA && validLandmarksB)
+                                                                                                      return false;
+                                                                                                  if (validLandmarksA && !validLandmarksB)
+                                                                                                      return true;
+                                                                                                  return a->timestamp_ < b->timestamp_;
+                                                                                         });
         auto f = timestampToVideoFrame.find(first_keyframe_data->timestamp_);
         if (f != timestampToVideoFrame.end())
             return {first_keyframe_data, f->second};
     }
     return {nullptr, -1};
+}
+
+void printKeyframeLandmarks(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms,
+                            std::map<double, int> const& timestampToVideoFrame) {
+
+   spdlog::info("Map keyframe:-");
+   for (auto const& keyfrm : keyfrms) {
+        if (!keyfrm)
+            spdlog::info("  [deleted]");
+        else if (keyfrm->will_be_erased())
+            spdlog::info("  [will be deleted]");
+        else {
+            int numValidLandmarks = keyfrm->get_valid_landmarks().size();
+            const unsigned int min_num_obs_thr(1);
+            int numTrackedLandmarks = keyfrm->get_num_tracked_landmarks(min_num_obs_thr);
+            int numFeatures = keyfrm->frm_obs_.num_keypts_;
+
+            auto f = timestampToVideoFrame.find(keyfrm->timestamp_);
+            int videoFrame = (f != timestampToVideoFrame.end()) ? f->second : -1;
+
+            spdlog::info("  id {}, frm id {}, timecode {}, vif frm {}, valid landmarks {}, tracked {}, features {}",
+                         keyfrm->id_, keyfrm->src_frm_id_, keyfrm->timestamp_, videoFrame,
+                         numValidLandmarks, numTrackedLandmarks, numFeatures);
+        }
+    }
 }
 
 void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
@@ -551,7 +585,14 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
     // run the SLAM in another thread
     std::thread thread([&]() {
         while (is_not_end) {
+
+           if (num_frame == 7 || num_frame==33)
+                printKeyframeLandmarks(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+
+
             is_not_end = video.read(frame);
+
+            spdlog::info("Read video frame {})", num_frame);
 
             //bfxTestDrawFrame(frame);
 
@@ -597,17 +638,21 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
             videoFrameToTimestamp[tf.second] = tf.first;
 
         // Track (with mapping) backwards from the first keyframe
-        auto [first_keyframe_data, first_keyframe] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
-        if (first_keyframe_data)
-            SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
+        auto [first_keyframe_data, first_keyframe] = earliest_valid_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        if (first_keyframe_data) {
+            bool resultRelocalise = SLAM.relocalize_by_pose(first_keyframe_data->get_pose_wc());
+            if (resultRelocalise==false)
+                spdlog::warn("Failed to relocalise to first keyframe pose (video frame {})", first_keyframe);
+        }
+        spdlog::info("Relocalised to first keyframe pose (video frame {})", first_keyframe);
 
-        spdlog::info("First keyframe {}", first_keyframe);
+        printKeyframeLandmarks(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
 
         //int first_keyframe(-1); // First find the earliest keyframe
         //auto keyfrms = SLAM.map_db_->get_all_keyframes();
         //if (!keyfrms.empty()) {
 
-        //   auto [first_keyframe_data, first_keyframe] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        //   auto [first_keyframe_data, first_keyframe] = earliest_valid_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
 
 
         //    std::shared_ptr<stella_vslam::data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
@@ -621,7 +666,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
         int frame_count(num_frame);
 
         if (first_keyframe > 0) {
-            for (num_frame = first_keyframe - 1; num_frame >= 0; --num_frame) {
+            for (num_frame = first_keyframe; num_frame >= 0; --num_frame) {
                 spdlog::info("Seeking to frame  {}", num_frame);
 
                 bool ok = video.set(cv::CAP_PROP_POS_FRAMES, num_frame);
@@ -670,7 +715,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::config>& cfg,
                     break;
             }
         }
-        auto [first_keyframe_data_new, first_keyframe_new] = earliest_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
+        auto [first_keyframe_data_new, first_keyframe_new] = earliest_valid_keyframe(SLAM.map_db_->get_all_keyframes(), timestampToVideoFrame);
         spdlog::info("Moved earliest keyframe from {} to {}", first_keyframe, first_keyframe_new);
 
         // Final bundle

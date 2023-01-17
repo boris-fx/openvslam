@@ -29,6 +29,21 @@ bool loop_bundle_adjuster::is_running() const {
     return loop_BA_is_running_;
 }
 
+void print_keyfrms_to_check(std::list<std::shared_ptr<data::keyframe>> const& keyfrms_to_check) {
+    std::stringstream ss;
+    for (auto const& key : keyfrms_to_check)
+        if (key) {
+          const auto children = key->graph_node_->get_spanning_children();
+          ss << key->id_ << " (";
+          for (auto const& child : children)
+              ss << child->id_ << " ";
+          ss << ")";
+        }
+        else
+            ss << "[] ";
+    spdlog::info("Keys: {}", ss.str());
+}
+
 void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
     spdlog::info("start loop bundle adjustment");
 
@@ -77,6 +92,9 @@ void loop_bundle_adjuster::optimize(int num_iter, bool general_bundle) {
         std::list<std::shared_ptr<data::keyframe>> keyfrms_to_check;
         keyfrms_to_check.push_back(map_db_->origin_keyfrm_);
         while (!keyfrms_to_check.empty()) {
+
+            print_keyfrms_to_check(keyfrms_to_check);
+
             auto parent = keyfrms_to_check.front();
             const Mat44_t cam_pose_wp = parent->get_pose_wc();
 
