@@ -220,11 +220,15 @@ bool global_optimization_module::force_loop_bundle_requested() const {
 }
 
 // Based on correct_loop() - just without the loop
-void global_optimization_module::run_forced_loop_bundle()
-{
-//    auto final_candidate_keyfrm = loop_detector_->get_selected_candidate_keyframe();
+void global_optimization_module::run_forced_loop_bundle() {
+    //    auto final_candidate_keyfrm = loop_detector_->get_selected_candidate_keyframe();
 
     spdlog::info("global_optimization_module::run_forced_loop_bundle");
+
+    if (map_db_->get_all_keyframes().empty()) {
+        spdlog::info("global_optimization_module::run_forced_loop_bundle terminated (no map keyframes)");
+        return;
+    }
 
     // 0. pre-processing
 
