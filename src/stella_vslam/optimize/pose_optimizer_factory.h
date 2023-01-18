@@ -4,9 +4,9 @@
 #include "stella_vslam/optimize/pose_optimizer_g2o.h"
 #ifdef USE_GTSAM
 #include "stella_vslam/optimize/pose_optimizer_gtsam.h"
+#include "stella_vslam/util/yaml.h"
 #endif // USE_GTSAM
 #include "stella_vslam/type.h"
-#include "stella_vslam/util/yaml.h"
 
 #include <memory>
 

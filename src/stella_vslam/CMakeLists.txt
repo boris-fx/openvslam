@@ -34,7 +34,7 @@ find_package(g2o REQUIRED
 #endif()
 
 # gtsam
-set(USE_GTSAM ON CACHE BOOL "Enable gtsam")
+set(USE_GTSAM OFF CACHE BOOL "Enable gtsam")
 unset(GTSAM_INCLUDE_DIRS CACHE)
 find_path(GTSAM_INCLUDE_DIRS NAMES gtsam
           PATHS /usr/local/include/)
@@ -211,8 +211,7 @@ target_include_directories(${PROJECT_NAME}
                            "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/>"
                            "$<INSTALL_INTERFACE:include/stella_vslam/3rd/json/include>"
                            "$<INSTALL_INTERFACE:include/stella_vslam/3rd/spdlog/include>"
-                           "$<INSTALL_INTERFACE:include/>"
-						   ${YAMLCPP_INCLUDE_DIRS})
+                           "$<INSTALL_INTERFACE:include/>")
 
 # Link to required libraries
 target_link_libraries(${PROJECT_NAME}
@@ -244,6 +243,7 @@ if (USE_SQLITE)
 endif()
 
 if(BUILD_EXAMPLES)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${YAMLCPP_INCLUDE_DIRS})
     target_link_libraries(${PROJECT_NAME} PUBLIC ${YAMLCPP_LIBRARIES})
 endif()
 
