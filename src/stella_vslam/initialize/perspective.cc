@@ -5,6 +5,7 @@
 #include "stella_vslam/initialize/perspective.h"
 #include "stella_vslam/solve/homography_solver.h"
 #include "stella_vslam/solve/fundamental_solver.h"
+#include "stella_vslam/solve/fundamental_to_focal_length.h"
 
 #include <thread>
 
@@ -73,6 +74,7 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
         spdlog::debug("reconstruct_with_F");
         const Mat33_t F_ref_to_cur = fundamental_solver.get_best_F_21();
         const auto is_inlier_match = fundamental_solver.get_inlier_matches();
+        stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_); // May update the camera if auto focal length is active
         return reconstruct_with_F(F_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
     }
     else {
