@@ -35,7 +35,8 @@ public:
     virtual ~base() = default;
 
     //! Initialize with the current frame
-    virtual bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier) = 0;
+    virtual bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur,
+                            double parallax_deg_thr_multiplier, bool initialize_focal_length) = 0;
 
     //! Get the rotation from the reference to the current
     Mat33_t get_rotation_ref_to_cur() const;

@@ -167,7 +167,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             //initialize::initialisation_cache* cache(refine_initialisation ? &init_cache : nullptr);
 
             // try to initialize
-            if (!try_initialize_for_monocular(curr_frm, 1.0)) {
+            if (!try_initialize_for_monocular(curr_frm, 1.0, true)) {
                // failed
                return false;
             }
@@ -203,7 +203,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                    reset(); // reset the initialiser (this)
                    map_db_->clear(); // reset the map_db
                    create_initializer(init_frm); // create a new initialiser
-                   bool ok_initialize = try_initialize_for_monocular(curr_frm, 0.7); // Reinitialise with the new focal length
+                   bool ok_initialize = try_initialize_for_monocular(curr_frm, 0.7, false); // Reinitialise with the new focal length
                                                                                        // and lower parallax threshold
                    if (ok_initialize)
                        create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
@@ -308,7 +308,7 @@ void initializer::create_initializer(data::frame& curr_frm) {
     state_ = initializer_state_t::Initializing;
 }
 
-bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier) {
+bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier, bool initialize_focal_length) {
     assert(state_ == initializer_state_t::Initializing);
 
     unsigned int num_matches = 0;
@@ -327,7 +327,7 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
     // try to initialize with the initial frame and the current frame
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
-    return initializer_->initialize(curr_frm, init_matches_, parallax_deg_thr_multiplier);
+    return initializer_->initialize(curr_frm, init_matches_, parallax_deg_thr_multiplier, initialize_focal_length);
 }
 
 #if 0

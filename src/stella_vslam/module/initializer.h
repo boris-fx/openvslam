@@ -103,7 +103,7 @@ private:
     void create_initializer(data::frame& curr_frm);
 
     //! Try to initialize a map with monocular camera setup
-    bool try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier);
+    bool try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier, bool initialize_focal_length);
 
     //! Try to improve initialization after improving focal length estimate
    // bool refine_initialize_for_monocular(data::frame& curr_frm, initialize::initialisation_cache* cache);

@@ -31,7 +31,8 @@ public:
     ~perspective() override;
 
     //! Initialize with the current frame
-    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier) override;
+    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur,
+                    double parallax_deg_thr_multiplier, bool initialize_focal_length) override;
 
 private:
     //! Reconstruct the initial map with the H matrix

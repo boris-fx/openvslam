@@ -2,6 +2,8 @@
 
 #include <fstream>
 
+#include <spdlog/spdlog.h>
+
 #include <stella_vslam/camera/base.h>
 #include <stella_vslam/camera/fisheye.h>
 #include <stella_vslam/camera/perspective.h>
@@ -189,6 +191,8 @@ bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* ca
    auto error_min = std::min_element(focal_length_to_error.begin(), focal_length_to_error.end(),
                                      [](const auto& a, const auto& b) { return a.second < b.second; });
    double focal_length_x_pixels = error_min->first;
+
+   spdlog::info("Initial focal length estimate: {}", focal_length_x_pixels);
 
    bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, focal_length_x_pixels);
    return set_f_ok;

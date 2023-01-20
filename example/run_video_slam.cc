@@ -866,7 +866,7 @@ int main(int argc, char* argv[]) {
     auto no_sleep = op.add<popl::Switch>("", "no-sleep", "not wait for next frame in real time");
     auto wait_loop_ba = op.add<popl::Switch>("", "wait-loop-ba", "wait until the loop BA is finished");
     auto auto_term = op.add<popl::Switch>("", "auto-term", "automatically terminate the viewer");
-    auto log_level = op.add<popl::Value<std::string>>("", "log-level", "log level", "info");
+    auto log_level = op.add<popl::Value<std::string>>("a", "log-level", "log level", "info");
     auto eval_log_dir = op.add<popl::Value<std::string>>("", "eval-log-dir", "store trajectory and tracking times at this path (Specify the directory where it exists.)", "");
     auto map_db_path_in = op.add<popl::Value<std::string>>("i", "map-db-in", "load a map from this path", "");
     auto map_db_path_out = op.add<popl::Value<std::string>>("o", "map-db-out", "store a map database at this path after slam", "");
