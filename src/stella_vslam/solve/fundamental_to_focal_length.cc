@@ -147,6 +147,81 @@ void write_graph(std::string_view const& filename,
    myfile.close();
 }
 
+void write_big_graph(std::string_view const& filename,
+                     std::map<double, double> frame_to_error_for_max_focal_length,
+                     std::map<double, double> frame_to_min_error,
+                     std::map<double, double> frame_to_best_focalLength)
+{
+    std::ofstream myfile;
+    myfile.open(filename.data());
+
+    std::stringstream html;
+    html << "<!DOCTYPE html><html><head></head><body>";
+
+    {
+        std::list<LabelledCurve> curves;
+
+        LabelledCurve errorCurve;
+        errorCurve.name = "Best Focal Length";
+        errorCurve.dataValues.resize(frame_to_best_focalLength.size());
+        int i(0);
+        for (auto const& vertex : frame_to_best_focalLength) {
+            errorCurve.dataValues[i].index = int(vertex.first + 0.5);
+            errorCurve.dataValues[i].value = (float)vertex.second;
+            //errorCurve.dataValues[i].label = std::string();
+            ++i;
+        }
+        curves.push_back(errorCurve);
+
+        bool linearXLabels(true);
+        addLabelToValueGraphToHtml(html, "Focal length (pixels)", "", "Baseline (frames)", curves, linearXLabels, 1200, 600, true);
+    }
+
+    {
+        std::list<LabelledCurve> curves;
+
+        LabelledCurve errorCurve;
+        errorCurve.name = "Geometric Error";
+        errorCurve.dataValues.resize(frame_to_min_error.size());
+        int i(0);
+        for (auto const& vertex : frame_to_min_error) {
+            errorCurve.dataValues[i].index = int(vertex.first + 0.5);
+            errorCurve.dataValues[i].value = (float)vertex.second;
+            //errorCurve.dataValues[i].label = std::string();
+            ++i;
+        }
+        curves.push_back(errorCurve);
+
+        bool linearXLabels(true);
+        addLabelToValueGraphToHtml(html, "Min Geometric Error", "", "Baseline (frames)", curves, linearXLabels, 1200, 600, true);
+    }
+
+    {
+        std::list<LabelledCurve> curves;
+
+        LabelledCurve errorCurve;
+        errorCurve.name = "Error at tiny focal length";
+        errorCurve.dataValues.resize(frame_to_error_for_max_focal_length.size());
+        int i(0);
+        for (auto const& vertex : frame_to_error_for_max_focal_length) {
+            errorCurve.dataValues[i].index = int(vertex.first + 0.5);
+            errorCurve.dataValues[i].value = (float)vertex.second;
+            //errorCurve.dataValues[i].label = std::string();
+            ++i;
+        }
+        curves.push_back(errorCurve);
+
+        bool linearXLabels(true);
+        addLabelToValueGraphToHtml(html, "Geometric Error", "", "Baseline (frames)", curves, linearXLabels, 1200, 600, true);
+    }
+
+    html << "</body></html>";
+
+    myfile << html.str();
+    myfile.close();
+}
+
+
 std::set<double> candidateFocalLengthsOverFOVRange(double startDegrees, double endDegrees, double imageWidth)
 {
    double const step(1);
@@ -163,7 +238,7 @@ bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* ca
 
    // Set of focal lengths (x-pixels)
    //std::set<double> candidates = { 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 2000, 3000, 4000, 5000 };
-   std::set<double> candidates = candidateFocalLengthsOverFOVRange(4, 170, camera->cols_);
+   std::set<double> candidates = candidateFocalLengthsOverFOVRange(1, 170, camera->cols_);
 
    std::map<double, double> focal_length_to_error; 
    std::map<double, double> fov_to_error; 
@@ -193,6 +268,27 @@ bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* ca
    double focal_length_x_pixels = error_min->first;
 
    spdlog::info("Initial focal length estimate: {}", focal_length_x_pixels);
+
+
+   double error_for_max_focal_length = focal_length_to_error.rbegin()->second;
+   double error_min_value = error_min->second;
+
+
+   static int temp(0);
+   ++temp; // frame
+   static std::map<double, double> frame_to_error_for_max_focal_length; 
+   static std::map<double, double> frame_to_min_error; 
+   static std::map<double, double> frame_to_best_focalLength; 
+
+   frame_to_error_for_max_focal_length[temp] = error_for_max_focal_length;
+   frame_to_min_error[temp] = error_min_value;
+   frame_to_best_focalLength[temp] = focal_length_x_pixels;
+
+   //if (temp==20)
+   //   write_big_graph("baseline_focal_length_error.html",
+   //                        frame_to_error_for_max_focal_length,
+   //                        frame_to_min_error,
+   //                        frame_to_best_focalLength);
 
    bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, focal_length_x_pixels);
    return set_f_ok;

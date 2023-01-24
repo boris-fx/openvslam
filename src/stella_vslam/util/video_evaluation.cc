@@ -17,6 +17,7 @@
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/landmark.h>
 #include <stella_vslam/util/video_evaluation.h>
+#include <stella_vslam/solver.h>
 
 namespace stella_vslam_bfx {
 
@@ -228,6 +229,104 @@ bool create_evaluation_video(std::string const& trackedVideoName, std::string co
 #else
     return false;
 #endif
+}
+
+bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
+                             stella_vslam_bfx::solve const& final_solve) {
+#if USE_OPENCV_VIDEO_IO
+
+    int thickness = 2;
+    int lineType = 8;
+    int shift = 0; // Number of fractional bits in the coordinates of the center and in the radius value.
+
+    using namespace std;
+    using namespace cv;
+    using namespace stella_vslam;
+
+    bool askOutputType(false);
+
+    spdlog::info("create_evaluation_video {} cameras, {} points", final_solve.frame_to_camera.size(), final_solve.world_points.size());
+
+    cv::VideoCapture inputVideo(trackedVideoName); // Open input
+    if (!inputVideo.isOpened()) {
+        spdlog::error("create_evaluation_video could not open the input video: {}", trackedVideoName);
+        return false;
+    }
+    string::size_type pAt = trackedVideoName.find_last_of('.');                               // Find extension point
+    const string outputVideoName = trackedVideoName.substr(0, pAt) + "_" + testName + ".mp4"; // Form the new name with container
+    int ex = static_cast<int>(inputVideo.get(CAP_PROP_FOURCC));                               // Get Codec Type- Int form
+    // Transform from int to char via Bitwise operators
+    char EXT[] = {(char)(ex & 0XFF), (char)((ex & 0XFF00) >> 8), (char)((ex & 0XFF0000) >> 16), (char)((ex & 0XFF000000) >> 24), 0};
+    Size S = Size((int)inputVideo.get(CAP_PROP_FRAME_WIDTH), // Acquire input size
+                  (int)inputVideo.get(CAP_PROP_FRAME_HEIGHT));
+    std::unique_ptr<VideoWriter> outputVideo = std::make_unique<VideoWriter>(); // Open the output
+    if (askOutputType)
+        outputVideo->open(outputVideoName, ex = -1, inputVideo.get(CAP_PROP_FPS), S, true);
+    else
+        outputVideo->open(outputVideoName, ex, inputVideo.get(CAP_PROP_FPS), S, true);
+    if (!outputVideo->isOpened()) {
+        spdlog::error("create_evaluation_video could not open the output video: {}", outputVideoName);
+        return false;
+    }
+    cout << "Input frame resolution: Width=" << S.width << "  Height=" << S.height
+         << " of nr#: " << inputVideo.get(CAP_PROP_FRAME_COUNT) << endl;
+    cout << "Input codec type: " << EXT << endl;
+
+    Mat src, res;
+    vector<Mat> spl;
+    int srcFrame(0);
+    int cameraCount(0), noCameraCount(0);
+    for (;;) //Show the image captured in the window and repeat
+    {
+        inputVideo >> src; // read
+
+        if (src.empty())
+            break; // check if at end
+
+        Eigen::Matrix4d const* frameCamera(nullptr);
+        auto f = final_solve.frame_to_camera.find(srcFrame);
+        if (f != final_solve.frame_to_camera.end())
+            frameCamera = &f->second;
+
+        if (frameCamera) {
+            Vec2_t reproj;
+            float x_right; // ???
+            //using EigenTransform = Eigen::Transform<double, 3, Eigen::TransformTraits::AffineCompact>;
+            using EigenTransform = Eigen::Transform<double, 3, Eigen::TransformTraits::Isometry>;
+            EigenTransform cameraToWorld(*frameCamera);
+            // const Eigen::Matrix3d R(cameraToWorld.rotation().matrix());
+            //const Eigen::Vector3d t(cameraToWorld.translation().data());
+
+            EigenTransform worldToCamera = cameraToWorld.inverse();
+            const Eigen::Matrix3d R(worldToCamera.rotation().matrix());
+            const Eigen::Vector3d t(worldToCamera.translation().data());
+
+            for (auto const& point : final_solve.world_points) {
+                final_solve.camera_lens->reproject_to_image(R, t, point, reproj, x_right);
+                cv::circle(src, cv::Point(reproj(0), reproj(1)), 2,
+                           cv::Scalar(0, 255, 0), thickness,
+                           lineType, shift);
+            }
+
+            ++cameraCount;
+            *outputVideo << src;
+        }
+        else
+            ++noCameraCount;
+
+        ++srcFrame;
+    }
+
+    spdlog::info("create_evaluation_video writing video file, frames {}, missing {}, total {}", cameraCount, noCameraCount, srcFrame);
+    outputVideo.reset();
+    spdlog::info("create_evaluation_video wrote file {}", outputVideoName);
+
+    return true;
+#else
+    return false;
+#endif
+
+
 }
 
 } // namespace stella_vslam_bfx
