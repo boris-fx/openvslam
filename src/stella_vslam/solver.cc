@@ -43,8 +43,7 @@ void solver::set_stage_description_callback(std::function<void(std::string)> set
    set_stage_description_ = set_stage_description;
 }
 
-void solver::set_display_frame_callback(std::function<void(std::shared_ptr<frameDisplayData>)> display_frame)
-{
+void solver::set_display_frame_callback(std::function<void(std::shared_ptr<frame_display_data>)> display_frame) {
    display_frame_ = display_frame;
 }
 

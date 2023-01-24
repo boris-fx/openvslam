@@ -918,15 +918,6 @@ void mono_tracking_2(
 
     double initialFocalLength = (cfg->settings_.camera_model_ == stella_vslam::camera::model_type_t::Perspective) ? cfg->settings_.perspective_settings_.fx_ : 0;
 
-    //std::map<int, Eigen::Matrix4d> videoFrameToCamera;
-
-    // Create a functor object for creating evaluation videos
-    //std::map<double, int> timestampToVideoFrame;
-    //slam->camera_->autocalibration_parameters_.writeMapVideo = [&video_file_path, &timestampToVideoFrame](stella_vslam::data::map_database const* map, std::string const& filename) {
-    //    return stella_vslam_bfx::create_evaluation_video(video_file_path, filename, map, timestampToVideoFrame, nullptr);
-    //};
-
-
     // Set up the video frame source
     image_source images(video_file_path, start_time);
     if (!images.open())
@@ -940,7 +931,6 @@ void mono_tracking_2(
     if (!mesh_path.empty())
         mesh_points(mesh_path, extraPointsPerFrame, images.video.get(cv::CAP_PROP_FRAME_WIDTH), images.video.get(cv::CAP_PROP_FRAME_HEIGHT));
     const bool useExtraPoints = !extraPointsPerFrame.empty();
-
 
     // Create a solver (in this thread because the viewer needs access to its stella_vslam::system) 
     stella_vslam_bfx::solver solver(cfg, vocab_file_path, get_frame);
@@ -991,8 +981,6 @@ void mono_tracking_2(
 
     thread.join();
 
-    // printSolveSummary(solve); // Doesn't get called until the viewer is closed
-
     if (!eval_log_dir.empty()) {
         // output the trajectories for evaluation
         solver.system()->save_frame_trajectory(eval_log_dir + "/frame_trajectory.txt", "TUM");
@@ -1011,11 +999,6 @@ void mono_tracking_2(
         // output the map database
         solver.system()->save_map_database(map_db_path);
     }
-
-    //std::sort(track_times.begin(), track_times.end());
-    //const auto total_track_time = std::accumulate(track_times.begin(), track_times.end(), 0.0);
-    //std::cout << "median tracking time: " << track_times.at(track_times.size() / 2) << "[s]" << std::endl;
-    //std::cout << "mean tracking time: " << total_track_time / track_times.size() << "[s]" << std::endl;
 }
 
 

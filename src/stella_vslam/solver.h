@@ -37,16 +37,14 @@ public:
 /**
 * \brief Frame-level results pushed from the solver for possible user display
 */
-class frameDisplayData {
+class frame_display_data {
     // Some data that Mocha can use to display interesting things on the screen during tracking,
     // e.g. a set of 3D points and a camera, or a set or 2D image features
 };
 
 /**
-* \brief External interface object for the stella-vslam based camera solver
+* \brief Main interface object for the stella-vslam based camera solver
 *
-* The solver can request whichever frames it needs internally from the calling function via a callback
-* The calling function can cancel, get progress updates, get something to show on screen, etc also via callbacks
 */
 class STELLA_VSLAM_API solver {
 public:
@@ -55,9 +53,10 @@ public:
            std::function<bool(int, cv::Mat&)> get_frame);
     virtual ~solver();
 
+    /// Optional callback
     void set_progress_callback(std::function<void(float)> set_progress);
     void set_stage_description_callback(std::function<void(std::string)> set_stage_description);
-    void set_display_frame_callback(std::function<void(std::shared_ptr<frameDisplayData>)> display_frame);
+    void set_display_frame_callback(std::function<void(std::shared_ptr<frame_display_data>)> display_frame);
     void set_cancel_callback(std::function<bool()> cancel);
 
     enum tracking_direction {
@@ -79,7 +78,7 @@ protected:
 
    std::function<void(float)> set_progress_;
    std::function<void(std::string)> set_stage_description_;
-   std::function<void(std::shared_ptr<frameDisplayData>)> display_frame_;
+   std::function<void(std::shared_ptr<frame_display_data>)> display_frame_;
    std::function<bool()> cancel_;
 
    std::shared_ptr<stella_vslam::system> slam_;
