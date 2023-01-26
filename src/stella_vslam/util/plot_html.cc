@@ -2,9 +2,27 @@
 
 #include <iomanip>
 #include <sstream>
-#include <map>
 #include <array>
-#include <set>
+#include <fstream>
+#include <vector>
+#include <list>
+
+struct LabelToValue {
+    LabelToValue(std::string label, float value, int index)
+        : label(label), value(value), index(index) {}
+    LabelToValue()
+        : value(0), index(-1) {}
+    std::string label;
+    float value;
+    int index;
+};
+
+struct LabelledCurve {
+    std::string name;
+    std::vector<LabelToValue> dataValues;
+};
+
+void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& title, std::string_view yLabel, std::string_view xLabel, std::list<LabelledCurve> const& curves, bool linearXLabels, int graphWidth = 1200, int graphHeight = 600, bool drawVertexCircles = true);
 
 std::string floatLabelString(float v, int decimalPlaces)
 {
@@ -340,4 +358,43 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
 
    html << "Sorry, your browser does not support inline SVG." << std::endl;
    html << "</svg>" << std::endl;
+}
+
+using Curve = std::pair<std::string, std::map<double, double>>;
+using Graph = std::tuple<std::string, std::string, std::set<Curve>>;
+
+void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs)
+{
+   std::ofstream myfile;
+   myfile.open(filename.data());
+
+   std::stringstream html;
+   html << "<!DOCTYPE html><html><head></head><body>";
+
+   for (auto const& graph : graphs) {
+    
+      auto [xLabel, yLabel, curves] = graph; 
+      std::list<LabelledCurve> labelled_curves;
+
+      for (auto const& curve : curves) {
+         LabelledCurve labelled_curve;
+         labelled_curve.name = curve.first;
+         labelled_curve.dataValues.resize(curve.second.size());
+         int i(0);
+         for (auto const& vertex : curve.second) {
+            labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
+            labelled_curve.dataValues[i].value = (float)vertex.second;
+            //labelled_curve.dataValues[i].label = std::string();
+            ++i;
+         }
+         labelled_curves.push_back(labelled_curve);
+      }
+      bool linearXLabels(true);
+      addLabelToValueGraphToHtml(html, yLabel, "", xLabel, labelled_curves, linearXLabels, 1200, 600, true);
+   }
+
+   html << "</body></html>";
+
+   myfile << html.str();
+   myfile.close();
 }

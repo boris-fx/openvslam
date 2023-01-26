@@ -23,7 +23,7 @@ bearing_vector::~bearing_vector() {
     spdlog::debug("DESTRUCT: initialize::bearing_vector");
 }
 
-bool bearing_vector::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier, bool initialize_focal_length) {
+bool bearing_vector::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier, bool initialize_focal_length, bool* focal_length_was_modified) {
     // set the current camera model
     cur_camera_ = cur_frm.camera_;
     // store the keypoints and bearings

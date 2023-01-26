@@ -30,7 +30,7 @@ perspective::~perspective() {
     spdlog::debug("DESTRUCT: initialize::perspective");
 }
 
-bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier, bool initialize_focal_length) {
+bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier, bool initialize_focal_length, bool* focal_length_was_modified) {
     // set the current camera model
     cur_camera_ = cur_frm.camera_;
     // store the keypoints and bearings
@@ -74,8 +74,19 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
         spdlog::debug("reconstruct_with_F");
         const Mat33_t F_ref_to_cur = fundamental_solver.get_best_F_21();
         const auto is_inlier_match = fundamental_solver.get_inlier_matches();
-        //if (initialize_focal_length)
-        //  stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_); // May update the camera if auto focal length is active
+        *focal_length_was_modified = false;
+        if (true && initialize_focal_length) {
+            bool focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_); // May update the camera if auto focal length is active
+            // If the focal length was changed we also need to update the bearing vectors,
+            //   and indicate to our calling function that it should do the same
+            if (focal_length_changed) {
+                const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_).clear();
+                ref_camera_->convert_keypoints_to_bearings(ref_undist_keypts_, const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_));
+                cur_bearings_.clear();
+                ref_camera_->convert_keypoints_to_bearings(cur_undist_keypts_, cur_bearings_);
+            }
+            *focal_length_was_modified = focal_length_changed;
+        }
         return reconstruct_with_F(F_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
     }
     else {

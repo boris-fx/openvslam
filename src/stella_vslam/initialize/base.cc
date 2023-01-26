@@ -2,6 +2,11 @@
 #include "stella_vslam/initialize/base.h"
 #include "stella_vslam/solve/triangulator.h"
 
+#include <fstream> // temp
+#include <stella_vslam/util/plot_html.h> // temp
+
+#include <spdlog/spdlog.h>
+
 namespace stella_vslam {
 namespace initialize {
 
@@ -71,6 +76,22 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
                                             [max_num_valid_pts_iter](unsigned int num_valid_pts) {
                                                 return 0.8 * (*max_num_valid_pts_iter) < num_valid_pts;
                                             });
+    spdlog::info("Plausable - num similar {}, parallax {}\370 good({} < {}th) {}\370, num triangulated {}",
+                 num_similars, acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI, init_parallax.at(max_num_valid_index), std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI), parallax_deg_thr_multiplier * parallax_deg_thr_,
+       num_triangulated_pts.at(max_num_valid_index));
+
+    { // test
+        static int temp(0);
+        ++temp; // frame
+        static std::map<double, double> frame_to_parallax;
+        frame_to_parallax[temp] = acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI;
+        if (temp == 18) {
+            write_graphs_html("frame_parallax.html",
+                              {std::make_tuple("Baseline(frames)", "Parallax\xB0", std::set<Curve>({{"Parallax", frame_to_parallax}}))});
+        }
+        return false;
+    }
+
     if (1 < num_similars) {
         return false;
     }
