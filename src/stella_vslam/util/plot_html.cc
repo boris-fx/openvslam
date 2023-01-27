@@ -398,3 +398,7 @@ void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs)
    myfile << html.str();
    myfile.close();
 }
+
+bool disable_all_html_graph_export() {
+   return true;
+}

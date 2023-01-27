@@ -20,8 +20,16 @@ solver::solver(const std::shared_ptr<config>& cfg,
                std::function<bool(int, cv::Mat&)> get_frame)
 : get_frame_(get_frame)
 {
+    spdlog::debug("debug log message test solver");
+    spdlog::info("info log message test solver");
+//    spdlog::set_level(spdlog::level::from_str(log_level->value()));
     // build the slam system
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_file_path);
+
+    spdlog::debug("debug log message test solver 2");
+    spdlog::info("info log message test solver 2");
+
+
     bool already_have_map(false); // see run_video_slam for the case where we already have a map
     slam_->startup(!already_have_map);
 }

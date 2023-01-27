@@ -76,16 +76,27 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
         const auto is_inlier_match = fundamental_solver.get_inlier_matches();
         *focal_length_was_modified = false;
         if (true && initialize_focal_length) {
-            bool focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_); // May update the camera if auto focal length is active
-            // If the focal length was changed we also need to update the bearing vectors,
-            //   and indicate to our calling function that it should do the same
-            if (focal_length_changed) {
-                const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_).clear();
-                ref_camera_->convert_keypoints_to_bearings(ref_undist_keypts_, const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_));
-                cur_bearings_.clear();
-                ref_camera_->convert_keypoints_to_bearings(cur_undist_keypts_, cur_bearings_);
-            }
-            *focal_length_was_modified = focal_length_changed;
+
+           bool focal_length_estimate_is_stable;
+           bool focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_, &focal_length_estimate_is_stable); // May update the camera if auto focal length is active
+
+           // If the focal length was changed we also need to update the bearing vectors,
+           //   and indicate to our calling function that it should do the same
+           if (focal_length_changed) {
+              const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_).clear();
+              ref_camera_->convert_keypoints_to_bearings(ref_undist_keypts_, const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_));
+              cur_bearings_.clear();
+              ref_camera_->convert_keypoints_to_bearings(cur_undist_keypts_, cur_bearings_);
+           }
+           *focal_length_was_modified = focal_length_changed;
+
+           // If focal length estimation was required but failed, then intiialisation should fail
+           if (!focal_length_estimate_is_stable)
+              return false;
+
+        }
+        else {
+            *focal_length_was_modified = false;
         }
         return reconstruct_with_F(F_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
     }

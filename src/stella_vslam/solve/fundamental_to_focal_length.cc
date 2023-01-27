@@ -117,253 +117,146 @@ double error_for_focal_length(stella_vslam::Mat33_t const &F_21, camera::base co
     return error;
 }
 
-template<typename LAMBDA_VALUE>
-void RootFind_Bisection(float minX, float maxX, const LAMBDA_VALUE& lambdaValue) {
+// only works when close to the minimum
+double min_geometric_error_focal_length_bisection(stella_vslam::Mat33_t const& F_21, camera::base const* camera, double focal_x_start, double focal_x_end)
+{
+   int const max_iterations = 20;
 
-   const size_t c_numIterations = 25;
+   //double start_fov_degrees(1), end_fov_degrees(170);
+   double f_0 = focal_x_start;  ////0.5 * double(camera->cols_) / tan(M_PI * end_fov_degrees   / (2.0 * 180.0));
+   double e_0 = error_for_focal_length(F_21, camera, f_0);
+   double f_1 = focal_x_end;  ////0.5 * double(camera->cols_) / tan(M_PI * start_fov_degrees / (2.0 * 180.0));
+   double e_1 = error_for_focal_length(F_21, camera, f_1);
 
-    float minY = lambdaValue(minX);
-    float maxY = lambdaValue(maxX);
+   for (int i = 0; i < max_iterations; ++i) {
 
-    if (minY > maxY) {
-        std::swap(minX, maxX);
-        std::swap(minY, maxY);
-    }
+      double f_m = 0.5 * (f_0 + f_1);
+      double e_m = error_for_focal_length(F_21, camera, f_m);
 
-    // y signs need to be opposite
-    if (minY > 0.0f || maxY < 0.0f)
-        return;
+      if (e_0 < e_1) {
+          if (e_1 < e_m)
+              break;
+          f_1 = f_m;
+          e_1 = e_m;
+      }
+      else {
+          if (e_0 < e_m)
+              break;
+          f_0 = f_m;
+          e_0 = e_m;
+      }
 
-    for (size_t iterationIndex = 1; iterationIndex <= c_numIterations; ++iterationIndex) {
-        float midX = (minX + maxX) / 2.0f;
-        float midY = lambdaValue(midX);
+   }
 
-
-        if (midY < 0.0f) {
-            minX = midX;
-            minY = midY;
-        }
-        else {
-            maxX = midX;
-            maxY = midY;
-        }
-    }
+   return 0.5 * (f_0 + f_1);
 }
 
+double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camera::base const* camera, bool* focal_length_estimate_is_stable) {
+    // Set of focal lengths (x-pixels)
+    std::set<double> candidates = candidateFocalLengthsOverFOVRange(1, 170, camera->cols_);
 
-template<typename LAMBDA_VALUE>
-void find_minimum_bisection(float minX, float maxX, const LAMBDA_VALUE& lambdaValue) {
-    const size_t c_numIterations = 25;
+    std::map<double, double> focal_length_to_error;
+    std::map<double, double> fov_to_error;
+    for (auto const& candidate_focal_length : candidates) {
+        double error = error_for_focal_length(F_21, camera, candidate_focal_length);
 
-    float minY = lambdaValue(minX);
-    float maxY = lambdaValue(maxX);
+        focal_length_to_error[candidate_focal_length] = error;
 
-    if (minY > maxY) {
-        std::swap(minX, maxX);
-        std::swap(minY, maxY);
+        double fov = 2.0 * atan2(0.5 * (double)camera->cols_, candidate_focal_length) * 180.0 / M_PI;
+        fov_to_error[fov] = error;
     }
 
-    // y signs need to be opposite
-    if (minY > 0.0f || maxY < 0.0f)
-        return;
 
-    for (size_t iterationIndex = 1; iterationIndex <= c_numIterations; ++iterationIndex) {
-        float midX = (minX + maxX) / 2.0f;
-        float midY = lambdaValue(midX);
+    // Take the focal length value with smallest geometric error
+    auto error_min = std::min_element(focal_length_to_error.begin(), focal_length_to_error.end(),
+                                      [](const auto& a, const auto& b) { return a.second < b.second; });
+    double focal_length_x_pixels_0 = error_min->first;
 
-        if (midY < 0.0f) {
-            minX = midX;
-            minY = midY;
-        }
-        else {
-            maxX = midX;
-            maxY = midY;
-        }
+    spdlog::info("Initial focal length estimate: {}", focal_length_x_pixels_0);
+
+    auto before = error_min;
+    --before;
+    auto after = error_min;
+    ++after;
+    std::set<double> candidates_2;
+    for (int i = (int)before->first - 1; i <= (int)after->first + 2; ++i)
+        candidates_2.insert(i);
+
+    double focal_length_estimate_bisection = min_geometric_error_focal_length_bisection(F_21, camera, *candidates_2.begin(), *candidates_2.rbegin()); // only works when close to the minimum
+
+    std::map<double, double> focal_length_to_error_2;
+    std::map<double, double> fov_to_error_2;
+    for (auto const& candidate_focal_length : candidates_2) {
+        double error = error_for_focal_length(F_21, camera, candidate_focal_length);
+
+        focal_length_to_error_2[candidate_focal_length] = error;
+
+        double fov = 2.0 * atan2(0.5 * (double)camera->cols_, candidate_focal_length) * 180.0 / M_PI;
+        fov_to_error_2[fov] = error;
     }
+
+    auto error_min_2 = std::min_element(focal_length_to_error_2.begin(), focal_length_to_error_2.end(),
+                                        [](const auto& a, const auto& b) { return a.second < b.second; });
+    double focal_length_x_pixels_2 = error_min_2->first;
+
+    spdlog::info("Initial focal length estimate: {} -> {}", focal_length_x_pixels_0, focal_length_x_pixels_2);
+
+    double delta_f(1);
+    double error_plus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 + delta_f);
+    double error_minus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 - delta_f);
+    double de_df_plus = (error_plus - error_min->second) / delta_f;
+    double de_df_minus = (error_min->second - error_minus) / delta_f;
+
+    double error_for_max_focal_length = focal_length_to_error.rbegin()->second;
+    double error_min_value = error_min->second;
+
+    *focal_length_estimate_is_stable = error_for_max_focal_length > 0.04; // to be explored more
+
+    static int frame_hit(0);
+    ++frame_hit; // frame_hit=7 for matching between frames 0 and 7
+    static std::map<double, double> frame_to_error_for_max_focal_length;
+    static std::map<double, double> frame_to_min_error;
+    static std::map<double, double> frame_to_best_focal_length;
+    static std::map<double, double> frame_to_best_focal_length_bisection;
+    static std::map<double, double> frame_to_de_df_plus;
+    static std::map<double, double> frame_to_de_df_minus;
+
+    frame_to_error_for_max_focal_length[frame_hit] = error_for_max_focal_length;
+    frame_to_min_error[frame_hit] = error_min_value;
+    frame_to_best_focal_length[frame_hit] = focal_length_x_pixels_2;
+    frame_to_best_focal_length_bisection[frame_hit] = focal_length_estimate_bisection;
+    frame_to_de_df_plus[frame_hit] = -de_df_plus;
+    frame_to_de_df_minus[frame_hit] = de_df_minus;
+
+    if (frame_hit == 18 && !disable_all_html_graph_export()) {
+        write_graphs_html("baseline_focal_length_error.html",
+                          {std::make_tuple("Baseline(frames)", "Error at tiny focal length", std::set<Curve>({{"Error", frame_to_error_for_max_focal_length}})),
+                           std::make_tuple("Baseline(frames)", "Min Geometric Error", std::set<Curve>({{"Error", frame_to_min_error}})),
+                           std::make_tuple("Baseline(frames)", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", frame_to_de_df_plus}, {"-dE/dF(-)", frame_to_de_df_minus}})),
+                           std::make_tuple("Baseline(frames)", "Best Focal Length", std::set<Curve>({{"Focal length", frame_to_best_focal_length}, {"Focal length bisection", frame_to_best_focal_length_bisection}}))});
+    }
+
+    if (!disable_all_html_graph_export()) {
+       write_graphs_html("focal_length_error_0_" + std::to_string(frame_hit) + "_" + std::to_string((int)(focal_length_x_pixels_2 + 0.5)) + ".html",
+                         {std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({{"Error", focal_length_to_error}})),
+                          std::make_tuple("FOV", "Geometric Error", std::set<Curve>({{"Error", fov_to_error}}))});
+    }
+    return focal_length_x_pixels_2;
 }
 
-
-bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* camera) {
+bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* camera, bool* focal_length_estimate_is_stable) {
    // Return early if auto focal length is turned off
-   if (camera->autocalibration_parameters_.optimise_focal_length == false)
+   if (camera->autocalibration_parameters_.optimise_focal_length == false) {
+      *focal_length_estimate_is_stable = true;
       return false;
-
-   // Set of focal lengths (x-pixels)
-   //std::set<double> candidates = { 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1400, 1600, 2000, 3000, 4000, 5000 };
-   std::set<double> candidates = candidateFocalLengthsOverFOVRange(1, 170, camera->cols_);
-
-   std::map<double, double> focal_length_to_error; 
-   std::map<double, double> fov_to_error; 
-   for (auto const& candidate_focal_length : candidates) {
-
-      double error = error_for_focal_length(F_21, camera, candidate_focal_length);
-
-      focal_length_to_error[candidate_focal_length] = error;
-
-      double fov = 2.0 * atan2(0.5 * (double)camera->cols_, candidate_focal_length) * 180.0 / M_PI;
-      fov_to_error[fov] = error;
    }
+   double focal_length_estimate = min_geometric_error_focal_length(F_21, camera, focal_length_estimate_is_stable);
 
-   write_graphs_html("focal_length_error.html",
-      {std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({{"Error", focal_length_to_error}})),
-       std::make_tuple("FOV",                   "Geometric Error", std::set<Curve>({{"Error",          fov_to_error}})) });
-
-   // Take the focal length value with smallest geometric error
-   auto error_min = std::min_element(focal_length_to_error.begin(), focal_length_to_error.end(),
-                                     [](const auto& a, const auto& b) { return a.second < b.second; });
-   double focal_length_x_pixels_0 = error_min->first;
-
-   spdlog::info("Initial focal length estimate: {}", focal_length_x_pixels_0);
-
-
-
-   //auto Value = [](float t) -> float {return 3.4f;};
-   //float minX, maxX;
-   //RootFind_Bisection(minX, maxX, Value);
-
-
-   auto before = error_min;
-   --before;
-   auto after = error_min;
-   ++after;
-   std::set<double> candidates_2;
-   for (int i = (int)before->first - 1; i <= (int)after->first + 2; ++i)
-       candidates_2.insert(i);
-
-   std::map<double, double> focal_length_to_error_2;
-   std::map<double, double> fov_to_error_2;
-   for (auto const& candidate_focal_length : candidates_2) {
-       double error = error_for_focal_length(F_21, camera, candidate_focal_length);
-
-       focal_length_to_error_2[candidate_focal_length] = error;
-
-       double fov = 2.0 * atan2(0.5 * (double)camera->cols_, candidate_focal_length) * 180.0 / M_PI;
-       fov_to_error_2[fov] = error;
+   if (focal_length_estimate_is_stable) {
+       bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, focal_length_estimate);
+       return set_f_ok;
    }
-
-   //write_graphs_html("focal_length_error_2.html",
-   //                  {std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({{"Error", focal_length_to_error_2}})),
-   //                   std::make_tuple("FOV", "Geometric Error", std::set<Curve>({{"Error", fov_to_error_2}}))});
-
-   auto error_min_2 = std::min_element(focal_length_to_error_2.begin(), focal_length_to_error_2.end(),
-                                     [](const auto& a, const auto& b) { return a.second < b.second; });
-   double focal_length_x_pixels_2 = error_min_2->first;
-
-   spdlog::info("Initial focal length estimate: {} -> {}", focal_length_x_pixels_0, focal_length_x_pixels_2);
-
-
-
-
-   double delta_f(1);
-   double error_plus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 + delta_f);
-   double error_minus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 - delta_f);
-   double de_df_plus = (error_plus - error_min->second) / delta_f;
-   double de_df_minus = (error_min->second - error_minus) / delta_f;
-
-   double error_for_max_focal_length = focal_length_to_error.rbegin()->second;
-   double error_min_value = error_min->second;
-
-
-   static int temp(0);
-   ++temp; // frame
-   static std::map<double, double> frame_to_error_for_max_focal_length; 
-   static std::map<double, double> frame_to_min_error; 
-   static std::map<double, double> frame_to_best_focalLength; 
-   static std::map<double, double> frame_to_de_df_plus; 
-   static std::map<double, double> frame_to_de_df_minus; 
-
-   frame_to_error_for_max_focal_length[temp] = error_for_max_focal_length;
-   frame_to_min_error[temp] = error_min_value;
-   frame_to_best_focalLength[temp] = focal_length_x_pixels_2;
-   frame_to_de_df_plus[temp] = -de_df_plus;
-   frame_to_de_df_minus[temp] = de_df_minus;
-
-   if (temp == 18) {
-      write_graphs_html("baseline_focal_length_error.html",
-                        {std::make_tuple("Baseline(frames)", "Error at tiny focal length", std::set<Curve>({{"Error", frame_to_error_for_max_focal_length}})),
-                         std::make_tuple("Baseline(frames)", "Min Geometric Error", std::set<Curve>({{"Error", frame_to_min_error}})), 
-                         std::make_tuple("Baseline(frames)", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", frame_to_de_df_plus}, {"-dE/dF(-)", frame_to_de_df_minus}})),
-                         std::make_tuple("Baseline(frames)", "Best Focal Length", std::set<Curve>({{"Focal length", frame_to_best_focalLength}})) });
-   }
-
-   bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, focal_length_x_pixels_2);
-   return set_f_ok;
+   return false;
 }
-
-
 
 } // namespace stella_vslam_bfx
-
-
-
-
-
-#if 0
-#include <stella_vslam/util/svg_plot/svg_2d_plot.hpp>
-// boost::svg::svg_2d_plot
-#include <limits>
-// infinity
-#include <map>
-//using std::map;
-
-double f(double x) { // Function to plot.
-    return 1. / x;
-}
-
-int plot_test() {
-    using namespace boost::svg; // For SVG named colors.
-    std::map<double, double> data1;
-
-    const double interval = 0.5;
-    for (double i = -10; i <= 10.; i += interval) {
-        data1[i] = f(i);
-    }
-
-    svg_2d_plot my_plot;
-
-    // Image size & ranges settings.
-    my_plot.size(500, 350)    // SVG image in pixels.
-        .x_range(-10.5, 10.5) // Offset by 0.5 so that +10 and -10 markers are visible.
-        .y_range(-1.1, 1.1);  // Offset by 1 so that +10 and -10 markers are visible.
-
-    // Text settings.
-    my_plot.title("Plot of 1 / x")
-        .x_label("X Axis Units")
-        .y_label("F(x)")
-        .y_major_labels_side(-1) // Left.
-        .plot_window_on(true);
-
-    // X-axis settings.
-    my_plot.x_major_interval(2)
-        .x_major_tick_length(14)
-        .x_major_tick_width(1)
-        .x_minor_tick_length(7)
-        .x_minor_tick_width(1)
-        .x_num_minor_ticks(1)
-        .x_major_labels_side(1) // Top of X-axis line (but zero collides with vertical x == 0 line).
-
-        // Y-axis settings.
-        .y_major_interval(1)
-        .y_num_minor_ticks(4);
-
-    // Legend-box settings.
-    my_plot.legend_title_font_size(15);
-
-    // Limit value at x = 0 when 1/x == +infinity shown by a pointing-down cone a the top of the plot.
-    //my_plot.minus_inf_limit_color(red).plus_inf_limit_color(green);
-    // TODO - the 'at-limit' infinity point cone pointing-down shows as default color pink, not the changed color(s).
-
-    my_plot.plot(data1, "1 / x").shape(square).size(5).line_on(false);
-
-    my_plot.write("./2d_limit.svg");
-
-    // Sets and gets colors correctly, but not used? A fix would be good, but does display.
-    // std::cout << "" << my_plot.plus_inf_limit_color() << std::endl; // RGB(0,128,0)
-    //std::cout << "" << my_plot.minus_inf_limit_color() << std::endl; // RGB(255,0,0)
-
-    return 0;
-} // int main()
-
-
-
-#endif

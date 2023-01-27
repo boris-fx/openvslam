@@ -6,6 +6,7 @@
 #include <array>
 #include <vector>
 #include <functional>
+#include <spdlog/spdlog.h>
 
 namespace stella_vslam::data { class map_database; }
 
@@ -227,6 +228,8 @@ public:
     // System/IO
     stella_vslam::io::map_format_t map_format_ = stella_vslam::io::map_format_t::Msgpack;
 };
+
+void STELLA_VSLAM_API set_module_log_level(spdlog::level::level_enum log_level);
 
 } // namespace stella_vslam_bfx
 

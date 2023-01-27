@@ -9,5 +9,6 @@ using Graph = std::tuple<std::string, std::string, std::set<Curve>>; /// x label
 
 void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs);
 
+bool disable_all_html_graph_export(); /// Temporary - not sure where to control this
 
 

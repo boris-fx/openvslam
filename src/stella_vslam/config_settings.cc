@@ -240,4 +240,8 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     return os;
 }
 
+void set_module_log_level(spdlog::level::level_enum log_level) {
+    spdlog::set_level(log_level);
+}
+
 } // namespace stella_vslam_bfx

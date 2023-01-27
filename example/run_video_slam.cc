@@ -1060,6 +1060,7 @@ int main(int argc, char* argv[]) {
     // setup logger
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] %^[%L] %v%$");
     spdlog::set_level(spdlog::level::from_str(log_level->value()));
+    stella_vslam_bfx::set_module_log_level(spdlog::level::from_str(log_level->value())); /// Required (on Windows anyway) to set the log level in the stella_vslam dynamic library
 
     // load configuration
     YAML::Node yaml_node;
