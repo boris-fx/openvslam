@@ -27,6 +27,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include <popl.hpp>
 
 #include <opencv2/core/types.hpp>
@@ -1020,6 +1021,8 @@ int main(int argc, char* argv[]) {
     auto wait_loop_ba = op.add<popl::Switch>("", "wait-loop-ba", "wait until the loop BA is finished");
     auto auto_term = op.add<popl::Switch>("", "auto-term", "automatically terminate the viewer");
     auto log_level = op.add<popl::Value<std::string>>("a", "log-level", "log level", "info");
+    auto log_file = op.add<popl::Value<std::string>>("", "log-file", "writes log to specified file instead of stdout", "");
+    auto log_times = op.add<popl::Value<bool>>("", "log-times", "include timestamps in the log messages", true);
     auto eval_log_dir = op.add<popl::Value<std::string>>("", "eval-log-dir", "store trajectory and tracking times at this path (Specify the directory where it exists.)", "");
     auto map_db_path_in = op.add<popl::Value<std::string>>("i", "map-db-in", "load a map from this path", "");
     auto map_db_path_out = op.add<popl::Value<std::string>>("o", "map-db-out", "store a map database at this path after slam", "");
@@ -1058,7 +1061,21 @@ int main(int argc, char* argv[]) {
     }
 
     // setup logger
-    spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] %^[%L] %v%$");
+    if (log_file->is_set()) {
+        try {
+            auto logger = spdlog::basic_logger_mt("stella file logger", log_file->value());
+            stella_vslam_bfx::set_module_logger(logger);    // Set the logger for the library, too
+            spdlog::set_default_logger(logger);
+        }
+        catch (const spdlog::spdlog_ex &ex) {
+            std::cerr << "Log init failed: " << ex.what() << std::endl;
+        }
+    }
+
+    if (log_times->value())
+        spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] %^[%L] %v%$");
+    else
+        spdlog::set_pattern("%^[%L] %v%$");
     spdlog::set_level(spdlog::level::from_str(log_level->value()));
     stella_vslam_bfx::set_module_log_level(spdlog::level::from_str(log_level->value())); /// Required (on Windows anyway) to set the log level in the stella_vslam dynamic library
 

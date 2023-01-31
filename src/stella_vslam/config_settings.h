@@ -8,6 +8,7 @@
 #include <functional>
 #include <spdlog/spdlog.h>
 
+namespace spdlog { class logger; }
 namespace stella_vslam::data { class map_database; }
 
 // Moved from camera/base.h to avoid circular headers
@@ -229,6 +230,7 @@ public:
     stella_vslam::io::map_format_t map_format_ = stella_vslam::io::map_format_t::Msgpack;
 };
 
+void STELLA_VSLAM_API set_module_logger(std::shared_ptr<spdlog::logger> logger);
 void STELLA_VSLAM_API set_module_log_level(spdlog::level::level_enum log_level);
 
 } // namespace stella_vslam_bfx

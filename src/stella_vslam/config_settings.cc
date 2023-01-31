@@ -240,6 +240,10 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     return os;
 }
 
+void set_module_logger(std::shared_ptr<spdlog::logger> logger) {
+    spdlog::set_default_logger(logger);
+}
+
 void set_module_log_level(spdlog::level::level_enum log_level) {
     spdlog::set_level(log_level);
 }
