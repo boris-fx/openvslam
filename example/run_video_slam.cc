@@ -532,13 +532,49 @@ void printKeyframeLandmarks(std::vector<std::shared_ptr<stella_vslam::data::keyf
     }
 }
 
-void printSolveSummary(stella_vslam_bfx::solve const& shot_solve)
+Eigen::IOFormat eigen_format(Eigen::StreamPrecision, Eigen::DontAlignCols, ", ", ", ", "", "", "[", "]");
+int g_print_precision = 3;
+
+template<typename... Args>
+void spdlog_always(const char *fmt, const Args &... args)
 {
-   spdlog::info("==========================");
-   spdlog::info("Final Solve");
-   spdlog::info("  Keypoints: {}", shot_solve.world_points.size());
-   spdlog::info("  Cameras: {}", shot_solve.frame_to_camera.size());
-   spdlog::info("==========================");
+    spdlog::log(spdlog::level::off, fmt, args...);
+}
+
+void printSolveSummary(stella_vslam_bfx::solve const& shot_solve, bool full_results)
+{
+    spdlog_always("==========================");
+    spdlog_always("Final Solve");
+    spdlog_always("  Keypoints: {}", shot_solve.world_points.size());
+    spdlog_always("  Cameras: {}", shot_solve.frame_to_camera.size());
+    spdlog_always("==========================");
+
+    if (full_results) {
+        std::stringstream msg_str;
+        msg_str.precision(g_print_precision);
+        for (auto camPose : shot_solve.frame_to_camera)
+            msg_str << std::fixed << "\tFrame " << camPose.first << " camera pose: "
+                << camPose.second.format(eigen_format) << std::endl;
+        
+        msg_str << "\tWorld points\n";
+        for (auto p : shot_solve.world_points)
+            msg_str << std::fixed << "\t\t" << p.format(eigen_format) << std::endl;
+    
+        spdlog_always("{}", msg_str.str());
+    }
+}
+
+void display_frame(std::shared_ptr<stella_vslam_bfx::frame_display_data> frame_data)
+{
+    std::stringstream msg_str;
+    msg_str.precision(g_print_precision);
+    msg_str << "Frame " << frame_data->frame << " solve results:\n";
+    msg_str << std::fixed << "\tCamera pose: " << frame_data->camera_pose.format(eigen_format) << std::endl;
+    msg_str << "\t" << frame_data->world_points.size() << "world points\n";
+    for (auto p : frame_data->world_points)
+        msg_str << std::fixed << "\t\t" << p.format(eigen_format) << std::endl; 
+    
+    spdlog_always("{}", msg_str.str());
 }
 
 void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
@@ -914,7 +950,8 @@ void mono_tracking_2(
                    const std::string& map_db_path,
                    const double start_timestamp,
                    const std::string& planar_path, const std::string& mesh_path,
-                   unsigned gridSize, YAML::Node yaml_node) {
+                   unsigned gridSize, YAML::Node yaml_node,
+                   bool print_frames, bool print_results) {
     // load the mask image
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
 
@@ -939,6 +976,11 @@ void mono_tracking_2(
     std::string solve_stage;
     solver.set_progress_callback([&](float progress) { spdlog::info("** Stage \"{}\" progress {}%", solve_stage, progress); });
     solver.set_stage_description_callback([&](std::string description) { solve_stage = description; });
+
+    if (print_frames) {
+        std::function<void(std::shared_ptr<stella_vslam_bfx::frame_display_data>)> display_frame_fn = display_frame;
+        solver.set_display_frame_callback(display_frame_fn);
+    }
     
     // Solve
     stella_vslam_bfx::solve solve;
@@ -958,7 +1000,7 @@ void mono_tracking_2(
        // Run the solve
        solver.track_frame_range(0, 100, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
 
-       printSolveSummary(solve);
+       printSolveSummary(solve, print_results);
 
        bool save_video_ok = stella_vslam_bfx::create_evaluation_video(video_file_path, "solve", solve);
 
@@ -1030,6 +1072,9 @@ int main(int argc, char* argv[]) {
     auto log_level = op.add<popl::Value<std::string>>("a", "log-level", "log level", "info");
     auto log_file = op.add<popl::Value<std::string>>("", "log-file", "writes log to specified file instead of stdout", "");
     auto log_times = op.add<popl::Value<bool>>("", "log-times", "include timestamps in the log messages", true);
+    auto print_frames = op.add<popl::Value<bool>>("", "print-frames", "print per-frame results", false); 
+    auto print_results = op.add<popl::Value<bool>>("", "print-results", "print final results in full", false);
+    auto print_precision = op.add<popl::Value<int>>("", "print-precision", "decimal places for printed results", 3);
     auto eval_log_dir = op.add<popl::Value<std::string>>("", "eval-log-dir", "store trajectory and tracking times at this path (Specify the directory where it exists.)", "");
     auto map_db_path_in = op.add<popl::Value<std::string>>("i", "map-db-in", "load a map from this path", "");
     auto map_db_path_out = op.add<popl::Value<std::string>>("o", "map-db-out", "store a map database at this path after slam", "");
@@ -1083,8 +1128,13 @@ int main(int argc, char* argv[]) {
         spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] %^[%L] %v%$");
     else
         spdlog::set_pattern("%^[%L] %v%$");
-    spdlog::set_level(spdlog::level::from_str(log_level->value()));
-    stella_vslam_bfx::set_module_log_level(spdlog::level::from_str(log_level->value())); /// Required (on Windows anyway) to set the log level in the stella_vslam dynamic library
+   
+    auto log_level_val = spdlog::level::from_str(log_level->value());
+    spdlog::set_level(log_level_val);
+    stella_vslam_bfx::set_module_log_level(log_level_val); /// Required (on Windows anyway) to set the log level in the stella_vslam dynamic library
+
+    if (print_precision->is_set())
+        g_print_precision = print_precision->value();
 
     // load configuration
     YAML::Node yaml_node;
@@ -1140,7 +1190,8 @@ int main(int argc, char* argv[]) {
                         map_db_path_out->value(),
                         timestamp,
                         planar_file_path->value(), mesh_file_path->value(),
-                        grid_size->value(), yaml_node);
+                        grid_size->value(), yaml_node,
+                        print_frames->value(), print_results->value());
     }
     else {
         // build a slam system

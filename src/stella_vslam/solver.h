@@ -32,6 +32,8 @@ public:
     std::map<int, Eigen::Matrix4d> frame_to_camera;
     std::vector<Eigen::Vector3d> world_points;
     std::shared_ptr<stella_vslam::camera::perspective> camera_lens;
+
+    void clear();
 };
 
 /**
@@ -40,6 +42,12 @@ public:
 class frame_display_data {
     // Some data that Mocha can use to display interesting things on the screen during tracking,
     // e.g. a set of 3D points and a camera, or a set or 2D image features
+public:
+    int frame = -1;
+    Eigen::Matrix4d camera_pose;
+    std::vector<Eigen::Vector3d> world_points;
+
+    void clear();
 };
 
 /**
@@ -65,7 +73,7 @@ public:
     };
 
     /// Track (or retrack)
-    bool track_frame_range(int begin, int end, tracking_direction direction, solve* final_solve);
+    bool track_frame_range(int begin, int end, tracking_direction direction, solve* final_solve = nullptr);
 
 public:
     /// Should be protected, but this is used by pangolin_viewer
@@ -73,6 +81,12 @@ public:
 
 protected:
     std::function<bool(int, cv::Mat&)> get_frame_;
+
+    /// Retrieve landmark positions from map db
+    void get_world_points(std::vector<Eigen::Vector3d>& world_points) const;
+
+    /// Package data and send to the calling application via display_frame_ callback
+    void send_frame_data(int frame, Eigen::Matrix4d& camera_pose) const;
 
     std::function<void(float)> set_progress_;
     std::function<void(std::string)> set_stage_description_;

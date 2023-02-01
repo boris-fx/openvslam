@@ -17,6 +17,18 @@ using namespace stella_vslam;
 
 namespace stella_vslam_bfx {
 
+void solve::clear() {
+    frame_to_camera.clear();
+    world_points.clear();
+    camera_lens.reset();
+}
+
+void frame_display_data::clear() {
+    frame = -1;
+    camera_pose.setIdentity();
+    world_points.clear();
+}
+
 solver::solver(const std::shared_ptr<config>& cfg,
                const std::string& vocab_file_path,
                std::function<bool(int, cv::Mat&)> get_frame)
@@ -85,6 +97,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     cv::Mat frame_image;
     cv::Mat mask; // to do!!
     prematched_points* extra_keypoints(nullptr); // to do!!
+    if (final_solve)
+        final_solve->clear();
 
     if (!get_frame_)
         return false; // report error!
@@ -114,7 +128,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         timestampToVideoFrame[timestamp] = frame;
 
-        slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+        if (camera_pose)
+            send_frame_data(frame, *camera_pose);
 
         double stage_progress = double(frame - begin + 1) / double(1 + end - begin);
         if (set_progress_)
@@ -156,7 +172,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         timestamp = videoFrameToTimestamp[frame];
 
-        slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+        if (camera_pose)
+            send_frame_data(frame, *camera_pose);
 
         double stage_progress = double(first_keyframe.value() - frame) / double(first_keyframe.value() - begin);
         if (set_progress_)
@@ -213,8 +231,11 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         camera_pose ? ++solved_frame_count : ++unsolved_frame_count;
 
         // Store the camera pose
-        if (camera_pose && final_solve)
-            final_solve->frame_to_camera[frame] = *camera_pose;
+        if (camera_pose) {
+            if (final_solve)
+                final_solve->frame_to_camera[frame] = *camera_pose;
+            send_frame_data(frame, *camera_pose);
+        }
 
         double stage_progress = double(frame - begin + 1) / double(1 + end - begin);
         if (set_progress_)
@@ -225,8 +246,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     const auto tp_after_resection = std::chrono::steady_clock::now();
 
-    // Store the camera intrinsics (lens properties)
     if (final_solve) {
+        // Store the camera intrinsics (lens properties)
         // Get the camera from the keyframes (maybe there's a better place?)
         auto keyfrms = slam_->map_db_->get_all_keyframes();
         for (const auto& keyfrm : keyfrms) {
@@ -235,15 +256,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
                 break;
             }
         }
-    }
 
-    // Store the map points
-    if (final_solve) {
-        data::map_database const* map_db = slam_->map_db_;
-        std::vector<std::shared_ptr<data::landmark>> all_landmarks = map_db->get_all_landmarks();
-        final_solve->world_points.clear();
-        std::transform(all_landmarks.cbegin(), all_landmarks.cend(), std::back_inserter(final_solve->world_points),
-                       [](const std::shared_ptr<data::landmark>& value) { return value->get_pos_in_world(); });
+        // Store the map points
+        get_world_points(final_solve->world_points);
     }
 
     // Store the metrics
@@ -272,6 +287,28 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
 std::shared_ptr<stella_vslam::system> solver::system() {
     return slam_;
+}
+
+void solver::get_world_points(std::vector<Eigen::Vector3d>& world_points) const {
+    world_points.clear();
+    std::vector<std::shared_ptr<data::landmark>> all_landmarks = slam_->map_db_->get_all_landmarks();
+    std::transform(all_landmarks.cbegin(), all_landmarks.cend(), std::back_inserter(world_points),
+                   [](const std::shared_ptr<data::landmark>& value) { return value->get_pos_in_world(); });
+}
+
+void solver::send_frame_data(int frame, Eigen::Matrix4d& camera_pose) const {
+    if (display_frame_) {
+        // Copy all current solve data, so that the calling application
+        // can (potentially) process it while the solver continues to run
+        auto frame_data = std::make_shared<frame_display_data>();
+        frame_data->frame = frame;
+        frame_data->camera_pose = camera_pose;
+        get_world_points(frame_data->world_points);
+
+        // TODO some indicators of whether the data is final etc.
+
+        display_frame_(frame_data);
+    }
 }
 
 } // namespace stella_vslam_bfx
