@@ -14,38 +14,38 @@
 #include <stella_vslam/camera/perspective.h>
 
 namespace cv {
-   class Mat;
+    class Mat;
 }
 
 namespace stella_vslam {
-   class system;
-   class config;
+    class system;
+    class config;
 }
 
 namespace stella_vslam_bfx {
 
 /**
-* \brief A camera solve (a set of 3D points, and a set of per=frame camera positions)
-*/
+ * \brief A camera solve (a set of 3D points, and a set of per=frame camera positions)
+ */
 class solve {
 public:
-   std::map<int, Eigen::Matrix4d> frame_to_camera;
-   std::vector<Eigen::Vector3d> world_points;
-   std::shared_ptr<stella_vslam::camera::perspective> camera_lens;
+    std::map<int, Eigen::Matrix4d> frame_to_camera;
+    std::vector<Eigen::Vector3d> world_points;
+    std::shared_ptr<stella_vslam::camera::perspective> camera_lens;
 };
 
 /**
-* \brief Frame-level results pushed from the solver for possible user display
-*/
+ * \brief Frame-level results pushed from the solver for possible user display
+ */
 class frame_display_data {
     // Some data that Mocha can use to display interesting things on the screen during tracking,
     // e.g. a set of 3D points and a camera, or a set or 2D image features
 };
 
 /**
-* \brief Main interface object for the stella-vslam based camera solver
-*
-*/
+ * \brief Main interface object for the stella-vslam based camera solver
+ *
+ */
 class STELLA_VSLAM_API solver {
 public:
     solver(const std::shared_ptr<stella_vslam::config>& cfg,
@@ -60,34 +60,27 @@ public:
     void set_cancel_callback(std::function<bool()> cancel);
 
     enum tracking_direction {
-       tracking_direction_forwards,
-       tracking_direction_backwards
+        tracking_direction_forwards,
+        tracking_direction_backwards
     };
 
     /// Track (or retrack)
     bool track_frame_range(int begin, int end, tracking_direction direction, solve* final_solve);
 
 public:
-
     /// Should be protected, but this is used by pangolin_viewer
     std::shared_ptr<stella_vslam::system> system();
 
 protected:
+    std::function<bool(int, cv::Mat&)> get_frame_;
 
-   std::function<bool(int, cv::Mat&)> get_frame_;
+    std::function<void(float)> set_progress_;
+    std::function<void(std::string)> set_stage_description_;
+    std::function<void(std::shared_ptr<frame_display_data>)> display_frame_;
+    std::function<bool()> cancel_;
 
-   std::function<void(float)> set_progress_;
-   std::function<void(std::string)> set_stage_description_;
-   std::function<void(std::shared_ptr<frame_display_data>)> display_frame_;
-   std::function<bool()> cancel_;
-
-   std::shared_ptr<stella_vslam::system> slam_;
-   std::shared_ptr<stella_vslam::config> cfg_;
+    std::shared_ptr<stella_vslam::system> slam_;
+    std::shared_ptr<stella_vslam::config> cfg_;
 };
 
-
-
-
-
-
-}
+} // namespace stella_vslam_bfx
