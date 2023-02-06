@@ -2,6 +2,7 @@
 #define STELLA_VSLAM_CAMERA_PERSPECTIVE_H
 
 #include "stella_vslam/camera/base.h"
+#include "stella_vslam/exports.h"
 
 #include <opencv2/core/version.hpp>
 #if CV_MAJOR_VERSION == 3
@@ -13,7 +14,7 @@
 namespace stella_vslam {
 namespace camera {
 
-class perspective final : public base {
+class STELLA_VSLAM_API perspective final : public base {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
