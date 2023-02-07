@@ -1,0 +1,120 @@
+{
+    "active_clips": [
+        {
+            "clip": "Gesture_Clip_8_1.mov",
+            "config": "1920-108-1988-25.yaml"
+        },
+        {
+            "clip": "4k-aerial-panning-around-rocky-mountain_nyhqugkn__D.mp4",
+            "config": "1920-1080-1920-24.yaml"
+        },
+        {
+            "clip": "Panning Shot of the famous Hollywood sign in Los Angeles, California on a sunny day.mp4",
+            "config": "3840-2160-5199-24.yaml"
+        },
+        {
+            "clip": "065878410-woman-walking-abandoned-plane.mov",
+            "config": "1920-1080-1500-25.yaml"
+        },
+        {
+            "clip": "WalkingPastBuildings.mov",
+            "config": "1920-1080-1715-24.yaml"
+        },
+        {
+            "clip": "V1-0143_V1-0072_A003_C062_0101F7.mp4",
+            "config": "1920-1080-1920-25.yaml"
+        },
+        {
+            "clip": "A008_C066_05040N-3.mov",
+            "config": "1920-1080-2750-24.yaml"
+        },
+        {
+            "clip": "Pexels Videos 2253472.mp4",
+            "config": "3840-2160-2500-24.yaml"
+        },
+        {
+            "clip": "FP001548MD03.mp4",
+            "config": "3480-2160-2000-23_98.yaml"
+        },
+        {
+            "clip": "videoblocks-a-young-man-in-a-black-jacket-goes-to-the-large-wooden-gate-and-looks-at-the-burning-lighthouse-against-the-background-of-the-sea-slow-motion_B03iQ7InP.mov",
+            "config": "1920-1080-8800-25.yaml"
+        },
+        {
+            "clip": "videoblocks-medium-shot-of-serious-caucasian-male-supervisor-in-yellow-hard-hat-walking-along-assembly-shop-of-big-tractor-plant-inspecting-machinery-equipment-and-work-of-employees_svwd4kswu.mov",
+            "config": "1920-1080-2300-50.yaml"
+        },
+        {
+            "clip": "FP005183HD07.mp4",
+            "config": "1920-1080-1000-24.yaml"
+        }
+    ],
+    "extra_clips": [
+        {
+            "clip": "D08-5D08C_BlackHawk38.mov",
+            "config": "1920-1080-1200-30.yaml"
+        },
+        {
+            "clip": "FP001033HD02.mp4",
+            "config": "1920-1080-1000-24.yaml"
+        },
+        {
+            "clip": "A008_C055_0504XB-2.mov",
+            "config": "1920-1080-2750-24.yaml"
+        },
+        {
+            "clip": "FP003941PD01.mov",
+            "config": "3840-2160-370-24.yaml"
+        },
+        {
+            "clip": "1Q3B6382.MOV",
+            "config": "1920-1080-3050-30.yaml"
+        },
+        {
+            "clip": "1Q3B6404.MOV",
+            "config": "1920-1080-3050-30.yaml"
+        },
+        {
+            "clip": "1Q3B6407.MOV",
+            "config": "1920-1080-3050-30.yaml"
+        },
+        {
+            "clip": "MVI_8799B.mov",
+            "config": "1920-1080-230-30.yaml"
+        },
+        {
+            "clip": "pexels-german-korb-5644053.mp4",
+            "config": "2562-1440-1150-60.yaml"
+        },
+        {
+            "clip": "ITA0000A463HD.mov",
+            "config": "1920-1080-2110-24.yaml"
+        },
+        {
+            "clip": "A Woman Stands Peering out at a Stunning Tropical Island Restort, A Beautiful Sunset and Mountains in the Background.mp4",
+            "config": "3840-2160-3000-24.yaml"
+        },
+        {
+            "clip": "FP003643HD04.mp4",
+            "config": "1920-1080-1920-24.yaml"
+        },
+        {
+            "clip": "Aerial Drone Shot of a Gorgeous Shoreline Leading to the Santa Monica Pier Amusement Park.mp4",
+            "config": "3840-2160-3620-24.yaml"
+        },
+        {
+            "clip": "02 Tilt down London street.mp4",
+            "config": "1920-1080-2740-25.yaml"
+        },
+        {
+            "clip": "Aerial Drone Shot Zoom on a Barren Valley on a Sunny Day, Snowy Mountain Cliffs in the Background.mp4",
+            "config": "3840-2160-5000-60.yaml",
+            "frame-skip": 3
+        },
+        {
+            "clip": "Aerial Drone Shot Zoom on a Barren Valley, Snowy Mountain Cliffs in the Background.mp4",
+            "config": "3840-2160-5000-60.yaml",
+            "frame-skip": 3
+        }
+    ]
+}
