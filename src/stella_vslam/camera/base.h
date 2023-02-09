@@ -3,6 +3,7 @@
 
 #include "stella_vslam/type.h"
 #include "stella_vslam/config_settings.h"
+#include "stella_vslam/exports.h"
 
 #include <string>
 #include <limits>
@@ -37,7 +38,7 @@ struct autocalibration_parameters {
     autocalibration_parameters(bool optimise_focal_length=false);
 };
 
-class base {
+class STELLA_VSLAM_API base {
 public:
     //! Constructor
     base(const std::string& name, const setup_type_t setup_type, const model_type_t model_type,

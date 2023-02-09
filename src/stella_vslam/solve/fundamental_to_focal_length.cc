@@ -151,6 +151,15 @@ double min_geometric_error_focal_length_bisection(stella_vslam::Mat33_t const& F
    return 0.5 * (f_0 + f_1);
 }
 
+template<typename Iter, typename Cont>
+bool is_last(Iter iter, const Cont& cont) {
+    if (iter == cont.end())
+        return false;
+    Iter next = iter;
+    ++next;
+    return next == cont.end();
+}
+
 double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camera::base const* camera, bool* focal_length_estimate_is_stable) {
     // Set of focal lengths (x-pixels)
     std::set<double> candidates = candidateFocalLengthsOverFOVRange(1, 170, camera->cols_);
@@ -175,9 +184,11 @@ double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camer
     spdlog::info("Initial focal length estimate: {}", focal_length_x_pixels_0);
 
     auto before = error_min;
-    --before;
+    if (before != focal_length_to_error.begin())
+       --before;
     auto after = error_min;
-    ++after;
+    if (!is_last(after, focal_length_to_error))
+       ++after;
     std::set<double> candidates_2;
     for (int i = (int)before->first - 1; i <= (int)after->first + 2; ++i)
         candidates_2.insert(i);

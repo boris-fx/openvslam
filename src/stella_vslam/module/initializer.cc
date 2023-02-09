@@ -66,82 +66,6 @@ bool initializer::get_use_fixed_seed() const {
     return use_fixed_seed_;
 }
 
-bool check_keyframe_landmarks(data::keyframe const& cur_keyfrm)
-{
-    const auto cur_lms = cur_keyfrm.get_landmarks();
-    for (unsigned int idx = 0; idx < cur_lms.size(); ++idx) {
-        auto lm = cur_lms.at(idx);
-        if (!lm) {
-            continue;
-        }
-        if (lm->will_be_erased()) {
-            continue;
-        }
-        using namespace data;
-        landmark::observations_t observations = lm->get_observations();
-        Vec3_t mean_normal = Vec3_t::Zero();
-        for (const auto& observation : observations) {
-            auto keyfrm = observation.first.lock();
-            if (!keyfrm)
-                return false;
-        }
-    }
-    return true;
-}
-
-bool check_keyframe_landmarks(std::shared_ptr<data::keyframe> const& keyfrm) {
-   if (!keyfrm)
-      return true;
-   const auto cur_lms = keyfrm->get_landmarks();
-   for (unsigned int idx = 0; idx < cur_lms.size(); ++idx) {
-      auto lm = cur_lms.at(idx);
-      if (!lm) {
-            return true;
-      }
-      if (lm->will_be_erased()) {
-            return true;
-      }
-      using namespace data;
-      landmark::observations_t observations = lm->get_observations();
-      Vec3_t mean_normal = Vec3_t::Zero();
-      for (const auto& observation : observations) {
-            auto keyfrm2 = observation.first.lock();
-            if (!keyfrm2)
-               return false;
-      }
-   }
-   return true;
-}
-
-
-bool check_keyframe_landmarks(data::map_database* map_db)
-{
-    auto keyfrms = map_db->get_all_keyframes();
-    for (const auto& keyfrm : keyfrms) {
-        if (!keyfrm)
-            continue;
-        const auto cur_lms = keyfrm->get_landmarks();
-        for (unsigned int idx = 0; idx < cur_lms.size(); ++idx) {
-            auto lm = cur_lms.at(idx);
-            if (!lm) {
-                continue;
-            }
-            if (lm->will_be_erased()) {
-                continue;
-            }
-            using namespace data;
-            landmark::observations_t observations = lm->get_observations();
-            Vec3_t mean_normal = Vec3_t::Zero();
-            for (const auto& observation : observations) {
-                auto keyfrm2 = observation.first.lock();
-                if (!keyfrm2)
-                    return false;
-            }
-        }
-    }
-    return true;
-}
-
 void update_frame_bearing_vectors(data::frame& frm, camera::base const* camera)
 {
     frm.frm_obs_.bearings_.clear();
@@ -169,22 +93,19 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             // try to initialize
             bool focal_length_was_modified;
             if (!try_initialize_for_monocular(curr_frm, 1.0, true, &focal_length_was_modified)) {
-               // failed
-               return false;
+                // failed
+                return false;
             }
 
             if (focal_length_was_modified) {
-               // Update bearing vectors for the frame objects used by create_map_for_monocular
-               update_frame_bearing_vectors(curr_frm, curr_frm.camera_);
-               update_frame_bearing_vectors(init_frm_, curr_frm.camera_);
+                last_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
+                // Update bearing vectors for the frame objects used by create_map_for_monocular
+                update_frame_bearing_vectors(curr_frm, curr_frm.camera_);
+                update_frame_bearing_vectors(init_frm_, curr_frm.camera_);
             }
 
             // create new map if succeeded
             create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
-
-            bool map_check_1 = check_keyframe_landmarks(map_db_);
-            if (!map_check_1)
-                int y = 0;
 
             // Try to improve the initialisation now that the focal length estimate has been improved
             if (refine_initialisation) {
@@ -213,9 +134,6 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                    if (ok_initialize)
                        create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
 
-                 bool map_check_2 = check_keyframe_landmarks(map_db_);
-                   if (!map_check_2)
-                        int y = 0;
 #else
 
                    if (!refine_initialize_for_monocular(curr_frm, cache)) {
@@ -330,6 +248,8 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
     }
 
     // try to initialize with the initial frame and the current frame
+    if (!initializer_)
+       spdlog::debug("error!! initialiser is empty");
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
     return initializer_->initialize(curr_frm, init_matches_, parallax_deg_thr_multiplier, initialize_focal_length, focal_length_was_modified);
@@ -439,31 +359,15 @@ bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data
     init_keyfrm->compute_bow(bow_vocab);
     curr_keyfrm->compute_bow(bow_vocab);
 
-
-bool map_check_d = check_keyframe_landmarks(map_db_);
-    if (!map_check_d)
-        int y = 0;
-
     // add the keyframes to the map DB
     map_db_->add_keyframe(init_keyfrm);
-    bool map_check_e = check_keyframe_landmarks(map_db_);
-    if (!map_check_e)
-        int y = 0;
-
     map_db_->add_keyframe(curr_keyfrm);
-    bool map_check_f = check_keyframe_landmarks(map_db_);
-    if (!map_check_f)
-        int y = 0;
 
     // update the frame statistics
     init_frm_.ref_keyfrm_ = init_keyfrm;
     curr_frm.ref_keyfrm_ = curr_keyfrm;
     map_db_->update_frame_statistics(init_frm_, false);
     map_db_->update_frame_statistics(curr_frm, false);
-
-bool map_check_c = check_keyframe_landmarks(map_db_);
-if (!map_check_c)
-        int y = 0;
 
     // assign 2D-3D associations
     std::vector<std::shared_ptr<data::landmark>> lms;
@@ -485,16 +389,6 @@ if (!map_check_c)
         // update the geometry
         lm->update_mean_normal_and_obs_scale_variance();
 
-        // temp
-        data::landmark::observations_t observations = lm->get_observations();
-        Vec3_t mean_normal = Vec3_t::Zero();
-        for (const auto& observation : observations) {
-            auto keyfrm = observation.first.lock();
-            if (!keyfrm)
-                int y = 0;
-        }
-        // temp
-
         // set the 2D-3D assocications to the current frame
         curr_frm.add_landmark(lm, curr_idx);
 
@@ -502,10 +396,6 @@ if (!map_check_c)
         map_db_->add_landmark(lm);
         lms.push_back(lm);
     }
-
-bool map_check_a = check_keyframe_landmarks(map_db_);
-if (!map_check_a)
-   int y = 0;
 
     bool indefinite_scale = true;
     for (const auto& id_mkr2d : init_keyfrm->markers_2d_) {
