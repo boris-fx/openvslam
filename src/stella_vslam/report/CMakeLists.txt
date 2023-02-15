@@ -4,9 +4,11 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/metrics.h
 			   ${CMAKE_CURRENT_SOURCE_DIR}/video_evaluation.h
 			   ${CMAKE_CURRENT_SOURCE_DIR}/plot_html.h
+			   ${CMAKE_CURRENT_SOURCE_DIR}/debug_printer.h
                ${CMAKE_CURRENT_SOURCE_DIR}/metrics.cc
 			   ${CMAKE_CURRENT_SOURCE_DIR}/video_evaluation.cc
-			   ${CMAKE_CURRENT_SOURCE_DIR}/plot_html.cc)
+			   ${CMAKE_CURRENT_SOURCE_DIR}/plot_html.cc
+			   ${CMAKE_CURRENT_SOURCE_DIR}/debug_printer.cc)
 
 if(BUILD_EXAMPLES)
     target_sources(${PROJECT_NAME} PUBLIC ${YAMLCPP_INCLUDE_DIRS})

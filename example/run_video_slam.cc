@@ -9,6 +9,7 @@
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/util/yaml.h"
 #include "stella_vslam/report/video_evaluation.h"
+#include "stella_vslam/report/debug_printer.h"
 #include "util/tinyxml2.h"
 #include "stella_vslam/solver.h"
 #include "stella_vslam/report/metrics.h"
@@ -532,9 +533,6 @@ void printKeyframeLandmarks(std::vector<std::shared_ptr<stella_vslam::data::keyf
     }
 }
 
-Eigen::IOFormat eigen_format(Eigen::StreamPrecision, Eigen::DontAlignCols, ", ", ", ", "", "", "[", "]");
-int g_print_precision = 3;
-
 template<typename... Args>
 void spdlog_always(const char *fmt, const Args &... args)
 {
@@ -551,14 +549,14 @@ void printSolveSummary(stella_vslam_bfx::solve const& shot_solve, bool full_resu
 
     if (full_results) {
         std::stringstream msg_str;
-        msg_str.precision(g_print_precision);
+        msg_str.precision(stella_vslam_bfx::debug_printer::precision);
         for (auto camPose : shot_solve.frame_to_camera)
             msg_str << std::fixed << "\tFrame " << camPose.first << " camera pose: "
-                << camPose.second.format(eigen_format) << std::endl;
+                << camPose.second.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
         
         msg_str << "\tWorld points\n";
         for (auto p : shot_solve.world_points)
-            msg_str << std::fixed << "\t\t" << p.format(eigen_format) << std::endl;
+            msg_str << std::fixed << "\t\t" << p.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
     
         spdlog_always("{}", msg_str.str());
     }
@@ -567,12 +565,12 @@ void printSolveSummary(stella_vslam_bfx::solve const& shot_solve, bool full_resu
 void display_frame(std::shared_ptr<stella_vslam_bfx::frame_display_data> frame_data)
 {
     std::stringstream msg_str;
-    msg_str.precision(g_print_precision);
+    msg_str.precision(stella_vslam_bfx::debug_printer::precision);
     msg_str << "Frame " << frame_data->frame << " solve results:\n";
-    msg_str << std::fixed << "\tCamera pose: " << frame_data->camera_pose.format(eigen_format) << std::endl;
+    msg_str << std::fixed << "\tCamera pose: " << frame_data->camera_pose.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
     msg_str << "\t" << frame_data->world_points.size() << "world points\n";
     for (auto p : frame_data->world_points)
-        msg_str << std::fixed << "\t\t" << p.format(eigen_format) << std::endl; 
+        msg_str << std::fixed << "\t\t" << p.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl; 
     
     spdlog_always("{}", msg_str.str());
 }
@@ -1134,7 +1132,7 @@ int main(int argc, char* argv[]) {
     stella_vslam_bfx::set_module_log_level(log_level_val); /// Required (on Windows anyway) to set the log level in the stella_vslam dynamic library
 
     if (print_precision->is_set())
-        g_print_precision = print_precision->value();
+        stella_vslam_bfx::debug_printer::precision = print_precision->value();
 
     // load configuration
     YAML::Node yaml_node;
