@@ -23,6 +23,7 @@
 #include "stella_vslam/publish/frame_publisher.h"
 #include "stella_vslam/util/converter.h"
 #include "stella_vslam/util/image_converter.h"
+#include <stella_vslam/util/plot_html.h>
 
 #include <thread>
 
@@ -424,7 +425,9 @@ bool system::loop_BA_is_running() const {
 }
 
 void system::run_loop_BA() {
+    spdlog::info("### system[{}] 1", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     global_optimizer_->run_loop_BA();
+    spdlog::info("### system[{}] 1", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
 }
 
 void system::abort_loop_BA() {

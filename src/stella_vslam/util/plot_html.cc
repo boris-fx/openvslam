@@ -402,3 +402,30 @@ void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs)
 bool disable_all_html_graph_export() {
    return true;
 }
+
+namespace stella_vslam_bfx {
+
+metrics_and_debugging* metrics_and_debugging::get_instance()
+{
+    if (!instance)
+        instance = new metrics_and_debugging();
+    return instance;
+}
+
+void metrics_and_debugging::set_thread_name(std::string name)
+{
+    std::thread::id id = std::this_thread::get_id();
+    auto f = thread_id_to_name.find(id);
+    if (f == thread_id_to_name.end())
+       thread_id_to_name[id] = name;
+}
+
+std::string metrics_and_debugging::thread_name() const
+{
+    auto f = thread_id_to_name.find(std::this_thread::get_id());
+    if (f != thread_id_to_name.end())
+        return f->second;
+    return "Unregistered";
+}
+
+} // namespace stella_vslam_bfx

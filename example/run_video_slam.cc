@@ -11,6 +11,7 @@
 #include "stella_vslam/util/video_evaluation.h"
 #include "util/tinyxml2.h"
 #include "stella_vslam/solver.h"
+#include "stella_vslam/metrics.h"
 
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/data/keyframe.h"
@@ -1006,6 +1007,12 @@ void mono_tracking_2(
 int main(int argc, char* argv[]) {
 #ifdef USE_STACK_TRACE_LOGGER
     backward::SignalHandling sh;
+#endif
+
+#if 1
+    std::string directory = "C:/MochaA/src/FocalEstimation/run_slam_test";
+    std::array<std::string, 3> image_filenames = { "Arc-11mm-DSCF5470.000.bmp", "Arc-16mm-DSCF5468.000.bmp", "FlameRoom.000.bmp"};
+    stella_vslam_bfx::metrics_html_test(directory, image_filenames);
 #endif
 
     // create options

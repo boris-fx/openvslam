@@ -12,6 +12,7 @@
 #include "stella_vslam/module/initializer.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
 #include "stella_vslam/util/video_evaluation.h"
+#include "stella_vslam/metrics.h"
 
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
@@ -106,6 +107,9 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
 
             // create new map if succeeded
             create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
+
+            stella_vslam_bfx::metrics& track_metrics = *stella_vslam_bfx::metrics::get_instance();
+            track_metrics.initialisation_frame_timestamps = {init_frm_.timestamp_, curr_frm.timestamp_ };
 
             // Try to improve the initialisation now that the focal length estimate has been improved
             if (refine_initialisation) {

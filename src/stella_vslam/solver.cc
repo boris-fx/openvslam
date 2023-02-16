@@ -7,9 +7,11 @@
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/landmark.h>
+#include <stella_vslam/util/plot_html.h>
 
 #include "type.h"
 #include "system.h"
+#include "metrics.h"
 
 using namespace stella_vslam;
 
@@ -100,6 +102,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     if (set_progress_)
         set_progress_(0);
 
+    const auto tp_start = std::chrono::steady_clock::now();
+
     // Track forwards to create the map
     for (int frame = begin; frame <= end; ++frame) {
         bool got_frame = get_frame_(frame, frame_image);
@@ -118,6 +122,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         if (cancel_ && cancel_())
             return false;
     }
+
+    const auto tp_after_forward_mapping = std::chrono::steady_clock::now();
 
     // Find the initialisation point (the first keyframe in the map)
     // Relocalise the tracker to the initialisation point's pose
@@ -154,36 +160,52 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
             return false;
     }
 
+    const auto tp_after_backward_mapping = std::chrono::steady_clock::now();
+
     // Wait for map optimisation after loop closing to finish
     while (slam_->loop_BA_is_running() || !slam_->mapping_module_is_enabled()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+
+    const auto tp_after_backward_mapping_and_loop_closing = std::chrono::steady_clock::now();
 
     if (set_stage_description_)
         set_stage_description_("Optimising");
 
     // Optimise the map
     if (true) {
+        spdlog::info("### solver[{}] 1", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
         slam_->run_loop_BA();
+        spdlog::info("### solver[{}] 2", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
         // Wait for map optimisation to finish
         while (slam_->loop_BA_is_running() || !slam_->mapping_module_is_enabled()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            spdlog::info("### solver[{}] 3", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            spdlog::info("### solver[{}] 4", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
         }
+        spdlog::info("### solver[{}] 5", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     }
+
+    const auto tp_after_bundle_adjust = std::chrono::steady_clock::now();
 
     if (set_stage_description_)
         set_stage_description_("Tracking");
 
     // Track forwards (without mapping) to calculate the non-keyframe camera positions
     slam_->disable_mapping_module();
+    int solved_frame_count(0), unsolved_frame_count(0);
     for (int frame = begin; frame <= end; ++frame) {
         bool got_frame = get_frame_(frame, frame_image);
-        if (!got_frame || frame_image.empty())
+        if (!got_frame || frame_image.empty()) {
+            ++unsolved_frame_count;
             continue;
+        }
 
         timestamp = videoFrameToTimestamp[frame];
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+
+        camera_pose ? ++solved_frame_count : ++unsolved_frame_count;
 
         // Store the camera pose
         if (camera_pose && final_solve)
@@ -195,6 +217,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         if (cancel_ && cancel_())
             return false;
     }
+
+    const auto tp_after_resection = std::chrono::steady_clock::now();
 
     // Store the camera intrinsics (lens properties)
     if (final_solve) {
@@ -215,6 +239,24 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         final_solve->world_points.clear();
         std::transform(all_landmarks.cbegin(), all_landmarks.cend(), std::back_inserter(final_solve->world_points),
                        [](const std::shared_ptr<data::landmark>& value) { return value->get_pos_in_world(); });
+    }
+
+    // Store the metrics
+    if (final_solve) {
+        metrics& track_metrics = *metrics::get_instance();
+
+        track_metrics.calculated_focal_length_x_pixels = final_solve->camera_lens->fx_;
+        track_metrics.solved_frame_count = solved_frame_count;
+        track_metrics.unsolved_frame_count = unsolved_frame_count;
+        track_metrics.num_points = final_solve->world_points.size();
+
+        timings& track_timings = track_metrics.track_timings;
+        track_timings.forward_mapping = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_forward_mapping - tp_start).count();
+        track_timings.backward_mapping = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_backward_mapping - tp_after_forward_mapping).count();
+        track_timings.loop_closing = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_backward_mapping_and_loop_closing - tp_after_backward_mapping).count();
+        track_timings.optimisation = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_bundle_adjust - tp_after_backward_mapping_and_loop_closing).count();
+        track_timings.tracking = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_resection - tp_after_bundle_adjust).count();
+
     }
 
     return true;

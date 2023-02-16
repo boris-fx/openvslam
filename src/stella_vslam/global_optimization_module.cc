@@ -6,6 +6,7 @@
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/match/fuse.h"
 #include "stella_vslam/util/converter.h"
+#include "stella_vslam/util/plot_html.h"
 
 #include <spdlog/spdlog.h>
 
@@ -117,6 +118,7 @@ bool global_optimization_module::loop_closure(const loop_closure_request& reques
 
 void global_optimization_module::run() {
     spdlog::info("start global optimization module");
+    stella_vslam_bfx::metrics_and_debugging::get_instance()->set_thread_name("Optimisation");
 
     is_terminated_ = false;
 
@@ -740,13 +742,19 @@ void global_optimization_module::terminate() {
 }
 
 bool global_optimization_module::loop_BA_is_running() const {
+    if (force_loop_bundle_)
+        spdlog::info("### global_optimization_module::loop_BA_is_running[{}] 1 force_loop_bundle_==true", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+    else
+        spdlog::info("### global_optimization_module::loop_BA_is_running[{}] 1 force_loop_bundle_==false", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     return loop_bundle_adjuster_->is_running() || force_loop_bundle_;
 }
 
 void global_optimization_module::run_loop_BA() {
+    spdlog::info("### global_optimization_module::run_loop_BA[{}] 1", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
+    spdlog::info("### global_optimization_module::run_loop_BA[{}] 2", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     force_loop_bundle_ = true;
-    spdlog::info("global optimization module force loop bundle requested");
+    spdlog::info("### global_optimization_module::run_loop_BA[{}] 3", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
 }
 
 void global_optimization_module::abort_loop_BA() {

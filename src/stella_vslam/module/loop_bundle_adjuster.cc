@@ -4,6 +4,7 @@
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/module/loop_bundle_adjuster.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
+#include "stella_vslam/util/plot_html.h"
 
 #include <thread>
 
@@ -25,7 +26,12 @@ void loop_bundle_adjuster::abort() {
 }
 
 bool loop_bundle_adjuster::is_running() const {
+    spdlog::info("### loop_bundle_adjuster::is_running[{}] 1", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     std::lock_guard<std::mutex> lock(mtx_thread_);
+    if (loop_BA_is_running_)
+        spdlog::info("### loop_bundle_adjuster::is_running[{}] 2 Running", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+    else
+        spdlog::info("### loop_bundle_adjuster::is_running[{}] 2 Not running", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     return loop_BA_is_running_;
 }
 
@@ -46,10 +52,13 @@ void print_keyfrms_to_check(std::list<std::shared_ptr<data::keyframe>> const& ke
 
 void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_keyfrm, int num_iter, bool general_bundle, bool* camera_was_modified) {
     spdlog::info("start loop bundle adjustment");
+    stella_vslam_bfx::metrics_and_debugging::get_instance()->set_thread_name("Loop Bundle");
 
     {
         std::lock_guard<std::mutex> lock(mtx_thread_);
+        spdlog::info("### loop_bundle_adjuster::optimise[{}] 1", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
         loop_BA_is_running_ = true;
+        spdlog::info("### loop_bundle_adjuster::optimise[{}] 2", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
         abort_loop_BA_ = false;
     }
 
@@ -69,8 +78,9 @@ void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_
 
         // if the loop BA was aborted, cannot update the map
         if (!ok) {
-            spdlog::info("abort loop bundle adjustment");
+            spdlog::info("### loop_bundle_adjuster::optimise[{}] 3", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
             loop_BA_is_running_ = false;
+            spdlog::info("### loop_bundle_adjuster::optimise[{}] 4", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
             abort_loop_BA_ = false;
             return;
         }
@@ -178,9 +188,9 @@ void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_
         }
 
         mapper_->resume();
+        spdlog::info("### loop_bundle_adjuster::optimise[{}] 5", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
         loop_BA_is_running_ = false;
-
-        spdlog::info("updated the map");
+        spdlog::info("### loop_bundle_adjuster::optimise[{}] 6", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
     }
 }
 

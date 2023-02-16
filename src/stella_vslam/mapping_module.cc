@@ -11,6 +11,7 @@
 #include "stella_vslam/module/two_view_triangulator.h"
 #include "stella_vslam/optimize/local_bundle_adjuster_factory.h"
 #include "stella_vslam/solve/essential_solver.h"
+#include "stella_vslam/util/plot_html.h"
 
 #include <thread>
 
@@ -59,6 +60,7 @@ void mapping_module::set_global_optimization_module(global_optimization_module* 
 
 void mapping_module::run() {
     spdlog::info("start mapping module");
+    stella_vslam_bfx::metrics_and_debugging::get_instance()->set_thread_name("Mapping");
 
     is_terminated_ = false;
     set_is_idle(true);
