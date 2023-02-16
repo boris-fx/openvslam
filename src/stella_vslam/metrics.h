@@ -112,7 +112,7 @@ protected:
     metrics(const metrics&) = default;
 };
 
-class metrics_copy {
+class STELLA_VSLAM_API metrics_copy {
 public:
     metrics_copy(metrics const& m);
     metrics const& operator()();
