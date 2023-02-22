@@ -10,7 +10,7 @@
 #include "stella_vslam/match/projection.h"
 #include "stella_vslam/module/local_map_updater.h"
 #include "stella_vslam/optimize/pose_optimizer_factory.h"
-#include "stella_vslam/util/plot_html.h"
+#include "stella_vslam/report/plot_html.h"
 
 #include <chrono>
 #include <unordered_map>

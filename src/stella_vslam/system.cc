@@ -23,7 +23,7 @@
 #include "stella_vslam/publish/frame_publisher.h"
 #include "stella_vslam/util/converter.h"
 #include "stella_vslam/util/image_converter.h"
-#include <stella_vslam/util/plot_html.h>
+#include <stella_vslam/report/plot_html.h>
 
 #include <thread>
 

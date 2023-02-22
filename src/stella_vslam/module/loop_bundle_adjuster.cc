@@ -4,7 +4,7 @@
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/module/loop_bundle_adjuster.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
-#include "stella_vslam/util/plot_html.h"
+#include "stella_vslam/report/plot_html.h"
 
 #include <thread>
 

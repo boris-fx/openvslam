@@ -3,7 +3,7 @@
 #include "stella_vslam/solve/triangulator.h"
 
 #include <fstream> // temp
-#include <stella_vslam/util/plot_html.h> // temp
+#include <stella_vslam/report/plot_html.h> // temp
 
 #include <spdlog/spdlog.h>
 

@@ -16,7 +16,7 @@
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/landmark.h>
-#include <stella_vslam/util/video_evaluation.h>
+#include <stella_vslam/report/video_evaluation.h>
 #include <stella_vslam/solver.h>
 
 namespace stella_vslam_bfx {

@@ -8,10 +8,10 @@
 #include "stella_vslam/config.h"
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/util/yaml.h"
-#include "stella_vslam/util/video_evaluation.h"
+#include "stella_vslam/report/video_evaluation.h"
 #include "util/tinyxml2.h"
 #include "stella_vslam/solver.h"
-#include "stella_vslam/metrics.h"
+#include "stella_vslam/report/metrics.h"
 
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/data/keyframe.h"

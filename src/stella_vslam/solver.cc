@@ -7,11 +7,11 @@
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/landmark.h>
-#include <stella_vslam/util/plot_html.h>
+#include <stella_vslam/report/plot_html.h>
+#include <stella_vslam/report/metrics.h>
 
 #include "type.h"
 #include "system.h"
-#include "metrics.h"
 
 using namespace stella_vslam;
 

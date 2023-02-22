@@ -11,8 +11,8 @@
 #include "stella_vslam/match/prematched.h"
 #include "stella_vslam/module/initializer.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
-#include "stella_vslam/util/video_evaluation.h"
-#include "stella_vslam/metrics.h"
+#include "stella_vslam/report/video_evaluation.h"
+#include "stella_vslam/report/metrics.h"
 
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
