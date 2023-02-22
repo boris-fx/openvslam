@@ -9,7 +9,10 @@
 #include <optional>
 #include <list>
 #include <array>
+#include <map>
 #include <set>
+
+#include <nlohmann/json_fwd.hpp>
 
 #include "stella_vslam/exports.h"
 
@@ -35,12 +38,25 @@ struct STELLA_VSLAM_API video_metadata {
     std::optional<double> groundTruthFilmBackHeightMM;   // Not used in tracking, but in evaluation
     std::optional<double> groundTruthFocalLengthMM;      // Not used in tracking, but in evaluation
 
+    nlohmann::json to_json() const;
+    bool from_json(const nlohmann::json& json);
+
     //
     std::optional<double> ground_truth_pixel_aspect_ratio() const;
     std::optional<double> ground_truth_focal_length_x_pixels() const;
     std::optional<double> calculated_focal_length_mm(double calculated_focal_length_x_pixels) const;
 
 
+};
+
+// A set of bools which can be used to trigger special testing modes which won't necessarily try to solve the camera
+struct STELLA_VSLAM_API debugging_setup {
+    bool debug_initialisation;
+
+    debugging_setup();
+
+    nlohmann::json to_json() const;
+    bool from_json(const nlohmann::json& json);
 };
 
 struct STELLA_VSLAM_API timings {
@@ -52,6 +68,9 @@ struct STELLA_VSLAM_API timings {
     double tracking; // aka. resection
 
     double total_time_sec() const;
+
+    nlohmann::json to_json() const;
+    bool from_json(const nlohmann::json& json);
 };
 
 enum tracking_problem_level {
@@ -67,6 +86,8 @@ public:
 
     // todo: add a multithreaded access mutex
 
+    debugging_setup debugging;
+
     video_metadata input_video_metadata;
 
     timings track_timings;
@@ -78,6 +99,9 @@ public:
     int num_points;
 
     std::set<int> initialisation_frames;
+
+    // Convert the timestamped metrics to frame numbers
+    void create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame);
 
     int total_frames() const;
     std::set<std::pair<std::string, tracking_problem_level>> problems() const;
@@ -93,7 +117,11 @@ public:
     static metrics* get_instance();
     void clear(); // clear for a new camera track
 
-    void save_html_report(std::string_view const& filename, std::string thumbnail_path) const;
+    nlohmann::json to_json() const;
+    bool from_json(const nlohmann::json& json);
+
+    void save_html_report(std::string_view const& filename, std::string thumbnail_path_relative) const;
+    void save_json_report(std::string_view const& filename) const;
     
     struct track_test_info {
         metrics const* m;

@@ -288,6 +288,7 @@ add_subdirectory(match)
 add_subdirectory(module)
 add_subdirectory(optimize)
 add_subdirectory(publish)
+add_subdirectory(report)
 add_subdirectory(solve)
 add_subdirectory(util)
 

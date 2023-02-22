@@ -56,7 +56,7 @@ void solver::set_cancel_callback(std::function<bool()> cancel) {
     cancel_ = cancel;
 }
 
-static std::tuple<std::shared_ptr<data::keyframe>, int> earliest_valid_keyframe(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms,
+static std::tuple<std::shared_ptr<data::keyframe>, std::optional<int>> earliest_valid_keyframe(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms,
                                                                                 std::map<double, int> const& timestampToVideoFrame) {
     if (!keyfrms.empty()) {
         std::shared_ptr<data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
@@ -74,7 +74,7 @@ static std::tuple<std::shared_ptr<data::keyframe>, int> earliest_valid_keyframe(
         if (f != timestampToVideoFrame.end())
             return {first_keyframe_data, f->second};
     }
-    return {nullptr, -1};
+    return {nullptr, {}};
 }
 
 double overall_progress_percent(double stage_progress, double stage_start_progress, double stage_end_progress) {
@@ -128,12 +128,17 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     // Find the initialisation point (the first keyframe in the map)
     // Relocalise the tracker to the initialisation point's pose
     auto [first_keyframe_data, first_keyframe] = earliest_valid_keyframe(slam_->map_db_->get_all_keyframes(), timestampToVideoFrame);
-    if (first_keyframe_data) {
-        bool resultRelocalise = slam_->relocalize_by_pose(first_keyframe_data->get_pose_wc());
-        if (resultRelocalise == false)
-            spdlog::warn("Failed to relocalise to first keyframe pose (video frame {})", first_keyframe);
+    if (!first_keyframe_data) {
+        spdlog::error("Failed to create any valid keyframes during initialialisation");
+        return false;
     }
-    spdlog::info("Relocalised to first keyframe pose (video frame {})", first_keyframe);
+    bool resultRelocalise = slam_->relocalize_by_pose(first_keyframe_data->get_pose_wc());
+    if (resultRelocalise == true)
+        spdlog::info("Relocalised to first keyframe pose (video frame {})", first_keyframe.value());
+    else {
+        spdlog::error("Failed to relocalise to first keyframe pose (video frame {})", first_keyframe.value());
+        return false;
+    }
 
     // Some bookkeeping
     std::vector<double> videoFrameToTimestamp(end+1, -1.0);
@@ -144,7 +149,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         set_stage_description_("Revisiting video");
 
     // Track backwards from the initialization point to finish the map
-    for (int frame = first_keyframe - 1; frame >= begin; --frame) {
+    for (int frame = first_keyframe.value() - 1; frame >= begin; --frame) {
         bool got_frame = get_frame_(frame, frame_image);
         if (!got_frame || frame_image.empty())
             continue;
@@ -153,7 +158,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
 
-        double stage_progress = double(first_keyframe - frame) / double(first_keyframe - begin);
+        double stage_progress = double(first_keyframe.value() - frame) / double(first_keyframe.value() - begin);
         if (set_progress_)
             set_progress_(overall_progress_percent(stage_progress, 0.4, 0.5));
         if (cancel_ && cancel_())
@@ -244,6 +249,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     // Store the metrics
     if (final_solve) {
         metrics& track_metrics = *metrics::get_instance();
+
+        // Convert the timestamped metrics to frame numbers
+        track_metrics.create_frame_metrics(timestampToVideoFrame);
 
         track_metrics.calculated_focal_length_x_pixels = final_solve->camera_lens->fx_;
         track_metrics.solved_frame_count = solved_frame_count;

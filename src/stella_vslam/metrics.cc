@@ -3,8 +3,72 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
+#include <iomanip>
+
+#include <nlohmann/json.hpp>
+namespace nlohmann {
+
+template<class T>
+nlohmann::json optional_to_json(const std::optional<T>& v) {
+    if (v.has_value())
+        return *v;
+    else
+        return nullptr;
+}
+
+template<class T>
+std::optional<T> optional_from_json(const nlohmann::json& j) {
+    if (j.is_null())
+        return std::nullopt;
+    else
+        return j.get<T>();
+}
+
+} // namespace nlohmann
 
 namespace stella_vslam_bfx {
+
+nlohmann::json video_metadata::to_json() const {
+
+    return {
+        {"name", name},
+        {"filename", filename},
+        {"gDriveID", gDriveID},
+
+        {"video_width", video_width},
+        {"video_height", video_height},
+        {"start_frame", start_frame},
+        {"end_frame", end_frame},
+        {"pixel_aspect_ratio_used", pixel_aspect_ratio_used},
+
+        {"knownFocalLengthXPixels", nlohmann::optional_to_json(knownFocalLengthXPixels)},
+        {"groundTruthFocalLengthXPixels", nlohmann::optional_to_json(groundTruthFocalLengthXPixels)},
+        {"groundTruthFilmBackWidthMM", nlohmann::optional_to_json(groundTruthFilmBackWidthMM)},
+        {"groundTruthFilmBackHeightMM", nlohmann::optional_to_json(groundTruthFilmBackHeightMM)},
+        {"groundTruthFocalLengthMM", nlohmann::optional_to_json(groundTruthFocalLengthMM)}
+    };
+}
+
+bool video_metadata::from_json(const nlohmann::json& json) {
+
+    name = json.at("name").get<std::string>();
+    filename = json.at("filename").get<std::string>();
+    gDriveID = json.at("gDriveID").get<std::string>();
+
+    video_width = json.at("video_width").get<int>();
+    video_height = json.at("video_height").get<int>();
+    start_frame = json.at("start_frame").get<int>();
+    end_frame = json.at("end_frame").get<int>();
+    pixel_aspect_ratio_used = json.at("pixel_aspect_ratio_used").get<double>();
+
+    knownFocalLengthXPixels = nlohmann::optional_from_json<double>(json.at("knownFocalLengthXPixels"));
+    groundTruthFocalLengthXPixels = nlohmann::optional_from_json<double>(json.at("groundTruthFocalLengthXPixels"));
+    groundTruthFilmBackWidthMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackWidthMM"));
+    groundTruthFilmBackHeightMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackHeightMM"));
+    groundTruthFocalLengthMM = nlohmann::optional_from_json<double>(json.at("groundTruthFocalLengthMM"));
+
+    return true;
+}
 
 std::optional<double> video_metadata::ground_truth_pixel_aspect_ratio() const
 {
@@ -34,6 +98,44 @@ std::optional<double> video_metadata::calculated_focal_length_mm(double calculat
 
 //////////////////////////////////////////////////////////////
 
+debugging_setup::debugging_setup()
+: debug_initialisation(false)
+{
+}
+
+nlohmann::json debugging_setup::to_json() const {
+    return {
+        {"debug_initialisation", debug_initialisation}
+    };
+}
+
+bool debugging_setup::from_json(const nlohmann::json& json) {
+    debug_initialisation = json.at("debug_initialisation").get<bool>();
+
+    return true;
+}
+//////////////////////////////////////////////////////////////
+
+nlohmann::json timings::to_json() const {
+    return {
+        {"forward_mapping", forward_mapping},
+        {"backward_mapping", backward_mapping},
+        {"loop_closing", loop_closing},
+        {"optimisation", optimisation},
+        {"tracking", tracking}
+    };
+}
+
+bool timings::from_json(const nlohmann::json& json) {
+    forward_mapping = json.at("forward_mapping").get<double>();
+    backward_mapping = json.at("backward_mapping").get<double>();
+    loop_closing = json.at("loop_closing").get<double>();
+    optimisation = json.at("optimisation").get<double>();
+    tracking = json.at("tracking").get<double>();
+
+    return true;
+}
+
 double timings::total_time_sec() const {
     return  forward_mapping + backward_mapping + loop_closing + optimisation + tracking;
 }
@@ -53,6 +155,42 @@ void metrics::clear() {
     if (instance) {
         delete instance;
         instance = nullptr;
+    }
+}
+
+nlohmann::json metrics::to_json() const {
+    return {
+        {"debugging", debugging.to_json()},
+        {"input_video_metadata", input_video_metadata.to_json()}, 
+        {"track_timings", track_timings.to_json()}, 
+        {"calculated_focal_length_x_pixels", calculated_focal_length_x_pixels}, 
+        {"solved_frame_count", solved_frame_count},
+        {"unsolved_frame_count", unsolved_frame_count},
+        {"num_points", num_points},
+        {"initialisation_frames", initialisation_frames},
+    };
+}
+
+bool metrics::from_json(const nlohmann::json& json) {
+
+    debugging.from_json(json.at("debugging"));
+    input_video_metadata.from_json(json.at("input_video_metadata"));
+    track_timings.from_json(json.at("track_timings"));
+    calculated_focal_length_x_pixels = json.at("calculated_focal_length_x_pixels").get<double>();
+    solved_frame_count = json.at("solved_frame_count").get<int>();
+    unsolved_frame_count = json.at("unsolved_frame_count").get<int>();
+    num_points = json.at("num_points").get<int>();
+    initialisation_frames = json.at("initialisation_frames").get<std::set<int>>();
+
+    return true;
+}
+
+void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame) {
+    initialisation_frames.clear();
+    for (auto const& timestamp : initialisation_frame_timestamps) {
+        auto f = timestamp_to_video_frame.find(timestamp);
+        if (f != timestamp_to_video_frame.end())
+            initialisation_frames.insert(f->second);
     }
 }
 
@@ -129,7 +267,7 @@ std::string to_string(std::set<T> const& s)
     return str;
 }
 
-void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_file) const {
+void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_file_relative) const {
     std::ofstream myfile;
     myfile.open(filename.data());
 
@@ -150,7 +288,9 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
 
     html << "<h1>" << input_video_metadata.name << "</h1>\n";
 
-    html << "<img src=\"" << thumbnail_file << "\" alt=\"Preview\" width=\"800\">\n ";
+    html << "<img src=\"" << thumbnail_file_relative << "\" alt=\"Preview\" width=\"800\">\n ";
+
+    html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " x pixels.</p>\n";
 
     html << "<h2>Parameters</h2>\n";
     if (input_video_metadata.knownFocalLengthXPixels)
@@ -215,8 +355,11 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
 
     // Timing
     html << "<h2> Timing</h2>\n";
-    double fps = (double(total_frames()) / track_timings.total_time_sec());
-    html << "<p> Total tracking time:" << track_timings.total_time_sec() << " sec (" << fps << "fps)</p>\n ";
+    std::optional<double> fps(total_frames() == 0 ? std::nullopt : std::optional<double>((double(total_frames()) / track_timings.total_time_sec())));
+    html << "<p> Total tracking time:" << track_timings.total_time_sec() << " sec";
+    if (fps)
+        html << " (" << fps.value() << "fps)";
+    html << "</p>\n ";
     html << "<p> Forward mapping: " << track_timings.forward_mapping << ".</p>\n";
     html << "<p> Backward mapping: " << track_timings.backward_mapping << ".</p>\n";
     html << "<p> Loop Closing: " << track_timings.loop_closing << ".</p>\n";
@@ -229,6 +372,11 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     myfile.close();
 }
 
+void metrics::save_json_report(std::string_view const& filename) const
+{
+    std::ofstream jsonFileStream(filename.data());
+    jsonFileStream << std::setw(4) << to_json() << std::endl;
+}
 
 void metrics::save_html_overview(std::string_view const& filename,
                                  std::list<track_test_info> const& track_test_info_list) {
@@ -342,18 +490,22 @@ void metrics::save_html_overview(std::string_view const& filename,
     for (auto const& test_info : track_test_info_list) {
         metrics const* m(test_info.m);
         bool fail(m->solved_frame_count == 0);
-        double fps = (double(m->total_frames()) / m->track_timings.total_time_sec());
+        std::optional<double> fps(m->total_frames() == 0 ? std::nullopt : std::optional<double>((double(m->total_frames()) / m->track_timings.total_time_sec())));
         std::string style = fail ? "style=\"background-color: #dc8c8c; .hover:background-color: #dc8c8c;\"" : "";
 
         html << "  <a role=\"row\" class=\"row\" href=\"" << test_info.html_filename << "\"" << style << ">\n";
         html << "    <div role=\"gridcell\" class=\"cell\">\n";
-        html << "      " << (fail ? "<fail>Fail</fail>" : "<pass>Pass</pass>") << "<img src=\"" << test_info.thumbnail_filename << "\" width=\"60\"><text>&nbsp;" << m->input_video_metadata.name << "</text>\n";
+        html << "      " << (fail ? "<fail>Fail</fail>" : "<pass>Pass</pass>") << "<img src=\"" << test_info.thumbnail_filename << "\" width=\"60\"><text>&nbsp;" << m->input_video_metadata.name;
+        html <<  " " << test_info.m->input_video_metadata.video_width << " x " << test_info.m->input_video_metadata.video_height << "</text>\n";
         html << "    </div>\n";
         html << "    <div role=\"gridcell\" class=\"cell\">\n";
         html << "      \n";
         html << "    </div>\n";
         html << "    <div role=\"gridcell\" class=\"cell\">\n";
-        html << "      <text>" << m->total_frames() << " frames, " << m->track_timings.total_time_sec() << " sec (" << fps << "fps)</text>\n ";
+        html << "      <text>" << m->total_frames() << " frames, " << m->track_timings.total_time_sec() << " sec";
+        if (fps)
+            html << " (" << fps.value() << "fps)";
+        html << "</text>\n ";
         html << "    </div>\n";
         html << "    <div role=\"gridcell\" class=\"cell\">\n";
         html << "      <text>" << m->num_points << " points</text>\n";
@@ -438,12 +590,30 @@ void metrics_html_test(std::string const& directory, std::array<std::string, 3> 
 
     metrics* the_metrics = metrics::get_instance();
 
+    // Images in directory
+    // Individual html in directory
+    // Overview in directory
+    std::array<std::string, 3> thumbnail_filenames_relative_html = image_filenames;
+    std::array<std::string, 3> thumbnail_filenames_relative_overview = image_filenames;
+
     for (int i = 0; i < 3; ++i) {
+        std::string html_filename_absolute = directory + "/report" + std::to_string(i + 1) + ".html";
+        std::string html_filename_relative_overview = "report" + std::to_string(i + 1) + ".html";
+
         fill_dummy_metrics(i, the_metrics);
         metrics_array[i] = std::make_unique<metrics_copy>(*the_metrics);
-        std::string html_filename = directory + "/report" + std::to_string(i + 1) + ".html ";
-        track_test_info_list.push_back({&metrics_array[i].get()->operator()(), image_filenames[i], html_filename});
-        the_metrics->save_html_report(html_filename, image_filenames[i]);
+        
+        track_test_info_list.push_back({&metrics_array[i].get()->operator()(), thumbnail_filenames_relative_overview[i], html_filename_relative_overview});
+        the_metrics->save_html_report(html_filename_absolute, thumbnail_filenames_relative_html[i]);
+
+        // write prettified JSON to another file
+        std::string json_filename = directory + "/report" + std::to_string(i + 1) + ".json";
+        std::ofstream out(json_filename);
+        out << std::setw(4) << the_metrics->to_json() << std::endl;
+
+        std::ifstream in(json_filename);
+        nlohmann::json j;
+        in >> j;
     }
     metrics::save_html_overview(directory + "/overview.html", track_test_info_list);
 }
