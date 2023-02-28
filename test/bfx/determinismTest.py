@@ -31,6 +31,7 @@ def fileDiff(file1, file2, printDiff):
     ignore = ( os.path.basename(file1), os.path.basename(file2), \
         'start .+ module$', \
         'terminate .+ module$', \
+        'resume .+ module$', \
         'tracking_module: start keyframe insertion', \
         'mapping_module::async_pause', \
         'global_optimization_module::run', \
