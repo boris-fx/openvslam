@@ -577,20 +577,21 @@ void display_frame(std::shared_ptr<stella_vslam_bfx::frame_display_data> frame_d
     spdlog_always("{}", msg_str.str());
 }
 
-void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
-                   const std::shared_ptr<stella_vslam::config>& cfg,
-                   const std::string& video_file_path,
-                   const std::string& mask_img_path,
-                   const unsigned int frame_skip,
-                   const unsigned int start_time,
-                   const bool no_sleep,
-                   const bool wait_loop_ba,
-                   const bool auto_term,
-                   const std::string& eval_log_dir,
-                   const std::string& map_db_path,
-                   const double start_timestamp,
-				       const std::string& planar_path, const std::string& mesh_path, 
-                   unsigned gridSize, YAML::Node yaml_node)
+int mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
+                  const std::shared_ptr<stella_vslam::config>& cfg,
+                  const std::string& video_file_path,
+                  const std::string& mask_img_path,
+                  const unsigned int frame_skip,
+                  const unsigned int start_time,
+                  const bool no_sleep,
+                  const bool wait_loop_ba,
+                  const bool auto_term,
+                  const std::string& eval_log_dir,
+                  const std::string& map_db_path,
+                  const double start_timestamp,
+                  const bool disable_gui,
+                  const std::string& planar_path, const std::string& mesh_path, 
+                  unsigned gridSize, YAML::Node yaml_node)
 {
     // load the mask image
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
@@ -618,7 +619,7 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
     auto video = cv::VideoCapture(video_file_path, cv::CAP_FFMPEG);
     if (!video.isOpened()) {
         std::cerr << "Unable to open the video." << std::endl;
-        return;
+        return EXIT_FAILURE;
     }
     video.set(0, start_time);
     std::vector<double> track_times;
@@ -847,24 +848,28 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
         bool ok = stella_vslam_bfx::create_evaluation_video(video_file_path, std::to_string((int)initialFocalLength), map_db, timestampToVideoFrame, &videoFrameToCamera);
         //bool ok = slam->camera_->autocalibration_parameters_.writeMapVideo(map_db, std::to_string((int)initialFocalLength));
 
-        // automatically close the viewer
+        if (!disable_gui) {
+            // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER
-        if (auto_term) {
-            viewer.request_terminate();
-        }
+            if (auto_term) {
+                viewer.request_terminate();
+            }
 #elif USE_SOCKET_PUBLISHER
-        if (auto_term) {
-            publisher.request_terminate();
-        }
+            if (auto_term) {
+                publisher.request_terminate();
+            }
 #endif
+        }
     });
 
-    // run the viewer in the current thread
+    if (!disable_gui) {
+        // run the viewer in the current thread
 #ifdef USE_PANGOLIN_VIEWER
-    viewer.run();
+        viewer.run();
 #elif USE_SOCKET_PUBLISHER
-    publisher.run();
+        publisher.run();
 #endif
+    }
 
     thread.join();
 
@@ -885,15 +890,18 @@ void mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
         }
     }
 
-    if (!map_db_path.empty()) {
-        // output the map database
-        slam->save_map_database(map_db_path);
-    }
-
     std::sort(track_times.begin(), track_times.end());
     const auto total_track_time = std::accumulate(track_times.begin(), track_times.end(), 0.0);
     std::cout << "median tracking time: " << track_times.at(track_times.size() / 2) << "[s]" << std::endl;
     std::cout << "mean tracking time: " << total_track_time / track_times.size() << "[s]" << std::endl;
+
+    if (!map_db_path.empty()) {
+        if (!slam->save_map_database(map_db_path)) {
+            return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
 }
 
 struct image_source {
@@ -1101,6 +1109,7 @@ int main(int argc, char* argv[]) {
     auto map_db_path_out = op.add<popl::Value<std::string>>("o", "map-db-out", "store a map database at this path after slam", "");
     auto disable_mapping = op.add<popl::Switch>("", "disable-mapping", "disable mapping");
     auto start_timestamp = op.add<popl::Value<double>>("t", "start-timestamp", "timestamp of the start of the video capture", 0.0);
+    auto disable_gui = op.add<popl::Switch>("", "disable-gui", "run without GUI");
     auto planar_file_path = op.add<popl::Value<std::string>>("l", "planar", "planar tracks file path", "");
     auto mesh_file_path = op.add<popl::Value<std::string>>("", "mesh", "mesh tracks file path", "");
     auto grid_size = op.add<popl::Value<unsigned int>>("g", "grid-size", "grid size for extending planar points", 5);
@@ -1193,6 +1202,7 @@ int main(int argc, char* argv[]) {
     }
 
     bool use_solver_interface(true);
+    int ret = EXIT_SUCCESS;
 
     if (use_solver_interface) {
         if (cfg->settings_.camera_setup_ != stella_vslam::camera::setup_type_t::Monocular)
@@ -1220,18 +1230,23 @@ int main(int argc, char* argv[]) {
         bool need_initialize = true;
         if (map_db_path_in->is_set()) {
             need_initialize = false;
-            //const auto path = fs::path(map_db_path_in->value());
-            //if (path.extension() == ".yaml") {
-            //    YAML::Node node = YAML::LoadFile(path);
-            //    for (const auto& map_path : node["maps"].as<std::vector<std::string>>()) {
-            //        slam->load_map_database(path.parent_path() / map_path);
-            //    }
-            //}
-            //else {
-            //    // load the prebuilt map
-            //    slam->load_map_database(path);
-            //}
-            slam->load_map_database(map_db_path_in->value());
+            // const auto path = fs::path(map_db_path_in->value());
+            // if (path.extension() == ".yaml") {
+            //     YAML::Node node = YAML::LoadFile(path);
+            //     for (const auto& map_path : node["maps"].as<std::vector<std::string>>()) {
+            //         if (!slam->load_map_database(path.parent_path() / map_path)) {
+            //             return EXIT_FAILURE;
+            //         }
+            //     }
+            // }
+            // else {
+            //     if (!slam->load_map_database(path)) {
+            //         return EXIT_FAILURE;
+            //     }
+            // }
+            if (!slam->load_map_database(map_db_path_in->value())) {
+                return EXIT_FAILURE;
+            }
         }
         slam->startup(need_initialize);
         if (disable_mapping->is_set()) {
@@ -1240,20 +1255,21 @@ int main(int argc, char* argv[]) {
 
         // run tracking
         if (slam->get_camera()->setup_type_ == stella_vslam::camera::setup_type_t::Monocular) {
-            mono_tracking(slam,
-                          cfg,
-                          video_file_path->value(),
-                          mask_img_path->value(),
-                          frame_skip->value(),
-                          start_time->value(),
-                          no_sleep->is_set(),
-                          wait_loop_ba->is_set(),
-                          auto_term->is_set(),
-                          eval_log_dir->value(),
-                          map_db_path_out->value(),
-                          timestamp,
-                          planar_file_path->value(), mesh_file_path->value(),
-                          grid_size->value(), yaml_node);
+            ret = mono_tracking(slam,
+                                cfg,
+                                video_file_path->value(),
+                                mask_img_path->value(),
+                                frame_skip->value(),
+                                start_time->value(),
+                                no_sleep->is_set(),
+                                wait_loop_ba->is_set(),
+                                auto_term->is_set(),
+                                eval_log_dir->value(),
+                                map_db_path_out->value(),
+                                timestamp,
+                                disable_gui->is_set(),
+                                planar_file_path->value(), mesh_file_path->value(),
+                                grid_size->value(), yaml_node);
 
             // // run tracking
             // if (cfg->camera_->setup_type_ == stella_vslam::camera::setup_type_t::Monocular) {
@@ -1275,5 +1291,5 @@ int main(int argc, char* argv[]) {
     if (settings)
         delete settings;
 
-    return EXIT_SUCCESS;
+    return ret;
 }
