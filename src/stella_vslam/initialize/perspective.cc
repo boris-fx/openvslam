@@ -6,6 +6,7 @@
 #include "stella_vslam/solve/homography_solver.h"
 #include "stella_vslam/solve/fundamental_solver.h"
 #include "stella_vslam/solve/fundamental_to_focal_length.h"
+#include "stella_vslam/report/metrics.h"
 
 #include <thread>
 
@@ -63,6 +64,8 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
     const auto cost_F = fundamental_solver.get_best_cost();
     const float rel_cost_H = cost_H / (cost_H + cost_F);
 
+    stella_vslam_bfx::metrics::initialisation_debug().submit_homography_fundamental_cost(cost_H, cost_F);
+
     // select a case according to the cost
     if (0.5 > rel_cost_H && homography_solver.solution_is_valid()) {
         spdlog::debug("reconstruct_with_H");
@@ -98,7 +101,14 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
         else {
             *focal_length_was_modified = false;
         }
-        return reconstruct_with_F(F_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
+        bool reconstruct_ok = reconstruct_with_F(F_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
+        
+        if (stella_vslam_bfx::metrics::initialisation_debug().active()) {
+            // Force initialisation to fail, so can collect more initialisation data
+            return false;
+        }
+
+        return reconstruct_ok;
     }
     else {
         return false;

@@ -22,8 +22,6 @@ struct LabelledCurve {
     std::vector<LabelToValue> dataValues;
 };
 
-void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& title, std::string_view yLabel, std::string_view xLabel, std::list<LabelledCurve> const& curves, bool linearXLabels, int graphWidth = 1200, int graphHeight = 600, bool drawVertexCircles = true);
-
 std::string floatLabelString(float v, int decimalPlaces)
 {
     if (decimalPlaces > 0) {
@@ -148,17 +146,15 @@ std::vector<std::vector<float>> generateColours(unsigned int n, float saturation
     return cols;
 }
 
-void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& title, std::string_view yLabel, std::string_view xLabel, std::list<LabelledCurve> const& curves, bool linearXLabels, int graphWidth, int graphHeight, bool drawVertexCircles) {
+void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::string_view xLabel, std::list<LabelledCurve> const& curves, bool linearXLabels, int graphWidth, int graphHeight, bool drawVertexCircles, std::optional<double> hardMaxY) {
    int valueNameSize(200); // Size of text xLabel
    int labelSize(200); // size of text dataValues[i].label - todo calculate based on string length - maybe use 'textLength' attriubute to force size
    int legendWidth(400);
 
    int width(graphWidth), height(graphHeight);
 
-   if (!title.empty())
-      html << "<h3>" << title << "</h3>" << std::endl;
 
-   html << "<svg height=\"" << height << "\" width=\"" << width + legendWidth << "\">" << std::endl;
+   svg << "<svg height=\"" << height << "\" width=\"" << width + legendWidth << "\">" << std::endl;
 
    // Horizontal axis (x-value 0, 1, 2, 3...)
    int xCanvas0(30);
@@ -183,8 +179,8 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
       }
 
       int xCanvasEnd(width - valueNameSize);
-      html << "<text x=\"" << xCanvasEnd + 1 << "\" y=\"" << yCanvas0 << "\" fill=\"black\" >" << xLabel << "</text>" << std::endl;
-      html << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvasEnd << "\" y2=\"" << yCanvas0 << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
+      svg << "<text x=\"" << xCanvasEnd + 1 << "\" y=\"" << yCanvas0 << "\" fill=\"black\" >" << xLabel << "</text>" << std::endl;
+      svg << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvasEnd << "\" y2=\"" << yCanvas0 << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
       xCanvasInc = (float(xCanvasEnd - xCanvas0) / float(labels.size() + 1));
       int subsampling(1);
       if (labels.size() > 20) subsampling = 2;
@@ -206,10 +202,10 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
          //if (tick.second.size()>=2) textOffset = -12;
          //if (tick.second.size()>=3) textOffset = -16;
 
-         html << "<line x1=\"" << tick.first << "\" y1=\"" << yCanvas0 << "\" x2=\"" << tick.first << "\" y2=\"" << yCanvas0 + 5 << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
+         svg << "<line x1=\"" << tick.first << "\" y1=\"" << yCanvas0 << "\" x2=\"" << tick.first << "\" y2=\"" << yCanvas0 + 5 << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
          float tx(tick.first + textOffset);
          float ty(yCanvas0 + 7);
-         html << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << ", " << ty << ")\">" << tick.second << "</text>" << std::endl;
+         svg << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << ", " << ty << ")\">" << tick.second << "</text>" << std::endl;
       }
    }
    else // linearLabels
@@ -243,8 +239,8 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
       //}
 
       int xCanvasEnd(width - valueNameSize);
-      html << "<text x=\"" << xCanvasEnd + 1 << "\" y=\"" << yCanvas0 << "\" fill=\"black\" >" << xLabel << "</text>" << std::endl;
-      html << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvasEnd << "\" y2=\"" << yCanvas0 << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
+      svg << "<text x=\"" << xCanvasEnd + 1 << "\" y=\"" << yCanvas0 << "\" fill=\"black\" >" << xLabel << "</text>" << std::endl;
+      svg << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvasEnd << "\" y2=\"" << yCanvas0 << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
       xCanvasInc = (float(xCanvasEnd - xCanvas0) / ((maxXValue - minXValue)*1.02f));
       xStartValue = minXValue - 0.01f*(maxXValue - minXValue);
 
@@ -271,10 +267,10 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
 
          float xPos(xCanvas0 + (tick.first - xStartValue)*xCanvasInc);
 
-         html << "<line x1=\"" << xPos << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xPos << "\" y2=\"" << yCanvas0 + 5 << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
+         svg << "<line x1=\"" << xPos << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xPos << "\" y2=\"" << yCanvas0 + 5 << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
          float tx(xPos + textOffset);
          float ty(yCanvas0 + 7);
-         html << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << ", " << ty << ")\">" << tick.second << "</text>" << std::endl;
+         svg << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << ", " << ty << ")\">" << tick.second << "</text>" << std::endl;
       }
    }
 
@@ -283,8 +279,8 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
       int approxTickCountY(10);
 
       int yCanvasEnd(yLabel.empty() ? 0 : 25); // top
-      html << "<text x=\"" << xCanvas0 - 25 << "\" y=\"" << yCanvasEnd - 10 << "\" fill=\"black\" >" << yLabel << "</text>" << std::endl;
-      html << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvas0 << "\" y2=\"" << yCanvasEnd << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
+      svg << "<text x=\"" << xCanvas0 - 25 << "\" y=\"" << yCanvasEnd - 10 << "\" fill=\"black\" >" << yLabel << "</text>" << std::endl;
+      svg << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvas0 << "\" y2=\"" << yCanvasEnd << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
 
       // Get the max y value
       float maxYValue(0);
@@ -292,6 +288,8 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
          for (auto const& dataValue : curve.dataValues)
             if (maxYValue < dataValue.value)
                maxYValue = dataValue.value;
+      if (hardMaxY && maxYValue > hardMaxY.value())
+          maxYValue = hardMaxY.value();
       float minYValue(0);
 
       std::list<std::pair<float, std::string>> ticks = tickMarksForValueRange(minYValue, maxYValue, approxTickCountY);
@@ -307,8 +305,8 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
 
          float tickFirst(yCanvas0 + tick.first*yCanvasInc);
 
-         html << "<line x1=\"" << xCanvas0 - 5 << "\" y1=\"" << tickFirst << "\" x2=\"" << xCanvas0 << "\" y2=\"" << tickFirst << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
-         html << "<text x=\"" << xCanvas0 + textOffset - 2 << "\" y=\"" << tickFirst + 5 << "\" fill=\"black\" >" << tick.second << "</text>" << std::endl;
+         svg << "<line x1=\"" << xCanvas0 - 5 << "\" y1=\"" << tickFirst << "\" x2=\"" << xCanvas0 << "\" y2=\"" << tickFirst << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
+         svg << "<text x=\"" << xCanvas0 + textOffset - 2 << "\" y=\"" << tickFirst + 5 << "\" fill=\"black\" >" << tick.second << "</text>" << std::endl;
       }
    }
 
@@ -334,15 +332,15 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
       }
 
       // Plot the curve as a polyline
-      html << "<polyline points=\"";
+      svg << "<polyline points=\"";
       for (auto const& xy : xyList)
-         html << xy.first << "," << xy.second << " ";
-      html << "\" style=\"fill:none;stroke:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");stroke-width:3\" />" << std::endl;
+          svg << xy.first << "," << xy.second << " ";
+      svg << "\" style=\"fill:none;stroke:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");stroke-width:3\" />" << std::endl;
 
       // Draw a circle on each vertex of the curve
       if (drawVertexCircles)
          for (auto const& xy : xyList)
-            html << "<circle cx = \"" << xy.first << "\" cy = \"" << xy.second << "\" r = \"3\" fill = rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ") />" << std::endl;
+              svg << "<circle cx = \"" << xy.first << "\" cy = \"" << xy.second << "\" r = \"3\" fill = rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ") />" << std::endl;
 
       ++c;
    }
@@ -351,20 +349,61 @@ void addLabelToValueGraphToHtml(std::stringstream& html, std::string const& titl
    int y(30);
    c = 0;
    for (auto const& curve : curves) {
-      html << "<text x=\"" << width << "\" y=\"" << y << "\" style=\"fill:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");\">" << curve.name << "</text>" << std::endl;
+       svg << "<text x=\"" << width << "\" y=\"" << y << "\" style=\"fill:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");\">" << curve.name << "</text>" << std::endl;
       ++c;
       y += 30;
    }
 
-   html << "Sorry, your browser does not support inline SVG." << std::endl;
-   html << "</svg>" << std::endl;
+   svg << "Sorry, your browser does not support inline SVG." << std::endl;
+   svg << "</svg>" << std::endl;
 }
 
-using Curve = std::pair<std::string, std::map<double, double>>;
-using Graph = std::tuple<std::string, std::string, std::set<Curve>>;
+void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
+{
+   auto [xLabel, yLabel, curves, hardMaxY] = graph;
+   std::list<LabelledCurve> labelled_curves;
+
+   for (auto const& curve : curves) {
+      LabelledCurve labelled_curve;
+      labelled_curve.name = curve.first;
+      labelled_curve.dataValues.resize(curve.second.size());
+      int i(0);
+      for (auto const& vertex : curve.second) {
+            labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
+            labelled_curve.dataValues[i].value = (float)vertex.second;
+            //labelled_curve.dataValues[i].label = std::string(); // the x-values can also have text labels
+            ++i;
+      }
+      labelled_curves.push_back(labelled_curve);
+   }
+   bool linearXLabels(true);
+
+   write_graph_as_svg(svg, yLabel, xLabel, labelled_curves, linearXLabels, 1200, 600, true, hardMaxY);
+
+}
+
+
+html_file::html_file(std::string_view const& filename) {
+    myfile.open(filename.data());
+    html << "<!DOCTYPE html><html><head></head><body>";
+}
+
+html_file::~html_file()
+{
+    html << "</body></html>";
+    myfile << html.str();
+    myfile.close();
+}
 
 void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs)
 {
+#if 1
+    html_file html(filename);
+    for (auto const& graph : graphs)
+        write_graph_as_svg(html.html, graph);
+    html << "<p>text</p>";
+#else
+
    std::ofstream myfile;
    myfile.open(filename.data());
 
@@ -373,59 +412,40 @@ void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs)
 
    for (auto const& graph : graphs) {
     
-      auto [xLabel, yLabel, curves] = graph; 
-      std::list<LabelledCurve> labelled_curves;
+      //auto [xLabel, yLabel, curves] = graph; 
+      //std::list<LabelledCurve> labelled_curves;
 
-      for (auto const& curve : curves) {
-         LabelledCurve labelled_curve;
-         labelled_curve.name = curve.first;
-         labelled_curve.dataValues.resize(curve.second.size());
-         int i(0);
-         for (auto const& vertex : curve.second) {
-            labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
-            labelled_curve.dataValues[i].value = (float)vertex.second;
-            //labelled_curve.dataValues[i].label = std::string();
-            ++i;
-         }
-         labelled_curves.push_back(labelled_curve);
-      }
-      bool linearXLabels(true);
-      addLabelToValueGraphToHtml(html, yLabel, "", xLabel, labelled_curves, linearXLabels, 1200, 600, true);
+      //for (auto const& curve : curves) {
+      //   LabelledCurve labelled_curve;
+      //   labelled_curve.name = curve.first;
+      //   labelled_curve.dataValues.resize(curve.second.size());
+      //   int i(0);
+      //   for (auto const& vertex : curve.second) {
+      //      labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
+      //      labelled_curve.dataValues[i].value = (float)vertex.second;
+      //      //labelled_curve.dataValues[i].label = std::string();
+      //      ++i;
+      //   }
+      //   labelled_curves.push_back(labelled_curve);
+      //}
+      //bool linearXLabels(true);
+
+      ////html << "<h3>" << title << "</h3>" << std::endl;
+
+      //write_graph_as_svg(html, yLabel, xLabel, labelled_curves, linearXLabels, 1200, 600, true);
+
+      write_graph_as_svg(html, graph);
    }
 
    html << "</body></html>";
 
    myfile << html.str();
    myfile.close();
+#endif
+
 }
 
 bool disable_all_html_graph_export() {
    return true;
 }
 
-namespace stella_vslam_bfx {
-
-metrics_and_debugging* metrics_and_debugging::get_instance()
-{
-    if (!instance)
-        instance = new metrics_and_debugging();
-    return instance;
-}
-
-void metrics_and_debugging::set_thread_name(std::string name)
-{
-    std::thread::id id = std::this_thread::get_id();
-    auto f = thread_id_to_name.find(id);
-    if (f == thread_id_to_name.end())
-       thread_id_to_name[id] = name;
-}
-
-std::string metrics_and_debugging::thread_name() const
-{
-    auto f = thread_id_to_name.find(std::this_thread::get_id());
-    if (f != thread_id_to_name.end())
-        return f->second;
-    return "Unregistered";
-}
-
-} // namespace stella_vslam_bfx

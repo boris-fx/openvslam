@@ -1,9 +1,7 @@
 #include "stella_vslam/data/frame.h"
 #include "stella_vslam/initialize/base.h"
 #include "stella_vslam/solve/triangulator.h"
-
-#include <fstream> // temp
-#include <stella_vslam/report/plot_html.h> // temp
+#include <stella_vslam/report/metrics.h>
 
 #include <spdlog/spdlog.h>
 
@@ -80,16 +78,9 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
                  num_similars, acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI, init_parallax.at(max_num_valid_index), std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI), parallax_deg_thr_multiplier * parallax_deg_thr_,
        num_triangulated_pts.at(max_num_valid_index));
 
-    if (false) { // test
-        static int frame_hit(0);
-        ++frame_hit; // frame
-        static std::map<double, double> frame_to_parallax;
-        frame_to_parallax[frame_hit] = acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI;
-        if (frame_hit == 18 && !disable_all_html_graph_export()) {
-            write_graphs_html("frame_parallax.html",
-                              {std::make_tuple("Baseline(frames)", "Parallax\xB0", std::set<Curve>({{"Parallax", frame_to_parallax}}))});
-        }
-        return false;
+    if (stella_vslam_bfx::metrics::initialisation_debug().active()) {
+        double parallax(acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI);
+        stella_vslam_bfx::metrics::initialisation_debug().submit_parallax_debugging(parallax);
     }
 
     if (1 < num_similars) {

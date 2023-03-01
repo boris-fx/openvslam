@@ -146,6 +146,10 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     auto [first_keyframe_data, first_keyframe] = earliest_valid_keyframe(slam_->map_db_->get_all_keyframes(), timestampToVideoFrame);
     if (!first_keyframe_data) {
         spdlog::error("Failed to create any valid keyframes during initialialisation");
+        
+        metrics& track_metrics = *metrics::get_instance();
+        track_metrics.create_frame_metrics(timestampToVideoFrame);
+        
         return false;
     }
     bool resultRelocalise = slam_->relocalize_by_pose(first_keyframe_data->get_pose_wc());
@@ -197,16 +201,16 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Optimise the map
     if (true) {
-        spdlog::info("### solver[{}] 1", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+        spdlog::info("### solver[{}] 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         slam_->run_loop_BA();
-        spdlog::info("### solver[{}] 2", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+        spdlog::info("### solver[{}] 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         // Wait for map optimisation to finish
         while (slam_->loop_BA_is_running() || !slam_->mapping_module_is_enabled()) {
-            spdlog::info("### solver[{}] 3", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+            spdlog::info("### solver[{}] 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
             std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-            spdlog::info("### solver[{}] 4", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+            spdlog::info("### solver[{}] 4", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         }
-        spdlog::info("### solver[{}] 5", stella_vslam_bfx::metrics_and_debugging::get_instance()->thread_name());
+        spdlog::info("### solver[{}] 5", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     }
 
     const auto tp_after_bundle_adjust = std::chrono::steady_clock::now();

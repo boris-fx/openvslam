@@ -10,6 +10,7 @@
 #include <stella_vslam/camera/radial_division.h>
 #include <stella_vslam/data/keyframe_autocalibration_wrapper.h>
 #include <stella_vslam/report/plot_html.h>
+#include <stella_vslam/report/metrics.h>
 
 using namespace stella_vslam;
 
@@ -181,8 +182,6 @@ double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camer
                                       [](const auto& a, const auto& b) { return a.second < b.second; });
     double focal_length_x_pixels_0 = error_min->first;
 
-    spdlog::info("Initial focal length estimate: {}", focal_length_x_pixels_0);
-
     auto before = error_min;
     if (before != focal_length_to_error.begin())
        --before;
@@ -210,48 +209,35 @@ double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camer
                                         [](const auto& a, const auto& b) { return a.second < b.second; });
     double focal_length_x_pixels_2 = error_min_2->first;
 
-    spdlog::info("Initial focal length estimate: {} -> {}", focal_length_x_pixels_0, focal_length_x_pixels_2);
-
-    double delta_f(1);
-    double error_plus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 + delta_f);
-    double error_minus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 - delta_f);
-    double de_df_plus = (error_plus - error_min->second) / delta_f;
-    double de_df_minus = (error_min->second - error_minus) / delta_f;
-
     double error_for_max_focal_length = focal_length_to_error.rbegin()->second;
-    double error_min_value = error_min->second;
-
     *focal_length_estimate_is_stable = error_for_max_focal_length > 0.04; // to be explored more
 
-    static int frame_hit(0);
-    ++frame_hit; // frame_hit=7 for matching between frames 0 and 7
-    static std::map<double, double> frame_to_error_for_max_focal_length;
-    static std::map<double, double> frame_to_min_error;
-    static std::map<double, double> frame_to_best_focal_length;
-    static std::map<double, double> frame_to_best_focal_length_bisection;
-    static std::map<double, double> frame_to_de_df_plus;
-    static std::map<double, double> frame_to_de_df_minus;
+    spdlog::info("Initial focal length estimate: nearest {}, bisection {} (stability {})", focal_length_x_pixels_0, focal_length_x_pixels_2, error_for_max_focal_length);
 
-    frame_to_error_for_max_focal_length[frame_hit] = error_for_max_focal_length;
-    frame_to_min_error[frame_hit] = error_min_value;
-    frame_to_best_focal_length[frame_hit] = focal_length_x_pixels_2;
-    frame_to_best_focal_length_bisection[frame_hit] = focal_length_estimate_bisection;
-    frame_to_de_df_plus[frame_hit] = -de_df_plus;
-    frame_to_de_df_minus[frame_hit] = de_df_minus;
+    if (metrics::initialisation_debug().active()) {
 
-    if (frame_hit == 18 && !disable_all_html_graph_export()) {
-        write_graphs_html("baseline_focal_length_error.html",
-                          {std::make_tuple("Baseline(frames)", "Error at tiny focal length", std::set<Curve>({{"Error", frame_to_error_for_max_focal_length}})),
-                           std::make_tuple("Baseline(frames)", "Min Geometric Error", std::set<Curve>({{"Error", frame_to_min_error}})),
-                           std::make_tuple("Baseline(frames)", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", frame_to_de_df_plus}, {"-dE/dF(-)", frame_to_de_df_minus}})),
-                           std::make_tuple("Baseline(frames)", "Best Focal Length", std::set<Curve>({{"Focal length", frame_to_best_focal_length}, {"Focal length bisection", frame_to_best_focal_length_bisection}}))});
+        double delta_f(1);
+        double error_plus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 + delta_f);
+        double error_minus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 - delta_f);
+        double de_df_plus = -(error_plus - error_min->second) / delta_f;
+        double de_df_minus = (error_min->second - error_minus) / delta_f;
+        double error_min_value = error_min->second;
+        double min_error_percent_max_focal_error = 100.0 * error_min_value / error_for_max_focal_length;
+
+        metrics::initialisation_debug().submit_fundamental_to_focal_length_debugging(error_for_max_focal_length,
+                                                                                     error_min_value,
+                                                                                     focal_length_x_pixels_2,
+                                                                                     focal_length_estimate_bisection,
+                                                                                     de_df_plus,
+                                                                                     de_df_minus,
+                                                                                     min_error_percent_max_focal_error,
+                                                                                     focal_length_to_error,
+                                                                                     fov_to_error);
+
+        //*focal_length_estimate_is_stable = false; // Make initialisation fail, so we can collect more initialisation data
+        *focal_length_estimate_is_stable = true; // Try to make initialisation succeed, so we can collect parallax and fail a bit later to collect more initialisation data
     }
 
-    if (!disable_all_html_graph_export()) {
-       write_graphs_html("focal_length_error_0_" + std::to_string(frame_hit) + "_" + std::to_string((int)(focal_length_x_pixels_2 + 0.5)) + ".html",
-                         {std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({{"Error", focal_length_to_error}})),
-                          std::make_tuple("FOV", "Geometric Error", std::set<Curve>({{"Error", fov_to_error}}))});
-    }
     return focal_length_x_pixels_2;
 }
 

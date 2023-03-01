@@ -16,6 +16,8 @@
 
 #include "stella_vslam/exports.h"
 
+#include "initialisation_debugging.h"
+
 namespace stella_vslam_bfx {
 
 struct STELLA_VSLAM_API video_metadata {
@@ -114,8 +116,11 @@ public:
     
     metrics& operator=(const metrics&) = delete;
 
+
     static metrics* get_instance();
     void clear(); // clear for a new camera track
+
+    static initialisation_debugging& initialisation_debug();
 
     nlohmann::json to_json() const;
     bool from_json(const nlohmann::json& json);
@@ -133,6 +138,8 @@ public:
 
 protected:
     friend class metrics_copy;
+
+    initialisation_debugging initialisation_debug_object;
 
     inline static metrics* instance{nullptr};
     metrics() = default;

@@ -4,6 +4,8 @@
 #include "socket_publisher/publisher.h"
 #endif
 
+#include <filesystem>
+
 #include "stella_vslam/system.h"
 #include "stella_vslam/config.h"
 #include "stella_vslam/camera/base.h"
@@ -950,6 +952,12 @@ void mono_tracking_2(
                    const std::string& planar_path, const std::string& mesh_path,
                    unsigned gridSize, YAML::Node yaml_node,
                    bool print_frames, bool print_results) {
+
+    bool const debug_initialisation(false);
+
+    if (debug_initialisation)
+        stella_vslam_bfx::metrics::get_instance()->debugging.debug_initialisation = true;
+
     // load the mask image
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
 
@@ -995,12 +1003,28 @@ void mono_tracking_2(
     // run slam in another thread
     std::thread thread([&]() {
 
+
+       stella_vslam_bfx::metrics::get_instance()->input_video_metadata.groundTruthFocalLengthXPixels = initialFocalLength;
+        stella_vslam_bfx::metrics::get_instance()->input_video_metadata.name = "run_view_slam metrics";
+
        // Run the solve
        solver.track_frame_range(0, 100, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
 
        printSolveSummary(solve, print_results);
 
+
        bool save_video_ok = stella_vslam_bfx::create_evaluation_video(video_file_path, "solve", solve);
+
+       if (debug_initialisation) {
+           std::filesystem::path fsVideo(video_file_path);
+           std::string init_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_init.html";
+           
+
+
+           stella_vslam_bfx::metrics::initialisation_debug().save_html_report(init_html_filename, initialFocalLength);
+           std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
+           stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "");
+       }
 
     // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER
@@ -1048,8 +1072,7 @@ int main(int argc, char* argv[]) {
 #ifdef USE_STACK_TRACE_LOGGER
     backward::SignalHandling sh;
 #endif
-
-#if 1
+#if 0 // debug_initialisation
     std::string directory = "C:/MochaA/src/FocalEstimation/run_slam_test";
     std::array<std::string, 3> image_filenames = { "Arc-11mm-DSCF5470.000.bmp", "Arc-16mm-DSCF5468.000.bmp", "FlameRoom.000.bmp"};
     stella_vslam_bfx::metrics_html_test(directory, image_filenames);

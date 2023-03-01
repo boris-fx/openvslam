@@ -1,36 +1,32 @@
+/** \file
+ * \brief Camera tracking metrics recorded during and ater tracking
+ *
+ * Copyright (c) 2023 Boris Fx Inc. All rights reserved
+ */
 #pragma once
 
 #include <string>
 #include <map>
 #include <set>
-#include <thread>
+#include <sstream>
+#include <fstream>
+#include <optional>
 
 using Curve = std::pair<std::string, std::map<double, double>>; /// Data name, map from x value to y
-using Graph = std::tuple<std::string, std::string, std::set<Curve>>; /// x label, y label, set of curves
+using Graph = std::tuple<std::string, std::string, std::set<Curve>, std::optional<double>>; /// x label, y label, set of curves, hard max Y
 
 void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs);
 
+void write_graph_as_svg(std::stringstream& svg, Graph const& graph);
+
 bool disable_all_html_graph_export(); /// Temporary - not sure where to control this
 
-namespace stella_vslam_bfx {
-
-class metrics_and_debugging {
-private:
-    inline static metrics_and_debugging* instance{nullptr};
-    metrics_and_debugging() = default;
-    ~metrics_and_debugging() = default;
-
-    std::map<std::thread::id, std::string> thread_id_to_name; // protect with mutex
-
+class html_file {
 public:
-
-    std::string thread_name() const;
-    void set_thread_name(std::string name);
-
-    metrics_and_debugging(const metrics_and_debugging&) = delete;
-    metrics_and_debugging& operator=(const metrics_and_debugging&) = delete;
-
-    static metrics_and_debugging* get_instance();
+    html_file(std::string_view const& filename);
+    ~html_file();
+    template<typename T> void operator<<(T const& data) { html << data; }
+    std::stringstream html;
+protected:
+    std::ofstream myfile;
 };
-
-} // namespace stella_vslam_bfx

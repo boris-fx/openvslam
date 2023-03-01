@@ -10,7 +10,7 @@
 #include "stella_vslam/match/projection.h"
 #include "stella_vslam/module/local_map_updater.h"
 #include "stella_vslam/optimize/pose_optimizer_factory.h"
-#include "stella_vslam/report/plot_html.h"
+#include "stella_vslam/report/initialisation_debugging.h"
 
 #include <chrono>
 #include <unordered_map>
@@ -138,7 +138,7 @@ void tracking_module::reset() {
 std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
     
     //spdlog::info("tracking_module::feed_frame {} {}", curr_frm.id_, curr_frm.timestamp_);
-    stella_vslam_bfx::metrics_and_debugging::get_instance()->set_thread_name("Tracking");
+    stella_vslam_bfx::thread_dubugging::get_instance()->set_thread_name("Tracking");
 
     // check if pause is requested
     pause_if_requested();

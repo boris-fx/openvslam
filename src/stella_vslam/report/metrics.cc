@@ -158,6 +158,12 @@ void metrics::clear() {
     }
 }
 
+initialisation_debugging& metrics::initialisation_debug() {
+    metrics* m = get_instance();
+    m->initialisation_debug_object.is_active = m->debugging.debug_initialisation;
+    return m->initialisation_debug_object;
+}
+
 nlohmann::json metrics::to_json() const {
     return {
         {"debugging", debugging.to_json()},
@@ -192,6 +198,9 @@ void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_vid
         if (f != timestamp_to_video_frame.end())
             initialisation_frames.insert(f->second);
     }
+
+    initialisation_debug_object.create_frame_data(timestamp_to_video_frame);
+
 }
 
 int metrics::total_frames() const
@@ -291,6 +300,11 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "<img src=\"" << thumbnail_file_relative << "\" alt=\"Preview\" width=\"800\">\n ";
 
     html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " x pixels.</p>\n";
+
+    if (debugging.debug_initialisation) {
+        html << "<h2>Initialisation debug</h2>\n";
+        initialisation_debug_object.add_to_html(html, input_video_metadata.ground_truth_focal_length_x_pixels());
+    }
 
     html << "<h2>Parameters</h2>\n";
     if (input_video_metadata.knownFocalLengthXPixels)

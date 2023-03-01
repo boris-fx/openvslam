@@ -256,6 +256,12 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
        spdlog::debug("error!! initialiser is empty");
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
+
+    stella_vslam_bfx::metrics::initialisation_debug().current_init_frames = {init_frm_.timestamp_, curr_frm.timestamp_}; // store the timestamps of the two frames
+    stella_vslam_bfx::metrics::initialisation_debug().submit_feature_match_debugging(num_matches);
+    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[init_frm_.timestamp_] = init_frm_.frm_obs_.num_keypts_;
+    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[curr_frm.timestamp_] = curr_frm.frm_obs_.num_keypts_;
+
     return initializer_->initialize(curr_frm, init_matches_, parallax_deg_thr_multiplier, initialize_focal_length, focal_length_was_modified);
 }
 
