@@ -46,6 +46,16 @@ solver::solver(const std::shared_ptr<config>& cfg,
     slam_->startup(!already_have_map);
 }
 
+#if !defined(USE_DBOW2)
+solver::solver(const std::shared_ptr<config>& cfg,
+               std::ifstream & vocab_data,
+               std::function<bool(int, cv::Mat&)> get_frame)
+: get_frame_(get_frame) {
+    slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_data);
+    slam_->startup();
+}
+#endif
+
 solver::~solver() {
     // shutdown the slam process
     if (slam_)

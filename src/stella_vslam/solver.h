@@ -59,6 +59,13 @@ public:
     solver(const std::shared_ptr<stella_vslam::config>& cfg,
            const std::string& vocab_file_path,
            std::function<bool(int, cv::Mat&)> get_frame);
+
+#if !defined(USE_DBOW2)
+    solver(const std::shared_ptr<stella_vslam::config>& cfg,
+           std::ifstream & vocab_data,
+           std::function<bool(int, cv::Mat&)> get_frame);
+#endif
+
     virtual ~solver();
 
     /// Optional callback
