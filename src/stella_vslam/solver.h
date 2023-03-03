@@ -44,6 +44,8 @@ class frame_display_data {
     // e.g. a set of 3D points and a camera, or a set or 2D image features
 public:
     int frame = -1;
+    bool solve_success = false; // Indicates whether 3D data was generated
+    bool final_points = false;  // Indicates whether mapping has completed
     Eigen::Matrix4d camera_pose;
     std::vector<Eigen::Vector3d> world_points;
 
@@ -93,7 +95,10 @@ protected:
     void get_world_points(std::vector<Eigen::Vector3d>& world_points) const;
 
     /// Package data and send to the calling application via display_frame_ callback
-    void send_frame_data(int frame, Eigen::Matrix4d& camera_pose) const;
+    void send_frame_data(int frame,
+                         std::shared_ptr<Eigen::Matrix4d> camera_pose,
+                         bool final_points,
+                         bool send_points) const;
 
     std::function<void(float)> set_progress_;
     std::function<void(std::string)> set_stage_description_;

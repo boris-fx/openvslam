@@ -569,10 +569,16 @@ void display_frame(std::shared_ptr<stella_vslam_bfx::frame_display_data> frame_d
     std::stringstream msg_str;
     msg_str.precision(stella_vslam_bfx::debug_printer::precision);
     msg_str << "Frame " << frame_data->frame << " solve results:\n";
-    msg_str << std::fixed << "\tCamera pose: " << frame_data->camera_pose.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
-    msg_str << "\t" << frame_data->world_points.size() << "world points\n";
-    for (auto p : frame_data->world_points)
-        msg_str << std::fixed << "\t\t" << p.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl; 
+    if (frame_data->solve_success) {
+        msg_str << std::fixed << "\tCamera pose: " << frame_data->camera_pose.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
+        if (!frame_data->world_points.empty()) {
+            msg_str << "\t" << frame_data->world_points.size() << " " << (frame_data->final_points ? "final" : "estimated") << " world points\n";
+            for (auto p : frame_data->world_points)
+                msg_str << std::fixed << "\t\t" << p.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
+        }
+    }
+    else
+        msg_str << "\tNo 3D data generated\n";
     
     spdlog_always("{}", msg_str.str());
 }

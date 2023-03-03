@@ -25,6 +25,8 @@ void solve::clear() {
 
 void frame_display_data::clear() {
     frame = -1;
+    final_points = false;
+    solve_success = false;
     camera_pose.setIdentity();
     world_points.clear();
 }
@@ -139,8 +141,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         timestampToVideoFrame[timestamp] = frame;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
-        if (camera_pose)
-            send_frame_data(frame, *camera_pose);
+        send_frame_data(frame, camera_pose, false, true);
 
         double stage_progress = double(frame - begin + 1) / double(1 + end - begin);
         if (set_progress_)
@@ -187,8 +188,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         timestamp = videoFrameToTimestamp[frame];
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
-        if (camera_pose)
-            send_frame_data(frame, *camera_pose);
+        send_frame_data(frame, camera_pose, false, true);
 
         double stage_progress = double(first_keyframe.value() - frame) / double(first_keyframe.value() - begin);
         if (set_progress_)
@@ -245,11 +245,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         camera_pose ? ++solved_frame_count : ++unsolved_frame_count;
 
         // Store the camera pose
-        if (camera_pose) {
-            if (final_solve)
-                final_solve->frame_to_camera[frame] = *camera_pose;
-            send_frame_data(frame, *camera_pose);
-        }
+        if (camera_pose && final_solve)
+            final_solve->frame_to_camera[frame] = *camera_pose;
+        send_frame_data(frame, camera_pose, true, frame == begin);
 
         double stage_progress = double(frame - begin + 1) / double(1 + end - begin);
         if (set_progress_)
@@ -310,16 +308,22 @@ void solver::get_world_points(std::vector<Eigen::Vector3d>& world_points) const 
                    [](const std::shared_ptr<data::landmark>& value) { return value->get_pos_in_world(); });
 }
 
-void solver::send_frame_data(int frame, Eigen::Matrix4d& camera_pose) const {
+void solver::send_frame_data(int frame,
+                             std::shared_ptr<Eigen::Matrix4d> camera_pose,
+                             bool final_points,
+                             bool send_points) const {
     if (display_frame_) {
         // Copy all current solve data, so that the calling application
         // can (potentially) process it while the solver continues to run
         auto frame_data = std::make_shared<frame_display_data>();
         frame_data->frame = frame;
-        frame_data->camera_pose = camera_pose;
-        get_world_points(frame_data->world_points);
-
-        // TODO some indicators of whether the data is final etc.
+        if (camera_pose != nullptr) {
+            frame_data->solve_success = true;
+            frame_data->camera_pose = *camera_pose;
+            frame_data->final_points = final_points;
+            if (send_points)
+                get_world_points(frame_data->world_points);
+        }
 
         display_frame_(frame_data);
     }
