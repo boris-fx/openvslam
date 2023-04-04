@@ -49,6 +49,41 @@ bool fx_fy_from_camera(stella_vslam::camera::base* camera, double **fx, double *
     return true;
 }
 
+template<typename camera_type>
+void intrinsics_from_camera(camera_type* camera, double& focal_length_x_pixels, double& par, double& cx, double& cy)
+{
+    focal_length_x_pixels = camera->fx_;
+    par = camera->fy_ / camera->fx_;
+    cx = camera->cx_;
+    cy = camera->cy_;
+}
+
+bool intrinsics_from_camera(stella_vslam::camera::base const* camera, double &focal_length_x_pixels, double &par, double &cx, double &cy)
+{
+    using namespace stella_vslam;
+    if (!camera)
+        return false;
+
+    switch (camera->model_type_) {
+    case camera::model_type_t::Perspective: {
+        intrinsics_from_camera(static_cast<camera::perspective const*>(camera), focal_length_x_pixels, par, cx, cy);
+        break;
+    }
+    case camera::model_type_t::Fisheye: {
+        intrinsics_from_camera(static_cast<camera::fisheye const*>(camera), focal_length_x_pixels, par, cx, cy);
+        break;
+    }
+    case camera::model_type_t::RadialDivision: {
+        intrinsics_from_camera(static_cast<camera::radial_division const*>(camera), focal_length_x_pixels, par, cx, cy);
+        break;
+    }
+    default:
+        return false;
+    }
+
+    return true;
+}
+
 keyframe_autocalibration_wrapper::keyframe_autocalibration_wrapper(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms)
 {
    using namespace stella_vslam;

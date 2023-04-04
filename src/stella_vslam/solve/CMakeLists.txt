@@ -7,12 +7,14 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/essential_solver.h
                ${CMAKE_CURRENT_SOURCE_DIR}/pnp_solver.h
                ${CMAKE_CURRENT_SOURCE_DIR}/fundamental_to_focal_length.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/fundamental_consistency.h
                ${CMAKE_CURRENT_SOURCE_DIR}/common.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/homography_solver.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/fundamental_solver.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/essential_solver.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/pnp_solver.cc
-               ${CMAKE_CURRENT_SOURCE_DIR}/fundamental_to_focal_length.cc)
+               ${CMAKE_CURRENT_SOURCE_DIR}/fundamental_to_focal_length.cc
+               ${CMAKE_CURRENT_SOURCE_DIR}/fundamental_consistency.cc)
 
 # Install headers
 file(GLOB HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/*.h")

@@ -15,6 +15,7 @@
 #include "util/tinyxml2.h"
 #include "stella_vslam/solver.h"
 #include "stella_vslam/report/metrics.h"
+#include "stella_vslam/solve/fundamental_to_focal_length.h"
 
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/data/keyframe.h"
@@ -543,11 +544,11 @@ void spdlog_always(const char *fmt, const Args &... args)
 
 void printSolveSummary(stella_vslam_bfx::solve const& shot_solve, bool full_results)
 {
-    spdlog_always("==========================");
-    spdlog_always("Final Solve");
-    spdlog_always("  Keypoints: {}", shot_solve.world_points.size());
-    spdlog_always("  Cameras: {}", shot_solve.frame_to_camera.size());
-    spdlog_always("==========================");
+    spdlog::info("==========================");
+    spdlog::info("Final Solve");
+    spdlog::info("  Keypoints: {}", shot_solve.world_points.size());
+    spdlog::info("  Cameras: {}", shot_solve.frame_to_camera.size());
+    spdlog::info("==========================");
 
     if (full_results) {
         std::stringstream msg_str;
@@ -969,8 +970,11 @@ void mono_tracking_2(
 
     bool const debug_initialisation(false);
 
-    if (debug_initialisation)
-        stella_vslam_bfx::metrics::get_instance()->debugging.debug_initialisation = true;
+    if (debug_initialisation) {
+       bool test_ok = stella_vslam_bfx::fundamental_to_focal_length_optimisation_test();
+       stella_vslam_bfx::metrics::get_instance()->debugging.debug_initialisation = true;
+
+    }
 
     // load the mask image
     const cv::Mat mask = mask_img_path.empty() ? cv::Mat{} : cv::imread(mask_img_path, cv::IMREAD_GRAYSCALE);
@@ -1022,7 +1026,7 @@ void mono_tracking_2(
         stella_vslam_bfx::metrics::get_instance()->input_video_metadata.name = "run_view_slam metrics";
 
        // Run the solve
-       solver.track_frame_range(0, 100, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
+       solver.track_frame_range(0, 50, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
 
        printSolveSummary(solve, print_results);
 
@@ -1032,9 +1036,6 @@ void mono_tracking_2(
        if (debug_initialisation) {
            std::filesystem::path fsVideo(video_file_path);
            std::string init_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_init.html";
-           
-
-
            stella_vslam_bfx::metrics::initialisation_debug().save_html_report(init_html_filename, initialFocalLength);
            std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
            stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "");

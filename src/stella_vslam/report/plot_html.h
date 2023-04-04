@@ -12,8 +12,17 @@
 #include <fstream>
 #include <optional>
 
+enum class range_behaviour { no_max, hard_max, max_from_median };
+struct axis_scaling
+{
+    axis_scaling(range_behaviour behaviour) : behaviour(behaviour), max(0) {}
+    axis_scaling(double max) : behaviour(range_behaviour::hard_max), max(max) {}
+    range_behaviour behaviour;
+    double          max;
+};
+
 using Curve = std::pair<std::string, std::map<double, double>>; /// Data name, map from x value to y
-using Graph = std::tuple<std::string, std::string, std::set<Curve>, std::optional<double>>; /// x label, y label, set of curves, hard max Y
+using Graph = std::tuple<std::string, std::string, std::set<Curve>, axis_scaling>; /// x label, y label, set of curves, Y-axis scaling
 
 void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs);
 

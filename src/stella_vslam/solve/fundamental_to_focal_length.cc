@@ -12,6 +12,23 @@
 #include <stella_vslam/report/plot_html.h>
 #include <stella_vslam/report/metrics.h>
 
+//
+
+#include <Eigen/Core>
+#include <Eigen/Geometry>
+#include <iostream>
+
+#define CERES_MSVC_USE_UNDERSCORE_PREFIXED_BESSEL_FUNCTIONS // Avoids a compilation warning 
+
+#include "g2o/core/auto_differentiation.h"
+#include "g2o/core/base_unary_edge.h"
+#include "g2o/core/base_vertex.h"
+#include "g2o/core/optimization_algorithm_factory.h"
+#include "g2o/core/sparse_optimizer.h"
+#include "g2o/stuff/command_args.h"
+#include "g2o/stuff/sampler.h"
+
+
 using namespace stella_vslam;
 
 namespace stella_vslam_bfx {
@@ -117,6 +134,22 @@ double error_for_focal_length(stella_vslam::Mat33_t const &F_21, camera::base co
 
     return error;
 }
+
+double error_for_focal_length(stella_vslam::Mat33_t const& F_21, double focal_length_x_pixels,
+                              double par, double cx, double cy)
+{
+   double fx = focal_length_x_pixels;
+   double fy = focal_length_x_pixels * par;
+   Mat33_t cam_matrix;
+   //cam_matrix << fx, 0, 0, 0, fy, 0, cx, cy, 1.0;
+   cam_matrix << fx, 0, cx, 0, fy, cy, 0, 0, 1.0;
+
+   // Compute the error for this focal length
+   double error = fundamental_focal_geometric_fit_error(F_21, cam_matrix, cam_matrix);
+
+   return error;
+}
+
 
 // only works when close to the minimum
 double min_geometric_error_focal_length_bisection(stella_vslam::Mat33_t const& F_21, camera::base const* camera, double focal_x_start, double focal_x_end)
@@ -255,5 +288,259 @@ bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* ca
    }
    return false;
 }
+
+
+
+using namespace std;
+
+G2O_USE_OPTIMIZATION_LIBRARY(dense);
+
+double errorOfSolution(int numPoints, Eigen::Vector2d* points,
+   const Eigen::Vector3d& circle) {
+   Eigen::Vector2d center = circle.head<2>();
+   double radius = circle(2);
+   double error = 0.;
+   for (int i = 0; i < numPoints; ++i) {
+      double d = (points[i] - center).norm() - radius;
+      error += d * d;
+   }
+   return error;
+}
+
+double errorOfSolution1D(int numPoints, Eigen::Vector2d* points,
+   const Eigen::Matrix<double, 1, 1>& circle) {
+   //   Eigen::Vector2d center = circle.head<2>();
+   Eigen::Vector2d center(4.0, 2.0);
+   double radius = circle(0);
+   double error = 0.;
+   for (int i = 0; i < numPoints; ++i) {
+      double d = (points[i] - center).norm() - radius;
+      error += d * d;
+   }
+   return error;
+}
+///**
+// * \brief a circle located at x,y with radius r
+// */
+//class VertexCircle : public g2o::BaseVertex<3, Eigen::Vector3d> {
+//public:
+//   EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+//   VertexCircle() {}
+//
+//   virtual bool read(std::istream& /*is*/) { return false; }
+//
+//   virtual bool write(std::ostream& /*os*/) const { return false; }
+//
+//   virtual void setToOriginImpl() {
+//      cerr << __PRETTY_FUNCTION__ << " not implemented yet" << endl;
+//   }
+//
+//   virtual void oplusImpl(const double* update) {
+//      Eigen::Vector3d::ConstMapType v(update);
+//      _estimate += v;
+//   }
+//};
+
+namespace focal_error_minimisation {
+
+   /**
+    * \brief a circle located at x,y with radius r
+    */
+   class focal_length_vertex : public g2o::BaseVertex<1, Eigen::Matrix<double, 1, 1>> {
+   public:
+      EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+      focal_length_vertex() {}
+
+      virtual bool read(std::istream& /*is*/) { return false; }
+
+      virtual bool write(std::ostream& /*os*/) const { return false; }
+
+      virtual void setToOriginImpl() {
+         cerr << __PRETTY_FUNCTION__ << " not implemented yet" << endl;
+      }
+
+      virtual void oplusImpl(const double* update) {
+         Eigen::Matrix<double, 1, 1>::ConstMapType v(update);
+         _estimate += v;
+      }
+   };
+
+   /**
+    * \brief measurement for a point on the circle
+    *
+    * Here the measurement is the point which is on the circle.
+    * The error function computes the distance of the point to
+    * the center minus the radius of the circle.
+    */
+    //class EdgePointOnCircle
+    //   : public g2o::BaseUnaryEdge<1, Eigen::Vector2d, VertexCircle> {
+    //public:
+    //   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    //      EdgePointOnCircle() {}
+    //   virtual bool read(std::istream& /*is*/) { return false; }
+    //   virtual bool write(std::ostream& /*os*/) const { return false; }
+    //
+    //   template <typename T>
+    //   bool operator()(const T* circle, T* error) const {
+    //      typename g2o::VectorN<2, T>::ConstMapType center(circle);
+    //      const T& radius = circle[2];
+    //
+    //      error[0] = (measurement().cast<T>() - center).norm() - radius;
+    //      return true;
+    //   }
+    //
+    //   G2O_MAKE_AUTO_AD_FUNCTIONS  // use autodiff
+    //};
+
+
+
+   class fundamental_matrix_edge
+      : public g2o::BaseUnaryEdge<1, Eigen::Vector2d, focal_length_vertex> {
+   public:
+      EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+         fundamental_matrix_edge() {}
+      virtual bool read(std::istream& /*is*/) { return false; }
+      virtual bool write(std::ostream& /*os*/) const { return false; }
+
+      template <typename T>
+      bool operator()(const T* focal_length, T* error) const {
+         //typename g2o::VectorN<2, T>::ConstMapType center(circle);
+         //Eigen::Matrix<T, 2, 1, 0>::ConstMapType centre(circle);
+         Eigen::Vector2d center(4.0, 2.0);
+         const T& radius = focal_length[0];
+
+        // error[0] = error_for_focal_length(stella_vslam::Mat33_t const& F_21, camera::base const* camera, *focal_length);
+
+
+         error[0] = (measurement().cast<T>() - center).norm() - radius;
+         return true;
+      }
+
+      G2O_MAKE_AUTO_AD_FUNCTIONS  // use autodiff
+   };
+
+} // namespace focal_error_minimisation
+
+bool fundamental_to_focal_length_optimisation_test()
+{
+   int numPoints = 100;
+   int maxIterations = 10;
+   bool verbose = false;
+
+   // generate random data
+   Eigen::Vector2d center(4.0, 2.0);
+   double radius = 2.0;
+   Eigen::Vector2d* points = new Eigen::Vector2d[numPoints];
+
+   g2o::Sampler::seedRand();
+   for (int i = 0; i < numPoints; ++i) {
+      double r = g2o::Sampler::gaussRand(radius, 0.05);
+      double angle = g2o::Sampler::uniformRand(0.0, 2.0 * M_PI);
+      points[i].x() = center.x() + r * cos(angle);
+      points[i].y() = center.y() + r * sin(angle);
+   }
+
+   // setup the solver
+   g2o::SparseOptimizer optimizer;
+   optimizer.setVerbose(false);
+
+   // allocate the solver
+   g2o::OptimizationAlgorithmProperty solverProperty;
+   optimizer.setAlgorithm(
+      g2o::OptimizationAlgorithmFactory::instance()->construct("lm_dense",
+         solverProperty));
+   bool use_1D(true);
+   focal_error_minimisation::focal_length_vertex* circle1D(nullptr);
+   //VertexCircle* circle(nullptr);
+   if (use_1D) {
+      // build the optimization problem given the points
+      // 1. add the circle vertex
+      circle1D = new focal_error_minimisation::focal_length_vertex();
+      circle1D->setId(0);
+      circle1D->setEstimate(
+         Eigen::Matrix<double, 1, 1>(3.0));  // some initial value for the circle
+      optimizer.addVertex(circle1D);
+      // 2. add the points we measured
+      for (int i = 0; i < numPoints; ++i) {
+         focal_error_minimisation::fundamental_matrix_edge* e = new focal_error_minimisation::fundamental_matrix_edge;
+         e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
+         e->setVertex(0, circle1D);
+         e->setMeasurement(points[i]);
+         optimizer.addEdge(e);
+      }
+   }
+   else {
+      //// build the optimization problem given the points
+      //// 1. add the circle vertex
+      //circle = new VertexCircle();
+      //circle->setId(0);
+      //circle->setEstimate(
+      //   Eigen::Vector3d(3.0, 3.0, 3.0));  // some initial value for the circle
+      //optimizer.addVertex(circle);
+      //// 2. add the points we measured
+      //for (int i = 0; i < numPoints; ++i) {
+      //   EdgePointOnCircle* e = new EdgePointOnCircle;
+      //   e->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
+      //   e->setVertex(0, circle);
+      //   e->setMeasurement(points[i]);
+      //   optimizer.addEdge(e);
+      //}
+   }
+
+   // perform the optimization
+   optimizer.initializeOptimization();
+   optimizer.setVerbose(verbose);
+   optimizer.optimize(maxIterations);
+
+   if (verbose) cout << endl;
+
+   // print out the result
+   cout << "Iterative least squares solution" << endl;
+   //if (circle) {
+   //   cout << "center of the circle " << circle->estimate().head<2>().transpose()
+   //      << endl;
+   //   cout << "radius of the cirlce " << circle->estimate()(2) << endl;
+   //   cout << "error " << errorOfSolution(numPoints, points, circle->estimate()) << endl;
+   //}
+   if (circle1D) {
+      cout << "radius of the cirlce " << circle1D->estimate()(0) << endl;
+      cout << "error " << errorOfSolution1D(numPoints, points, circle1D->estimate()) << endl;
+   }
+
+   cout << endl;
+
+   // solve by linear least squares
+   // Let (a, b) be the center of the circle and r the radius of the circle.
+   // For a point (x, y) on the circle we have:
+   // (x - a)^2 + (y - b)^2 = r^2
+   // This leads to
+   // (-2x -2y 1)^T * (a b c) = -x^2 - y^2   (1)
+   // where c = a^2 + b^2 - r^2.
+   // Since we have a bunch of points, we accumulate Eqn (1) in a matrix and
+   // compute the normal equation to obtain a solution for (a b c).
+   // Afterwards the radius r is recovered.
+   Eigen::MatrixXd A(numPoints, 3);
+   Eigen::VectorXd b(numPoints);
+   for (int i = 0; i < numPoints; ++i) {
+      A(i, 0) = -2 * points[i].x();
+      A(i, 1) = -2 * points[i].y();
+      A(i, 2) = 1;
+      b(i) = -pow(points[i].x(), 2) - pow(points[i].y(), 2);
+   }
+   Eigen::Vector3d solution =
+      (A.transpose() * A).ldlt().solve(A.transpose() * b);
+   // calculate the radius of the circle given the solution so far
+   solution(2) = sqrt(pow(solution(0), 2) + pow(solution(1), 2) - solution(2));
+   cout << "Linear least squares solution" << endl;
+   cout << "center of the circle " << solution.head<2>().transpose() << endl;
+   cout << "radius of the cirlce " << solution(2) << endl;
+   cout << "error " << errorOfSolution(numPoints, points, solution) << endl;
+
+   // clean up
+   delete[] points;
+
+   return true;
+}
+
 
 } // namespace stella_vslam_bfx

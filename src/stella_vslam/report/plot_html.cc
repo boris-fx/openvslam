@@ -7,6 +7,8 @@
 #include <vector>
 #include <list>
 
+#include <stella_vslam/solve/fundamental_consistency.h> // just for the median function, which should be somewhere else
+
 struct LabelToValue {
     LabelToValue(std::string label, float value, int index)
         : label(label), value(value), index(index) {}
@@ -358,9 +360,24 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
    svg << "</svg>" << std::endl;
 }
 
+double graph_median(std::set<Curve> const& curves)
+{
+    // Take the largest median of each curve
+    double largest(0.0);
+    for (auto const& curve : curves) {
+        std::vector<double> y_values;
+        for (auto const& data_point : curve.second)
+            y_values.push_back(data_point.second);
+        double median = stella_vslam_bfx::median(y_values);
+        if (largest < median)
+            largest = median;
+    }
+    return largest;
+}
+
 void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
 {
-   auto [xLabel, yLabel, curves, hardMaxY] = graph;
+   auto [xLabel, yLabel, curves, y_axis_scaling] = graph;
    std::list<LabelledCurve> labelled_curves;
 
    for (auto const& curve : curves) {
@@ -378,7 +395,14 @@ void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
    }
    bool linearXLabels(true);
 
-   write_graph_as_svg(svg, yLabel, xLabel, labelled_curves, linearXLabels, 1200, 600, true, hardMaxY);
+
+   std::optional<double> hard_max_y;
+   if (y_axis_scaling.behaviour == range_behaviour::hard_max)
+       hard_max_y = y_axis_scaling.max;
+   if (y_axis_scaling.behaviour == range_behaviour::max_from_median)
+       hard_max_y = 1.5 * graph_median(curves);
+
+   write_graph_as_svg(svg, yLabel, xLabel, labelled_curves, linearXLabels, 1200, 600, true, hard_max_y);
 
 }
 

@@ -6,6 +6,7 @@
 #include "stella_vslam/solve/homography_solver.h"
 #include "stella_vslam/solve/fundamental_solver.h"
 #include "stella_vslam/solve/fundamental_to_focal_length.h"
+#include "stella_vslam/solve/fundamental_consistency.h"
 #include "stella_vslam/report/metrics.h"
 
 #include <thread>
@@ -80,8 +81,20 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
         *focal_length_was_modified = false;
         if (true && initialize_focal_length) {
 
-           bool focal_length_estimate_is_stable;
-           bool focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_, &focal_length_estimate_is_stable); // May update the camera if auto focal length is active
+
+           bool focal_length_estimate_is_stable(true);
+           bool focal_length_changed(false);
+           
+           bool const focal_length_via_points_test(true);
+           if (focal_length_via_points_test) {
+               //stella_vslam_bfx::focal_length_estimator::test_v2(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_,
+               //                       focal_length_estimate_is_stable, focal_length_changed);
+
+               stella_vslam_bfx::focal_length_estimator::get_instance()->add_frame_pair(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur);
+               stella_vslam_bfx::focal_length_estimator::get_instance()->run_optimisation(ref_camera_, focal_length_estimate_is_stable, focal_length_changed);
+           }
+           else
+               focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_, &focal_length_estimate_is_stable); // May update the camera if auto focal length is active
 
            // If the focal length was changed we also need to update the bearing vectors,
            //   and indicate to our calling function that it should do the same

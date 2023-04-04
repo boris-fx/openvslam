@@ -38,6 +38,8 @@ struct keyframe_autocalibration_wrapper {
 
 double getCameraFocalLengthXPixels(stella_vslam::camera::base const* camera);
 
+bool intrinsics_from_camera(stella_vslam::camera::base const* camera, double& focal_length_x_pixels, double& par, double& cx, double& cy);
+
 bool setFocalLengthXPixels(stella_vslam::data::map_database * map_db, double focal_length_x_pixels);
 
 bool setFocalLengthXPixels(stella_vslam::data::frame& frm, double focal_length_x_pixels);

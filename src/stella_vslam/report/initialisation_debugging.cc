@@ -4,15 +4,9 @@
 #include <cmath>
 
 #include "plot_html.h"
+#include <stella_vslam/solve/fundamental_consistency.h>
 
 namespace stella_vslam_bfx {
-
-struct scalar_measurement {
-    scalar_measurement(double value = -1.0, double variance = -1.0)
-        : value(value), variance(variance) {}
-    double value;
-    double variance;
-};
 
 scalar_measurement combine_measurements(std::vector<scalar_measurement> const& measurements) {
     double sum_of_reciprocal_variance(0);
@@ -25,11 +19,6 @@ scalar_measurement combine_measurements(std::vector<scalar_measurement> const& m
     weighted_mean /= sum_of_reciprocal_variance;
 
     return scalar_measurement(weighted_mean, 1.0 / sum_of_reciprocal_variance);
-}
-
-// NB: c++20 has std::lerp, which can replace this 
-double naive_lerp(double a, double b, double t) {
-    return a + t * (b - a);
 }
 
 // uncertainty is in the units of the measurenent, like standard devaition
@@ -91,7 +80,7 @@ void initialisation_debugging::submit_feature_match_debugging(unsigned int num_m
     if (!is_active)
         return;
 
-    timestamp_to_num_matches[current_init_frames] = double(num_matches);
+    p_num_matches.by_timestamp[current_init_frames] = double(num_matches);
 }
 
 void initialisation_debugging::submit_parallax_debugging(double parallax)
@@ -99,7 +88,7 @@ void initialisation_debugging::submit_parallax_debugging(double parallax)
     if (!is_active)
         return;
 
-    timestamp_to_parallax[current_init_frames] = parallax;
+    p_parallax.by_timestamp[current_init_frames] = parallax;
 }
 
 void initialisation_debugging::submit_homography_fundamental_cost(double cost_H, double cost_F)
@@ -107,8 +96,8 @@ void initialisation_debugging::submit_homography_fundamental_cost(double cost_H,
     if (!is_active)
         return;
 
-    timestamp_to_cost_H[current_init_frames] = cost_H;
-    timestamp_to_cost_F[current_init_frames] = cost_F;
+    p_cost_H.by_timestamp[current_init_frames] = cost_H;
+    p_cost_F.by_timestamp[current_init_frames] = cost_F;
 }
 
 void initialisation_debugging::submit_fundamental_to_focal_length_debugging(double error_for_max_focal_length,
@@ -124,16 +113,74 @@ void initialisation_debugging::submit_fundamental_to_focal_length_debugging(doub
     if (!is_active)
         return;
 
-    timestamp_to_error_for_max_focal_length[current_init_frames] = error_for_max_focal_length;
-    timestamp_to_min_error[current_init_frames] = min_error;
-    timestamp_to_best_focal_length[current_init_frames] = best_focal_length;
-    timestamp_to_best_focal_length_bisection[current_init_frames] = best_focal_length_bisection;
-    timestamp_to_de_df_plus[current_init_frames] = de_df_plus;
-    timestamp_to_de_df_minus[current_init_frames] = de_df_minus;
-    timestamp_to_min_error_percent_max_focal_error[current_init_frames] = min_error_percent_max_focal_error;
+    p_error_for_max_focal_length.by_timestamp[current_init_frames] = error_for_max_focal_length;
+    p_min_error.by_timestamp[current_init_frames] = min_error;
+    p_best_focal_length.by_timestamp[current_init_frames] = best_focal_length;
+    p_best_focal_length_bisection.by_timestamp[current_init_frames] = best_focal_length_bisection;
+    p_de_df_plus.by_timestamp[current_init_frames] = de_df_plus;
+    p_de_df_minus.by_timestamp[current_init_frames] = de_df_minus;
+    p_min_error_percent_max_focal_error.by_timestamp[current_init_frames] = min_error_percent_max_focal_error;
 
-    timestamp_to_focal_length_to_error[current_init_frames] = focal_length_to_error;
-    timestamp_to_fov_to_error[current_init_frames] = fov_to_error;
+    p_focal_length_to_error.by_timestamp[current_init_frames] = focal_length_to_error;
+    p_fov_to_error.by_timestamp[current_init_frames] = fov_to_error;
+}
+
+void initialisation_debugging::submit_fundamental_decomp_debugging(double error_for_max_focal_length,
+    double min_error,
+    double best_focal_length,
+    double de_df_plus,
+    double de_df_minus,
+    double min_error_percent_max_focal_error,
+    std::map<double, double> focal_length_to_error)
+{
+    if (!is_active)
+        return;
+
+    p_dec_error_for_max_focal_length.by_timestamp[current_init_frames] = error_for_max_focal_length;
+    p_dec_min_error.by_timestamp[current_init_frames] = min_error;
+    p_dec_best_focal_length.by_timestamp[current_init_frames] = best_focal_length;
+    p_dec_de_df_plus.by_timestamp[current_init_frames] = de_df_plus;
+    p_dec_de_df_minus.by_timestamp[current_init_frames] = de_df_minus;
+    p_dec_min_error_percent_max_focal_error.by_timestamp[current_init_frames] = min_error_percent_max_focal_error;
+
+    p_dec_focal_length_to_error.by_timestamp[current_init_frames] = focal_length_to_error;
+
+}
+
+void initialisation_debugging::submit_epipolar_estimator_debugging(double min_error, double initial_focal_length, double best_focal_length,
+    double dedf, double dedtu, double dedtv, double dedrx, double dedry, double dedrz,
+    double sd_dedf, double sd_dedtu, double sd_dedtv, double sd_dedrx, double sd_dedry, double sd_dedrz)
+{
+    if (!is_active)
+        return;
+
+    p_ep_min_error.by_timestamp[current_init_frames] = min_error;
+    p_ep_initial_focal_length.by_timestamp[current_init_frames] = initial_focal_length;
+    p_ep_best_focal_length.by_timestamp[current_init_frames] = best_focal_length;
+
+    p_ep_dedf.by_timestamp[current_init_frames] = dedf;
+    p_ep_dedtu.by_timestamp[current_init_frames] = dedtu;
+    p_ep_dedtv.by_timestamp[current_init_frames] = dedtv;
+    p_ep_dedrx.by_timestamp[current_init_frames] = dedrx;
+    p_ep_dedry.by_timestamp[current_init_frames] = dedry;
+    p_ep_dedrz.by_timestamp[current_init_frames] = dedrz;
+
+    p_ep_sd_dedf.by_timestamp[current_init_frames] = sd_dedf;
+    p_ep_sd_dedtu.by_timestamp[current_init_frames] = sd_dedtu;
+    p_ep_sd_dedtv.by_timestamp[current_init_frames] = sd_dedtv;
+    p_ep_sd_dedrx.by_timestamp[current_init_frames] = sd_dedrx;
+    p_ep_sd_dedry.by_timestamp[current_init_frames] = sd_dedry;
+    p_ep_sd_dedrz.by_timestamp[current_init_frames] = sd_dedrz;
+}
+
+void initialisation_debugging::submit_feature_motions(double quantile_25, double quantile_50, double quantile_75)
+{
+    if (!is_active)
+        return;
+
+    feature_motion_quantile_25.by_timestamp[current_init_frames] = quantile_25;
+    feature_motion_quantile_50.by_timestamp[current_init_frames] = quantile_50;
+    feature_motion_quantile_75.by_timestamp[current_init_frames] = quantile_75;
 }
 
 template<typename T>
@@ -162,24 +209,78 @@ void transform_frame_data(std::map<double, T> const& input,
     }
 }
 
-void initialisation_debugging::create_frame_data(std::map<double, int> const& timestamp_to_video_frame) {
+void initialisation_debugging::create_frame_data(std::map<double, int> const& timestamp_to_video_frame)
+{
+    std::list<frame_param<double>*> p_double = frame_params_double();
+    for (auto &param : p_double)
+        transform_frame_data(param->by_timestamp, param->by_frame, timestamp_to_video_frame);
 
-    transform_frame_data(timestamp_to_num_matches, frame_to_num_matches, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_parallax, frame_to_parallax, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_cost_H, frame_to_cost_H, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_cost_F, frame_to_cost_F, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_error_for_max_focal_length, frame_to_error_for_max_focal_length, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_min_error, frame_to_min_error, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_best_focal_length, frame_to_best_focal_length, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_best_focal_length_bisection, frame_to_best_focal_length_bisection, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_de_df_plus, frame_to_de_df_plus, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_de_df_minus, frame_to_de_df_minus, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_min_error_percent_max_focal_error, frame_to_min_error_percent_max_focal_error, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_focal_length_to_error, frame_to_focal_length_to_error, timestamp_to_video_frame);
-    transform_frame_data(timestamp_to_fov_to_error, frame_to_fov_to_error, timestamp_to_video_frame);
+    std::list<frame_param<std::map<double, double>>*> p_map_double_double = frame_params_map_double_double();
+    for (auto& param : p_map_double_double)
+        transform_frame_data(param->by_timestamp, param->by_frame, timestamp_to_video_frame);
 
     transform_frame_data(feature_count_by_timestamp, feature_count_by_frame, timestamp_to_video_frame);
+}
 
+std::list<frame_param<double>*> initialisation_debugging::frame_params_double()
+{
+    std::list<frame_param<double>*> result;
+
+    result.push_back(&p_num_matches);
+
+    result.push_back(&p_parallax);
+    result.push_back(&p_cost_H);
+    result.push_back(&p_cost_F);
+
+    result.push_back(&p_error_for_max_focal_length);
+    result.push_back(&p_min_error);
+    result.push_back(&p_best_focal_length);
+    result.push_back(&p_best_focal_length_bisection);
+    result.push_back(&p_de_df_plus);
+    result.push_back(&p_de_df_minus);
+    result.push_back(&p_min_error_percent_max_focal_error);
+
+    result.push_back(&p_dec_error_for_max_focal_length);
+    result.push_back(&p_dec_min_error);
+    result.push_back(&p_dec_best_focal_length);
+    result.push_back(&p_dec_de_df_plus);
+    result.push_back(&p_dec_de_df_minus);
+    result.push_back(&p_dec_min_error_percent_max_focal_error);
+
+    result.push_back(&p_ep_min_error);
+    result.push_back(&p_ep_initial_focal_length);
+    result.push_back(&p_ep_best_focal_length);
+
+    result.push_back(&p_ep_dedf);
+    result.push_back(&p_ep_dedtu);
+    result.push_back(&p_ep_dedtv);
+    result.push_back(&p_ep_dedrx);
+    result.push_back(&p_ep_dedry);
+    result.push_back(&p_ep_dedrz);
+
+    result.push_back(&p_ep_sd_dedf);
+    result.push_back(&p_ep_sd_dedtu);
+    result.push_back(&p_ep_sd_dedtv);
+    result.push_back(&p_ep_sd_dedrx);
+    result.push_back(&p_ep_sd_dedry);
+    result.push_back(&p_ep_sd_dedrz);
+
+    result.push_back(&feature_motion_quantile_25);
+    result.push_back(&feature_motion_quantile_50);
+    result.push_back(&feature_motion_quantile_75);
+
+    return result;
+}
+
+std::list<frame_param<std::map<double, double>>*> initialisation_debugging::frame_params_map_double_double()
+{
+    std::list<frame_param<std::map<double, double>>*> result;
+
+    result.push_back(&p_focal_length_to_error);
+    result.push_back(&p_fov_to_error);
+    result.push_back(&p_dec_focal_length_to_error);
+
+    return result;
 }
 
 // map entry {a, b}->c becomes b->c
@@ -192,6 +293,13 @@ std::map<double, T> select_second_frame_data(std::map<std::array<int, 2>, T> con
         if (i.first[0]==first_frame)
             output[i.first[1]] = i.second;
     return output;
+}
+
+// map entry {a, b}->c becomes b->c
+template<typename T>
+std::map<double, T> select_second_frame_data(frame_param<T> const& input)
+{
+    return select_second_frame_data(input.by_frame);
 }
 
 // map entry {a, b}->c becomes b->c*scale
@@ -243,6 +351,14 @@ std::map<double, double> multiply(std::map<double, double> const& data_1, std::m
     return output;
 }
 
+std::map<double, double> rescale_graph(std::map<double, double> const& data, double scale)
+{
+    std::map<double, double> output;
+    for (auto const& d : data)
+        output[d.first] = scale * d.second;
+    return output;
+}
+
 std::map<double, double> constand_value_graph(std::map<double, double> const& data, double value) {
     std::map<double, double> output;
     if (!data.empty()) {
@@ -257,17 +373,41 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
         return;
 
 
-    std::map<double, double> graph_num_matches = select_second_frame_data(frame_to_num_matches);
-    std::map<double, double> graph_parallax = select_second_frame_data(frame_to_parallax);
-    std::map<double, double> graph_cost_H = select_second_frame_data(frame_to_cost_H);
-    std::map<double, double> graph_cost_F = select_second_frame_data(frame_to_cost_F);
-    std::map<double, double> graph_error_for_max_focal_length = select_second_frame_data(frame_to_error_for_max_focal_length);
-    std::map<double, double> graph_min_error = select_second_frame_data(frame_to_min_error);
-    std::map<double, double> graph_de_df_plus = select_second_frame_data(frame_to_de_df_plus);
-    std::map<double, double> graph_de_df_minus = select_second_frame_data(frame_to_de_df_minus);
-    std::map<double, double> graph_min_error_percent_max_focal_error = select_second_frame_data(frame_to_min_error_percent_max_focal_error);
-    std::map<double, double> graph_best_focal_length = select_second_frame_data(frame_to_best_focal_length);
-    std::map<double, double> graph_best_focal_length_bisection = select_second_frame_data(frame_to_best_focal_length_bisection);
+    std::map<double, double> graph_num_matches = select_second_frame_data(p_num_matches);
+    std::map<double, double> graph_parallax = select_second_frame_data(p_parallax);
+    std::map<double, double> graph_cost_H = select_second_frame_data(p_cost_H);
+    std::map<double, double> graph_cost_F = select_second_frame_data(p_cost_F);
+    std::map<double, double> graph_error_for_max_focal_length = select_second_frame_data(p_error_for_max_focal_length);
+    std::map<double, double> graph_min_error = select_second_frame_data(p_min_error);
+    std::map<double, double> graph_de_df_plus = select_second_frame_data(p_de_df_plus);
+    std::map<double, double> graph_de_df_minus = select_second_frame_data(p_de_df_minus);
+    std::map<double, double> graph_min_error_percent_max_focal_error = select_second_frame_data(p_min_error_percent_max_focal_error);
+    std::map<double, double> graph_best_focal_length = select_second_frame_data(p_best_focal_length);
+    std::map<double, double> graph_best_focal_length_bisection = select_second_frame_data(p_best_focal_length_bisection);
+
+    std::map<double, double> dec_graph_best_focal_length = select_second_frame_data(p_dec_best_focal_length);
+
+    std::map<double, double> graph_ep_min_error = select_second_frame_data(p_ep_min_error);
+    std::map<double, double> graph_ep_initial_focal_length = select_second_frame_data(p_ep_initial_focal_length);
+    std::map<double, double> graph_ep_best_focal_length = select_second_frame_data(p_ep_best_focal_length);
+
+    std::map<double, double> graph_ep_dedf = select_second_frame_data(p_ep_dedf);
+    std::map<double, double> graph_ep_dedtu = select_second_frame_data(p_ep_dedtu);
+    std::map<double, double> graph_ep_dedtv = select_second_frame_data(p_ep_dedtv);
+    std::map<double, double> graph_ep_dedrx = select_second_frame_data(p_ep_dedrx);
+    std::map<double, double> graph_ep_dedry = select_second_frame_data(p_ep_dedry);
+    std::map<double, double> graph_ep_dedrz = select_second_frame_data(p_ep_dedrz);
+
+    std::map<double, double> graph_ep_sd_dedf = select_second_frame_data(p_ep_sd_dedf);
+    std::map<double, double> graph_ep_sd_dedtu = select_second_frame_data(p_ep_sd_dedtu);
+    std::map<double, double> graph_ep_sd_dedtv = select_second_frame_data(p_ep_sd_dedtv);
+    std::map<double, double> graph_ep_sd_dedrx = select_second_frame_data(p_ep_sd_dedrx);
+    std::map<double, double> graph_ep_sd_dedry = select_second_frame_data(p_ep_sd_dedry);
+    std::map<double, double> graph_ep_sd_dedrz = select_second_frame_data(p_ep_sd_dedrz);
+
+    std::map<double, double> graph_feature_motion_quantile_25 = select_second_frame_data(feature_motion_quantile_25);
+    std::map<double, double> graph_feature_motion_quantile_50 = select_second_frame_data(feature_motion_quantile_50);
+    std::map<double, double> graph_feature_motion_quantile_75 = select_second_frame_data(feature_motion_quantile_75);
 
     std::map<double, double> graph_error_at_ground_truth_focal_length;
     std::map<double, double> graph_gt_error_percent_max_focal_error;
@@ -275,7 +415,7 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
     if (ground_truth_focal_length_x_pixels) {
         std::map<std::array<int, 2>, double> frame_to_error_at_ground_truth_focal_length
             = error_for_focal_length(ground_truth_focal_length_x_pixels.value(),
-                                     frame_to_focal_length_to_error);
+                                     p_focal_length_to_error.by_frame);
         graph_error_at_ground_truth_focal_length = select_second_frame_data(frame_to_error_at_ground_truth_focal_length);
         graph_gt_error_percent_max_focal_error = percent_of_value(graph_error_at_ground_truth_focal_length, graph_error_for_max_focal_length);
         graph_min_error_percent_gt_error = percent_deviation_from_value(graph_min_error, graph_error_at_ground_truth_focal_length);
@@ -283,22 +423,35 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
     }
 
     std::map<double, double> graph_percent_matches;
-    if (!frame_to_num_matches.empty()) {
-        auto f = feature_count_by_frame.find(frame_to_num_matches.begin()->first[0]);
+    if (!p_num_matches.by_frame.empty()) {
+        auto f = feature_count_by_frame.find(p_num_matches.by_frame.begin()->first[0]);
         if (f != feature_count_by_frame.end()) {
             double scale = 100.0 / double(f->second);
-            graph_percent_matches = select_scaled_second_frame_data(frame_to_num_matches, scale);
+            graph_percent_matches = select_scaled_second_frame_data(p_num_matches.by_frame, scale);
 
         }
     }
 
-    std::optional<double> percent_max(110);
-    std::optional<double> focal_max(ground_truth_focal_length_x_pixels ? std::optional<double>(2.0 * ground_truth_focal_length_x_pixels.value()) : std::nullopt);
-    std::optional<double> no_max;
+    //std::optional<double> percent_max(110);
+    axis_scaling percent_max(110);
+//    std::optional<double> focal_max(ground_truth_focal_length_x_pixels ? std::optional<double>(2.0 * ground_truth_focal_length_x_pixels.value()) : std::nullopt);
+    axis_scaling focal_max = ground_truth_focal_length_x_pixels ? axis_scaling(2.0 * ground_truth_focal_length_x_pixels.value()) : axis_scaling(range_behaviour::no_max);
 
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Cost", std::set<Curve>({{"H cost", graph_cost_H}, {"F cost", graph_cost_F}}), no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Num feature matches", std::set<Curve>({{"Match count", graph_num_matches}}), no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Best Focal Length", std::set<Curve>({{"Focal length", graph_best_focal_length}, {"Focal length bisection", graph_best_focal_length_bisection}}), focal_max));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Feature motion (pixels)", std::set<Curve>({ {"First Quartile", graph_feature_motion_quantile_25},
+                                                                                                               {"Second Quartile", graph_feature_motion_quantile_50},
+                                                                                                               {"Third Quartile", graph_feature_motion_quantile_75} }), range_behaviour::no_max));
+
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Epipolar focal length", std::set<Curve>({ {"Focal length est.", graph_ep_best_focal_length}, {"Initial focal length", graph_ep_initial_focal_length}}), focal_max));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Epipolar pixel error", std::set<Curve>({ {"Error", graph_ep_min_error} }), range_behaviour::no_max));
+
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "de/df", std::set<Curve>({ {"de/df", graph_ep_dedf}, {"sd de/df", graph_ep_sd_dedf} }), range_behaviour::max_from_median));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "de/dt", std::set<Curve>({ {"de/dtu", graph_ep_dedtu}, {"de/dtv", graph_ep_dedtv}, {"sd de/dtu", graph_ep_sd_dedtu}, {"sd de/dtv", graph_ep_sd_dedtv} }), range_behaviour::max_from_median));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "de/dr", std::set<Curve>({ {"de/drx", graph_ep_dedrx},  {"de/dry", graph_ep_dedry}, {"de/drz", graph_ep_dedrz},
+                                                                                             {"sd de/drx", graph_ep_sd_dedrx},  {"sd de/dry", graph_ep_sd_dedry}, {"sd de/drz", graph_ep_sd_dedrz} }), range_behaviour::max_from_median));
+
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Cost", std::set<Curve>({{"H cost", graph_cost_H}, {"F cost", graph_cost_F}}), range_behaviour::no_max));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Num feature matches", std::set<Curve>({{"Match count", graph_num_matches}}), range_behaviour::no_max));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Best Focal Length", std::set<Curve>({{"Focal length", graph_best_focal_length}, {"Focal length bisection", graph_best_focal_length_bisection}, {"Dec Focal length", dec_graph_best_focal_length}}), focal_max));
     if (ground_truth_focal_length_x_pixels) {
         std::map<double, double> graph_focal_deviation = percent_deviation_from_value(graph_best_focal_length_bisection, ground_truth_focal_length_x_pixels.value());
         std::set<Curve> curves({{"% Error in focal est.", graph_focal_deviation}, {"% Comp. error measure", graph_min_error_percent_max_focal_error}});
@@ -310,17 +463,17 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
         }
         write_graph_as_svg(html, std::make_tuple("Second init frame", "Error Percent", curves, percent_max));
     }
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", graph_de_df_plus}, {"-dE/dF(-)", graph_de_df_minus}}), no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Parallax", std::set<Curve>({{"Parallax", graph_parallax}}), no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Error at tiny focal length", std::set<Curve>({{"Error", graph_error_for_max_focal_length}}), no_max));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", graph_de_df_plus}, {"-dE/dF(-)", graph_de_df_minus}}), range_behaviour::no_max));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Parallax", std::set<Curve>({{"Parallax", graph_parallax}}), range_behaviour::no_max));
+    write_graph_as_svg(html, std::make_tuple("Second init frame", "Error at tiny focal length", std::set<Curve>({{"Error", graph_error_for_max_focal_length}}), range_behaviour::no_max));
     if (!graph_error_at_ground_truth_focal_length.empty()) {
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}, {"% gt error", graph_gt_error_percent_max_focal_error}, {"min % gt error",  graph_min_error_percent_gt_error}}), no_max));
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}}), no_max));
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}, {"Error @180fov", graph_error_for_max_focal_length}}), no_max));
+        write_graph_as_svg(html, std::make_tuple("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}, {"% gt error", graph_gt_error_percent_max_focal_error}, {"min % gt error",  graph_min_error_percent_gt_error}}), range_behaviour::no_max));
+        write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}}), range_behaviour::no_max));
+        write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}, {"Error @180fov", graph_error_for_max_focal_length}}), range_behaviour::no_max));
     }
     else {
-       write_graph_as_svg(html, std::make_tuple("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}}), no_max));
-       write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}}), no_max));
+       write_graph_as_svg(html, std::make_tuple("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}}), range_behaviour::no_max));
+       write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}}), range_behaviour::no_max));
     }
 
     // Simple stochastic analysis
@@ -334,22 +487,29 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
 
         if (ground_truth_focal_length_x_pixels) {
             std::map<double, double> gt_graph = constand_value_graph(measurement, ground_truth_focal_length_x_pixels.value());
-            write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic estimates", std::set<Curve>({{"measurement", measurement}, {"estimate", estimate}, {"ground truth", gt_graph}}), no_max));
+            write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic estimates", std::set<Curve>({{"measurement", measurement}, {"estimate", estimate}, {"ground truth", gt_graph}}), range_behaviour::no_max));
         }
         else
-           write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic estimates", std::set<Curve>({{"measurement", measurement} ,{"estimate", estimate}}), no_max));
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic uncertainty", std::set<Curve>({{"measurement uncertainty", measurement_uncertainty}, {"estimate uncertainty", estimate_uncertainty}}), no_max));
+           write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic estimates", std::set<Curve>({{"measurement", measurement} ,{"estimate", estimate}}), range_behaviour::no_max));
+        write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic uncertainty", std::set<Curve>({{"measurement uncertainty", measurement_uncertainty}, {"estimate uncertainty", estimate_uncertainty}}), range_behaviour::no_max));
     }
 
     // Export the error against focal length and field of view for individual frame pairs
     if (true) {
-        for (auto const& focal_error : frame_to_focal_length_to_error) {
-            auto fov_error = frame_to_fov_to_error.find(focal_error.first);
-            if (fov_error == frame_to_fov_to_error.end())
+        for (auto const& focal_error : p_focal_length_to_error.by_frame) {
+            auto fov_error = p_fov_to_error.by_frame.find(focal_error.first);
+            if (fov_error == p_fov_to_error.by_frame.end())
                 continue;
             html << "<h3>Frame " << focal_error.first[0] << " and " << focal_error.first[1] << "</h3>\n";
-            write_graph_as_svg(html, std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({{"Error", focal_error.second}}), no_max));
-            write_graph_as_svg(html, std::make_tuple("FOV", "Geometric Error", std::set<Curve>({{"Error", fov_error->second}}), no_max));
+
+            auto dec_fov_error = p_dec_focal_length_to_error.by_frame.find(focal_error.first);
+            if (dec_fov_error == p_dec_focal_length_to_error.by_frame.end())
+                write_graph_as_svg(html, std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({ {"Error", focal_error.second} }), range_behaviour::no_max));
+            else {
+                auto rescaled_dec_error = rescale_graph(dec_fov_error->second, 0.00001);
+                write_graph_as_svg(html, std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({ {"Error", focal_error.second}, {"Dec Error/1000", rescaled_dec_error} }), range_behaviour::no_max));
+            }
+            write_graph_as_svg(html, std::make_tuple("FOV", "Geometric Error", std::set<Curve>({ {"Error", fov_error->second} }), range_behaviour::no_max));
         }
     }
 }

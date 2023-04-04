@@ -13,6 +13,7 @@
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
 #include "stella_vslam/report/video_evaluation.h"
 #include "stella_vslam/report/metrics.h"
+#include "stella_vslam/solve/fundamental_consistency.h"
 
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
@@ -257,7 +258,10 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
 
-    stella_vslam_bfx::metrics::initialisation_debug().current_init_frames = {init_frm_.timestamp_, curr_frm.timestamp_}; // store the timestamps of the two frames
+    // store the timestamps of the two frames - perhaps combine these
+    stella_vslam_bfx::metrics::initialisation_debug().current_init_frames = {init_frm_.timestamp_, curr_frm.timestamp_};
+    stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
+    
     stella_vslam_bfx::metrics::initialisation_debug().submit_feature_match_debugging(num_matches);
     stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[init_frm_.timestamp_] = init_frm_.frm_obs_.num_keypts_;
     stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[curr_frm.timestamp_] = curr_frm.frm_obs_.num_keypts_;

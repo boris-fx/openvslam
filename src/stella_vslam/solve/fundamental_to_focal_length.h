@@ -6,6 +6,7 @@
 #pragma once
 
 #include <stella_vslam/type.h>
+#include <stella_vslam/exports.h>
 
 namespace stella_vslam::camera { class base; }
    
@@ -20,5 +21,13 @@ namespace stella_vslam_bfx {
 * 
 **/
 bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, stella_vslam::camera::base* camera, bool *focal_length_estimate_is_stable);
+
+double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, stella_vslam::camera::base const* camera, bool* focal_length_estimate_is_stable);
+
+std::set<double> candidateFocalLengthsOverFOVRange(double startDegrees, double endDegrees, double imageWidth);
+double error_for_focal_length(stella_vslam::Mat33_t const& F_21, stella_vslam::camera::base const* camera, double focal_length_x_pixels);
+double error_for_focal_length(stella_vslam::Mat33_t const& F_21, double focal_length_x_pixels, double par, double cx, double cy);
+
+STELLA_VSLAM_API bool fundamental_to_focal_length_optimisation_test();
 
 } // namespace stella_vslam_bfx
