@@ -166,8 +166,7 @@ stella_vslam_bfx::config_settings * settings_from_yaml(YAML::Node yaml_node)
     // Preprocessing
     const auto preproc_node = yaml_optional_ref(yaml_node, "Preprocessing");
     if ( preproc_node.size() ) {
-        settings->max_num_keypoints_ = preproc_node["max_num_keypoints"].as<unsigned int>(2000);
-        settings->ini_max_num_keypoints_ = preproc_node["ini_max_num_keypoints"].as<unsigned int>(2 * settings->max_num_keypoints_);
+        settings->min_feature_size_ = preproc_node["min_size"].as<unsigned int>(800);
         settings->depthmap_factor_ = preproc_node["depthmap_factor"].as<double>(1.0);
         settings->mask_rectangles_ =
             preproc_node["mask_rectangles"].as<std::vector<std::vector<float>>>(std::vector<std::vector<float>>());

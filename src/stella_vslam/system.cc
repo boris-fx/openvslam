@@ -165,20 +165,8 @@ void system::init(const config * cfg)
     //}
     auto mask_rectangles = cfg->settings_.mask_rectangles_;
 
-// <<<<<<< HEAD
-    // orb_params_db_ = new data::orb_params_database(orb_params_);
-
-    // const auto max_num_keypoints = cfg->settings_.max_num_keypoints_;
-    // extractor_left_ = new feature::orb_extractor(orb_params_, max_num_keypoints, mask_rectangles);
-    // if (camera_->setup_type_ == camera::setup_type_t::Monocular) {
-        // const auto ini_max_num_keypoints = std::max(cfg->settings_.ini_max_num_keypoints_, 2 * extractor_left_->get_max_num_keypoints());
-        // ini_extractor_left_ = new feature::orb_extractor(orb_params_, ini_max_num_keypoints, mask_rectangles);
-    // }
-// =======
-    // In stella 0.3.8 this is called max_num_keypoints in orb_extractor.h, and min_size here and in orb_extractor.cc
-    const auto min_size = cfg->settings_.max_num_keypoints_; // In stella 0.3.8 this is called max_num_keypoints in orb_extract.h and min_size here and in orb_extract.cc
+    const auto min_size = cfg->settings_.min_feature_size_;
     extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
-//>>>>>>> upstream/main
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
         extractor_right_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
     }

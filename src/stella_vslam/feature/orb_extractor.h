@@ -17,7 +17,7 @@ public:
 
     //! Constructor
     orb_extractor(const orb_params* orb_params,
-                  const unsigned int max_num_keypts,
+                  const unsigned int min_size,
                   const std::vector<std::vector<float>>& mask_rects = {});
 
     //! Destructor

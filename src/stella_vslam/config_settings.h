@@ -137,8 +137,7 @@ public:
     double depth_threshold_ = 40.0;
 
     // Preprocessing parameters
-    unsigned max_num_keypoints_ = 2000;
-    unsigned ini_max_num_keypoints_ = 0;
+    unsigned min_feature_size_ = 800;
     double depthmap_factor_ = 1.0;
     std::vector<std::vector<float>> mask_rectangles_;
 

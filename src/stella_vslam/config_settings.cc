@@ -140,8 +140,7 @@ std::ostream& operator<<(std::ostream& os, const config_settings& settings) {
     }
 
     os << "Preprocessing\n";
-    os << "\tMax num keypoints: " << settings.max_num_keypoints_ << std::endl;
-    os << "\tIni max num keypoints: " << settings.ini_max_num_keypoints_ << std::endl;
+    os << "\tMin feature size: " << settings.min_feature_size_ << std::endl;
     os << "\tDepthmap factor: " << settings.depthmap_factor_ << std::endl;
     os << "\tMask rectangles: ";
     for (auto rect : settings.mask_rectangles_) {
