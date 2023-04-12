@@ -5,6 +5,8 @@
 #include <spdlog/spdlog.h>
 
 #include <stella_vslam/data/keyframe.h>
+#include <stella_vslam/data/frame.h>
+#include <stella_vslam/data/keyframe_autocalibration_wrapper.h>
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/landmark.h>
 #include <stella_vslam/report/plot_html.h>
@@ -27,6 +29,7 @@ void frame_display_data::clear() {
     frame = -1;
     final_points = false;
     solve_success = false;
+    focal_length = 0.0;
     camera_pose.setIdentity();
     world_points.clear();
 }
@@ -141,7 +144,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         timestampToVideoFrame[timestamp] = frame;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
-        send_frame_data(frame, camera_pose, false, true);
+        send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
 
         double stage_progress = double(frame - begin + 1) / double(1 + end - begin);
         if (set_progress_)
@@ -188,7 +191,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         timestamp = videoFrameToTimestamp[frame];
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
-        send_frame_data(frame, camera_pose, false, true);
+        send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
 
         double stage_progress = double(first_keyframe.value() - frame) / double(first_keyframe.value() - begin);
         if (set_progress_)
@@ -247,7 +250,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         // Store the camera pose
         if (camera_pose && final_solve)
             final_solve->frame_to_camera[frame] = *camera_pose;
-        send_frame_data(frame, camera_pose, true, frame == begin);
+        send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, true, frame == begin);
 
         double stage_progress = double(frame - begin + 1) / double(1 + end - begin);
         if (set_progress_)
@@ -309,6 +312,7 @@ void solver::get_world_points(std::vector<Eigen::Vector3d>& world_points) const 
 }
 
 void solver::send_frame_data(int frame,
+                             const stella_vslam::camera::base* camera,
                              std::shared_ptr<Eigen::Matrix4d> camera_pose,
                              bool final_points,
                              bool send_points) const {
@@ -317,8 +321,9 @@ void solver::send_frame_data(int frame,
         // can (potentially) process it while the solver continues to run
         auto frame_data = std::make_shared<frame_display_data>();
         frame_data->frame = frame;
-        if (camera_pose != nullptr) {
+        if (camera && camera_pose) {
             frame_data->solve_success = true;
+            frame_data->focal_length = getCameraFocalLengthXPixels(camera);
             frame_data->camera_pose = *camera_pose;
             frame_data->final_points = final_points;
             if (send_points)

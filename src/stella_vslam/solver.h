@@ -46,6 +46,7 @@ public:
     int frame = -1;
     bool solve_success = false; // Indicates whether 3D data was generated
     bool final_points = false;  // Indicates whether mapping has completed
+    double focal_length = 0.0;
     Eigen::Matrix4d camera_pose;
     std::vector<Eigen::Vector3d> world_points;
 
@@ -96,6 +97,7 @@ protected:
 
     /// Package data and send to the calling application via display_frame_ callback
     void send_frame_data(int frame,
+                         const stella_vslam::camera::base* camera,
                          std::shared_ptr<Eigen::Matrix4d> camera_pose,
                          bool final_points,
                          bool send_points) const;
