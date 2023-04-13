@@ -65,7 +65,8 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
     const auto cost_F = fundamental_solver.get_best_cost();
     const float rel_cost_H = cost_H / (cost_H + cost_F);
 
-    stella_vslam_bfx::metrics::initialisation_debug().submit_homography_fundamental_cost(cost_H, cost_F);
+    // Average cost per match (pixels)
+    stella_vslam_bfx::metrics::initialisation_debug().submit_homography_fundamental_cost(cost_H/double(ref_cur_matches_.size()), cost_F/double(ref_cur_matches_.size()));
 
     // select a case according to the cost
     if (0.5 > rel_cost_H && homography_solver.solution_is_valid()) {
@@ -85,10 +86,10 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
            bool focal_length_estimate_is_stable(true);
            bool focal_length_changed(false);
            
-           bool const focal_length_via_points_test(true);
+           bool const focal_length_via_points_test(false);
            if (focal_length_via_points_test) {
-               //stella_vslam_bfx::focal_length_estimator::test_v2(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_,
-               //                       focal_length_estimate_is_stable, focal_length_changed);
+               stella_vslam_bfx::focal_length_estimator::test_v2(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_,
+                                      focal_length_estimate_is_stable, focal_length_changed);
 
                stella_vslam_bfx::focal_length_estimator::get_instance()->add_frame_pair(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur);
                stella_vslam_bfx::focal_length_estimator::get_instance()->run_optimisation(ref_camera_, focal_length_estimate_is_stable, focal_length_changed);
@@ -118,8 +119,12 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
         
         if (stella_vslam_bfx::metrics::initialisation_debug().active()) {
             // Force initialisation to fail, so can collect more initialisation data
+            spdlog::info("initialization forced to fail with F (initialisation_debug test active");
             return false;
         }
+        else
+            if (reconstruct_ok)
+                spdlog::info("initialization succeeded with F");
 
         return reconstruct_ok;
     }
@@ -169,7 +174,6 @@ bool perspective::reconstruct_with_F(const Mat33_t& F_ref_to_cur, const std::vec
         return false;
     }
 
-    spdlog::info("initialization succeeded with F");
     return true;
 }
 

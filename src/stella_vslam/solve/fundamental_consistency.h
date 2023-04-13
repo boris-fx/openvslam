@@ -18,6 +18,8 @@
 
 #include <opencv2/core/types.hpp>
 
+#include "stella_vslam/exports.h"
+
 namespace stella_vslam::camera { class base; }
 
 namespace stella_vslam_bfx {
@@ -37,7 +39,7 @@ struct input_matches {
     std::list<frame_pair_matches> frame_matches;
 };
 
-class focal_length_estimator
+class STELLA_VSLAM_API focal_length_estimator
 {
 public:
 
@@ -45,6 +47,8 @@ public:
 
 
     static focal_length_estimator* get_instance();
+
+    static void clear(); // clear for a new camera track
 
     std::array<double, 2> current_frame_pair; // Set the current frame identifiers - typically timestamps which aren't known when add_frame_pair() is called
 

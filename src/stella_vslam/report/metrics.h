@@ -118,14 +118,14 @@ public:
 
 
     static metrics* get_instance();
-    void clear(); // clear for a new camera track
+    static void clear(); // clear for a new camera track
 
     static initialisation_debugging& initialisation_debug();
 
     nlohmann::json to_json() const;
     bool from_json(const nlohmann::json& json);
 
-    void save_html_report(std::string_view const& filename, std::string thumbnail_path_relative) const;
+    void save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative) const;
     void save_json_report(std::string_view const& filename) const;
     
     struct track_test_info {

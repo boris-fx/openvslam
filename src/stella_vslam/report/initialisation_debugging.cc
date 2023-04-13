@@ -2,6 +2,8 @@
 
 #include <vector>
 #include <cmath>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #include "plot_html.h"
 #include <stella_vslam/solve/fundamental_consistency.h>
@@ -67,8 +69,8 @@ std::map<std::array<int, 2>, double> error_for_focal_length(double ground_truth_
 }
 
 initialisation_debugging::initialisation_debugging()
+: video_width(-1), current_init_frames({-1,-1})
 {
-
 }
 
 bool initialisation_debugging::active() const {
@@ -359,12 +361,20 @@ std::map<double, double> rescale_graph(std::map<double, double> const& data, dou
     return output;
 }
 
-std::map<double, double> constand_value_graph(std::map<double, double> const& data, double value) {
+std::map<double, double> constant_value_graph(std::map<double, double> const& data, double value) {
     std::map<double, double> output;
     if (!data.empty()) {
         output[data.begin()->first] = value;
         output[data.rbegin()->first] = value;
     }
+    return output;
+}
+
+std::map<double, double> focal_length_x_to_FOV_graph(std::map<double, double> const& data, double image_width)
+{
+    std::map<double, double> output;
+    for (auto const& d : data)
+        output[2.0 * atan2(0.5 * image_width, d.first) * 180.0 / M_PI] = d.second;
     return output;
 }
 
@@ -431,50 +441,42 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
 
         }
     }
-
+    
     //std::optional<double> percent_max(110);
-    axis_scaling percent_max(110);
+    axis_scaling percent_y(110);
 //    std::optional<double> focal_max(ground_truth_focal_length_x_pixels ? std::optional<double>(2.0 * ground_truth_focal_length_x_pixels.value()) : std::nullopt);
-    axis_scaling focal_max = ground_truth_focal_length_x_pixels ? axis_scaling(2.0 * ground_truth_focal_length_x_pixels.value()) : axis_scaling(range_behaviour::no_max);
+    axis_scaling focal_y = ground_truth_focal_length_x_pixels ? axis_scaling(2.0 * ground_truth_focal_length_x_pixels.value()) : range_behaviour::no_max;
+    range_behaviour full_x(range_behaviour::no_max), full_y(range_behaviour::no_max);
+    range_behaviour median_y(range_behaviour::max_from_median);
+    std::optional<double> no_gt, focal_gt(ground_truth_focal_length_x_pixels ? std::optional<double>(ground_truth_focal_length_x_pixels.value()) : std::nullopt);
 
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Feature motion (pixels)", std::set<Curve>({ {"First Quartile", graph_feature_motion_quantile_25},
+    axis_scaling focal_x = ground_truth_focal_length_x_pixels ? axis_scaling(3.0 * ground_truth_focal_length_x_pixels.value()) : range_behaviour::no_max;
+
+    html << "<h2>Feature Points and Matching</h2>" << std::endl;
+
+    write_graph_as_svg(html, Graph("Second init frame", "Feature motion (pixels)", std::set<Curve>({ {"First Quartile", graph_feature_motion_quantile_25},
                                                                                                                {"Second Quartile", graph_feature_motion_quantile_50},
-                                                                                                               {"Third Quartile", graph_feature_motion_quantile_75} }), range_behaviour::no_max));
+                                                                                                               {"Third Quartile", graph_feature_motion_quantile_75} }), full_x, full_y, no_gt));
+    write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Match count", graph_num_matches} }), full_x, full_y, no_gt));
+    html << "<hr>" << std::endl;
 
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Epipolar focal length", std::set<Curve>({ {"Focal length est.", graph_ep_best_focal_length}, {"Initial focal length", graph_ep_initial_focal_length}}), focal_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Epipolar pixel error", std::set<Curve>({ {"Error", graph_ep_min_error} }), range_behaviour::no_max));
+    html << "<h2>Structure type</h2>" << std::endl;
 
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "de/df", std::set<Curve>({ {"de/df", graph_ep_dedf}, {"sd de/df", graph_ep_sd_dedf} }), range_behaviour::max_from_median));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "de/dt", std::set<Curve>({ {"de/dtu", graph_ep_dedtu}, {"de/dtv", graph_ep_dedtv}, {"sd de/dtu", graph_ep_sd_dedtu}, {"sd de/dtv", graph_ep_sd_dedtv} }), range_behaviour::max_from_median));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "de/dr", std::set<Curve>({ {"de/drx", graph_ep_dedrx},  {"de/dry", graph_ep_dedry}, {"de/drz", graph_ep_dedrz},
-                                                                                             {"sd de/drx", graph_ep_sd_dedrx},  {"sd de/dry", graph_ep_sd_dedry}, {"sd de/drz", graph_ep_sd_dedrz} }), range_behaviour::max_from_median));
+    write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"H cost", graph_cost_H}, {"F cost", graph_cost_F} }), full_x, full_y, no_gt));
+    html << "<p>Average feature match deviation from the geometric model (pixels - with max of a few pixels). H cost is deviation from a planar scene model, F-cost measures deviation from a non-planar scene model.</p>" << std::endl;
+    html << "<hr>" << std::endl;
 
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Cost", std::set<Curve>({{"H cost", graph_cost_H}, {"F cost", graph_cost_F}}), range_behaviour::no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Num feature matches", std::set<Curve>({{"Match count", graph_num_matches}}), range_behaviour::no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Best Focal Length", std::set<Curve>({{"Focal length", graph_best_focal_length}, {"Focal length bisection", graph_best_focal_length_bisection}, {"Dec Focal length", dec_graph_best_focal_length}}), focal_max));
-    if (ground_truth_focal_length_x_pixels) {
-        std::map<double, double> graph_focal_deviation = percent_deviation_from_value(graph_best_focal_length_bisection, ground_truth_focal_length_x_pixels.value());
-        std::set<Curve> curves({{"% Error in focal est.", graph_focal_deviation}, {"% Comp. error measure", graph_min_error_percent_max_focal_error}});
-        if (!graph_percent_matches.empty())
-            curves.insert({"Feature match %", graph_percent_matches});
-        if (!graph_error_at_ground_truth_focal_length.empty()) {
-            std::map<double, double> graph_focal_deviation_2 = percent_deviation_from_value(graph_error_at_ground_truth_focal_length, graph_min_error);
-            curves.insert({"min error/gt error", graph_focal_deviation_2});
-        }
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Error Percent", curves, percent_max));
-    }
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", graph_de_df_plus}, {"-dE/dF(-)", graph_de_df_minus}}), range_behaviour::no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Parallax", std::set<Curve>({{"Parallax", graph_parallax}}), range_behaviour::no_max));
-    write_graph_as_svg(html, std::make_tuple("Second init frame", "Error at tiny focal length", std::set<Curve>({{"Error", graph_error_for_max_focal_length}}), range_behaviour::no_max));
-    if (!graph_error_at_ground_truth_focal_length.empty()) {
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}, {"% gt error", graph_gt_error_percent_max_focal_error}, {"min % gt error",  graph_min_error_percent_gt_error}}), range_behaviour::no_max));
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}}), range_behaviour::no_max));
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}, {"Error @180fov", graph_error_for_max_focal_length}}), range_behaviour::no_max));
-    }
-    else {
-       write_graph_as_svg(html, std::make_tuple("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}}), range_behaviour::no_max));
-       write_graph_as_svg(html, std::make_tuple("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}}), range_behaviour::no_max));
-    }
+    html << "<h2>Focal length from F-matrix (non-planar scene model)</h2>" << std::endl;
+
+
+//    write_graph_as_svg(html, Graph("Second init frame", "Epipolar focal length", std::set<Curve>({ {"Focal length est.", graph_ep_best_focal_length}, {"Initial focal length", graph_ep_initial_focal_length}}), full_x, focal_y, focal_gt));
+  //  write_graph_as_svg(html, Graph("Second init frame", "Best Focal Length", std::set<Curve>({ {"Focal length", graph_best_focal_length}, {"Focal length bisection", graph_best_focal_length_bisection}, {"Dec Focal length", dec_graph_best_focal_length} }), full_x, focal_y, focal_gt));
+
+    auto graph_singular_value(graph_ep_initial_focal_length.empty() ? graph_best_focal_length_bisection : graph_ep_initial_focal_length);
+    write_graph_as_svg(html, Graph("Second init frame", "Estimated Focal Length", std::set<Curve>({ {"Optimised", graph_ep_best_focal_length},
+                                                                                                    {"Singular value", graph_singular_value},
+                                                                                                    {"Decomposition-recomp.", dec_graph_best_focal_length} }), full_x, focal_y, focal_gt));
+
 
     // Simple stochastic analysis
     {
@@ -485,13 +487,47 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
         std::map<double, double> estimate, estimate_uncertainty;
         cumulative_stochastic_estimate(measurement, measurement_uncertainty, estimate, estimate_uncertainty);
 
-        if (ground_truth_focal_length_x_pixels) {
-            std::map<double, double> gt_graph = constand_value_graph(measurement, ground_truth_focal_length_x_pixels.value());
-            write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic estimates", std::set<Curve>({{"measurement", measurement}, {"estimate", estimate}, {"ground truth", gt_graph}}), range_behaviour::no_max));
+        write_graph_as_svg(html, Graph("Second init frame", "Stochastic estimates", std::set<Curve>({ {"measurement", measurement}, {"estimate", estimate} }), full_x, focal_y, focal_gt));
+        write_graph_as_svg(html, Graph("Second init frame", "Stochastic uncertainty", std::set<Curve>({ {"measurement uncertainty", measurement_uncertainty}, {"estimate uncertainty", estimate_uncertainty} }), full_x, focal_y, no_gt));
+    }
+
+    html << "<hr>" << std::endl;
+
+    html << "<h2>Optimised F-matrix deviation</h2>" << std::endl;
+
+    write_graph_as_svg(html, Graph("Second init frame", "Epipolar pixel error", std::set<Curve>({ {"Error", graph_ep_min_error} }), full_x, full_y, no_gt));
+
+    html << "<p>Average feature match deviation from optimised non-planar geometric model (pixels - with no max).</p>" << std::endl;
+   
+    html << "<hr>" << std::endl;
+
+    write_graph_as_svg(html, Graph("Second init frame", "de/df", std::set<Curve>({ {"de/df", graph_ep_dedf}, {"sd de/df", graph_ep_sd_dedf} }), full_x, median_y, no_gt));
+    write_graph_as_svg(html, Graph("Second init frame", "de/dt", std::set<Curve>({ {"de/dtu", graph_ep_dedtu}, {"de/dtv", graph_ep_dedtv}, {"sd de/dtu", graph_ep_sd_dedtu}, {"sd de/dtv", graph_ep_sd_dedtv} }), full_x, median_y, no_gt));
+    write_graph_as_svg(html, Graph("Second init frame", "de/dr", std::set<Curve>({ {"de/drx", graph_ep_dedrx},  {"de/dry", graph_ep_dedry}, {"de/drz", graph_ep_dedrz},
+                                                                                             {"sd de/drx", graph_ep_sd_dedrx},  {"sd de/dry", graph_ep_sd_dedry}, {"sd de/drz", graph_ep_sd_dedrz} }), full_x, median_y, no_gt));
+
+    if (ground_truth_focal_length_x_pixels) {
+        std::map<double, double> graph_focal_deviation = percent_deviation_from_value(graph_best_focal_length_bisection, ground_truth_focal_length_x_pixels.value());
+        std::set<Curve> curves({{"% Error in focal est.", graph_focal_deviation}, {"% Comp. error measure", graph_min_error_percent_max_focal_error}});
+        if (!graph_percent_matches.empty())
+            curves.insert({"Feature match %", graph_percent_matches});
+        if (!graph_error_at_ground_truth_focal_length.empty()) {
+            std::map<double, double> graph_focal_deviation_2 = percent_deviation_from_value(graph_error_at_ground_truth_focal_length, graph_min_error);
+            curves.insert({"min error/gt error", graph_focal_deviation_2});
         }
-        else
-           write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic estimates", std::set<Curve>({{"measurement", measurement} ,{"estimate", estimate}}), range_behaviour::no_max));
-        write_graph_as_svg(html, std::make_tuple("Second init frame", "Stochastic uncertainty", std::set<Curve>({{"measurement uncertainty", measurement_uncertainty}, {"estimate uncertainty", estimate_uncertainty}}), range_behaviour::no_max));
+        write_graph_as_svg(html, Graph("Second init frame", "Error Percent", curves, full_x, percent_y, no_gt));
+    }
+    write_graph_as_svg(html, Graph("Second init frame", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", graph_de_df_plus}, {"-dE/dF(-)", graph_de_df_minus}}), full_x, full_y, no_gt));
+    write_graph_as_svg(html, Graph("Second init frame", "Parallax", std::set<Curve>({{"Parallax", graph_parallax}}), full_x, full_y, no_gt));
+    write_graph_as_svg(html, Graph("Second init frame", "Error at tiny focal length", std::set<Curve>({{"Error", graph_error_for_max_focal_length}}), full_x, full_y, no_gt));
+    if (!graph_error_at_ground_truth_focal_length.empty()) {
+        write_graph_as_svg(html, Graph("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}, {"% gt error", graph_gt_error_percent_max_focal_error}, {"min % gt error",  graph_min_error_percent_gt_error}}), full_x, full_y, no_gt));
+        write_graph_as_svg(html, Graph("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}}), full_x, full_y, no_gt));
+        write_graph_as_svg(html, Graph("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}, {"Error @gt", graph_error_at_ground_truth_focal_length}, {"Error @180fov", graph_error_for_max_focal_length}}), full_x, full_y, no_gt));
+    }
+    else {
+       write_graph_as_svg(html, Graph("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}}), full_x, full_y, no_gt));
+       write_graph_as_svg(html, Graph("Second init frame", "Min Geometric Error", std::set<Curve>({{"Error", graph_min_error}}), full_x, full_y, no_gt));
     }
 
     // Export the error against focal length and field of view for individual frame pairs
@@ -502,14 +538,41 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
                 continue;
             html << "<h3>Frame " << focal_error.first[0] << " and " << focal_error.first[1] << "</h3>\n";
 
-            auto dec_fov_error = p_dec_focal_length_to_error.by_frame.find(focal_error.first);
-            if (dec_fov_error == p_dec_focal_length_to_error.by_frame.end())
-                write_graph_as_svg(html, std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({ {"Error", focal_error.second} }), range_behaviour::no_max));
-            else {
-                auto rescaled_dec_error = rescale_graph(dec_fov_error->second, 0.00001);
-                write_graph_as_svg(html, std::make_tuple("Focal length (pixels)", "Geometric Error", std::set<Curve>({ {"Error", focal_error.second}, {"Dec Error/1000", rescaled_dec_error} }), range_behaviour::no_max));
+
+
+            auto dec_focal_length_to_error = p_dec_focal_length_to_error.by_frame.find(focal_error.first);
+            if (dec_focal_length_to_error == p_dec_focal_length_to_error.by_frame.end()) {
+
+                write_graph_as_svg(html, Graph("Focal length (pixels)", "Geometric Error", std::set<Curve>({ {"Error", focal_error.second} }), focal_x, full_y, no_gt));
+                write_graph_as_svg(html, Graph("FOV", "Geometric Error", std::set<Curve>({ {"Error", fov_error->second} }), full_x, full_y, no_gt));
+
             }
-            write_graph_as_svg(html, std::make_tuple("FOV", "Geometric Error", std::set<Curve>({ {"Error", fov_error->second} }), range_behaviour::no_max));
+            else {
+                //double scale(0.00001);
+                //if (!dec_focal_length_to_error->second.empty() && !focal_error.second.empty())
+                //    scale = focal_error.second.rbegin()->second / dec_focal_length_to_error->second.rbegin()->second;
+                //auto rescaled_dec_error = rescale_graph(dec_focal_length_to_error->second, scale); // rescale to pixel error
+                //range_behaviour range_y = full_y;
+                //if (!rescaled_dec_error.empty())
+                //    range_y = range_behaviour( 1.5 * std::max(rescaled_dec_error.begin()->second, rescaled_dec_error.rbegin()->second));
+
+                double scale(100000);
+                if (!dec_focal_length_to_error->second.empty() && !focal_error.second.empty())
+                    scale = dec_focal_length_to_error->second.rbegin()->second / focal_error.second.rbegin()->second;
+                auto rescaled_focal_error = rescale_graph(focal_error.second, scale); // rescale to pixel error
+                axis_scaling range_y = full_y;
+                if (!rescaled_focal_error.empty())
+                    range_y = axis_scaling(1.5 * std::max(dec_focal_length_to_error->second.begin()->second, dec_focal_length_to_error->second.rbegin()->second));
+                html << "<p>" << range_y.max << " " << dec_focal_length_to_error->second.begin()->second << " " << dec_focal_length_to_error->second.rbegin()->second << "</p>" << std::endl;
+                write_graph_as_svg(html, Graph("Focal length (pixels)", "Geometric Error", std::set<Curve>({ {"Error", rescaled_focal_error}, {"Decomp Error", dec_focal_length_to_error->second} }), focal_x, range_y, no_gt));
+            
+                std::map<double, double> graph_dec_fov_to_error = focal_length_x_to_FOV_graph(dec_focal_length_to_error->second, video_width);
+                auto rescaled_fov_error = rescale_graph(fov_error->second, scale); // rescale to pixel error
+
+                write_graph_as_svg(html, Graph("FOV", "Geometric Error", std::set<Curve>({ {"Error", rescaled_fov_error}, {"Dec Error", graph_dec_fov_to_error} }), full_x, range_y, no_gt));
+
+            
+            }
         }
     }
 }

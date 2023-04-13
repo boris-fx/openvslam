@@ -22,7 +22,24 @@ struct axis_scaling
 };
 
 using Curve = std::pair<std::string, std::map<double, double>>; /// Data name, map from x value to y
-using Graph = std::tuple<std::string, std::string, std::set<Curve>, axis_scaling>; /// x label, y label, set of curves, Y-axis scaling
+//using Graph = std::tuple<std::string, std::string, std::set<Curve>, axis_scaling, std::optional<double>>; /// x label, y label, set of curves, Y-axis scaling, ground truth y-value
+
+struct Graph
+{
+    Graph(std::string x_label, std::string y_label, std::set<Curve> curves, axis_scaling x_axis_scaling, axis_scaling y_axis_scaling, std::optional<double> ground_truth_y=std::nullopt)
+        : x_label(x_label), y_label(y_label), curves(curves), ground_truth_y(ground_truth_y)
+        , x_axis_scaling(x_axis_scaling), y_axis_scaling(y_axis_scaling)
+    {}
+
+    std::string x_label;
+    std::string y_label;
+    std::set<Curve> curves;
+    axis_scaling x_axis_scaling;
+    axis_scaling y_axis_scaling;
+    std::optional<double> ground_truth_y;
+
+
+};
 
 void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs);
 

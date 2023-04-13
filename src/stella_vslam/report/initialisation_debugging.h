@@ -31,6 +31,7 @@ public:
     initialisation_debugging();
 
     std::array<double, 2> current_init_frames; 
+    double video_width;
     
     bool active() const;
 

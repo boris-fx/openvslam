@@ -243,7 +243,14 @@ double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camer
     double focal_length_x_pixels_2 = error_min_2->first;
 
     double error_for_max_focal_length = focal_length_to_error.rbegin()->second;
-    *focal_length_estimate_is_stable = error_for_max_focal_length > 0.04; // to be explored more
+    double error_min_value = error_min->second;
+    double min_error_percent_max_focal_error = 100.0 * error_min_value / error_for_max_focal_length;
+
+    // If the calculation is stable there should be a large drop in error between a focal_length
+    //    approaching infinity, and the focal length giving the minimum error
+    double stability = error_for_max_focal_length / error_min_value;
+    *focal_length_estimate_is_stable = stability > 2.0;
+    //*focal_length_estimate_is_stable = error_for_max_focal_length > 0.04; // to be explored more
 
     spdlog::info("Initial focal length estimate: nearest {}, bisection {} (stability {})", focal_length_x_pixels_0, focal_length_x_pixels_2, error_for_max_focal_length);
 
@@ -254,9 +261,8 @@ double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camer
         double error_minus = error_for_focal_length(F_21, camera, focal_length_x_pixels_2 - delta_f);
         double de_df_plus = -(error_plus - error_min->second) / delta_f;
         double de_df_minus = (error_min->second - error_minus) / delta_f;
-        double error_min_value = error_min->second;
-        double min_error_percent_max_focal_error = 100.0 * error_min_value / error_for_max_focal_length;
 
+        stella_vslam_bfx::metrics::initialisation_debug().video_width = (double)camera->cols_;
         metrics::initialisation_debug().submit_fundamental_to_focal_length_debugging(error_for_max_focal_length,
                                                                                      error_min_value,
                                                                                      focal_length_x_pixels_2,

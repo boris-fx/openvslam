@@ -16,6 +16,7 @@
 #include "stella_vslam/solver.h"
 #include "stella_vslam/report/metrics.h"
 #include "stella_vslam/solve/fundamental_to_focal_length.h"
+#include "stella_vslam/solve/fundamental_consistency.h"
 
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/data/keyframe.h"
@@ -643,6 +644,8 @@ int mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
     unsigned int num_frame = 0;
     double timestamp = start_timestamp;
 
+    stella_vslam_bfx::focal_length_estimator::clear();
+
     bool is_not_end = true;
     // run the slam in another thread
     std::thread thread([&]() {
@@ -1026,7 +1029,7 @@ void mono_tracking_2(
         stella_vslam_bfx::metrics::get_instance()->input_video_metadata.name = "run_view_slam metrics";
 
        // Run the solve
-       solver.track_frame_range(0, 50, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
+       solver.track_frame_range(0, 500, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
 
        printSolveSummary(solve, print_results);
 
@@ -1038,7 +1041,7 @@ void mono_tracking_2(
            std::string init_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_init.html";
            stella_vslam_bfx::metrics::initialisation_debug().save_html_report(init_html_filename, initialFocalLength);
            std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
-           stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "");
+           stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "", "");
        }
 
     // automatically close the viewer

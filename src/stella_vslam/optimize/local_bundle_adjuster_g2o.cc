@@ -33,11 +33,45 @@ local_bundle_adjuster_g2o::local_bundle_adjuster_g2o(const stella_vslam_bfx::con
     : num_first_iter_(num_first_iter), num_second_iter_(num_second_iter),
       use_additional_keyframes_for_monocular_(settings.use_additional_keyframes_for_monocular_) {}
 
+std::string timestamp_as_string(double timestamp)
+{
+    // Print as ints (assuming timestamps are separated by 1.0)
+    return std::to_string(int(timestamp + 0.5));
+}
+
+std::string keyframe_map_as_string(std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> const& keyfrms)
+{
+    if (keyfrms.empty())
+        return std::string();
+    // Collect timestamps
+    std::vector<double> timestamps;
+    for (auto const& key : keyfrms)
+        timestamps.push_back(key.second->timestamp_);
+    // Print as ints (assuming timestamps are separated by 1.0)
+    std::stringstream ss;
+    for (int i = 0; i < timestamps.size() - 1; ++i)
+        ss << timestamp_as_string(timestamps[i]) << ", ";
+    ss << timestamp_as_string(*timestamps.rbegin());
+    return ss.str();
+}
+
+void print_keyframe_info(std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> const& fixed_keyfrms,
+                         std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> const& local_keyfrms,
+                         const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, int map_frame_count)
+{
+    std::stringstream ss;
+
+    ss << "local_bundle_adjuster frame: " << timestamp_as_string(curr_keyfrm->timestamp_) 
+                                          << " - local frames: " << keyframe_map_as_string(local_keyfrms)
+                                          << " - fixed frames : " << keyframe_map_as_string(fixed_keyfrms) 
+                                          << " - keyframe count: " << map_frame_count << std::endl;
+
+    spdlog::info("{}", ss.str());
+}
+
 void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
                                          const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
     // 1. Aggregate the local and fixed keyframes, and local landmarks
-
-   //spdlog::warn("local_bundle_adjuster::optimize - current keyframe: {}", curr_keyfrm->id_);
 
     // Correct the local keyframes of the current keyframe
     std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> local_keyfrms;
@@ -187,6 +221,8 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
         auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(fixed_keyfrm, true);
         optimizer.addVertex(keyfrm_vtx);
     }
+
+    print_keyframe_info(fixed_keyfrms, local_keyfrms, curr_keyfrm, map_db->get_num_keyframes());
 
     // 4. Connect the vertices of the keyframe and the landmark by using an edge of reprojection constraint
 

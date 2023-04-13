@@ -276,7 +276,7 @@ std::string to_string(std::set<T> const& s)
     return str;
 }
 
-void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_file_relative) const {
+void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative) const {
     std::ofstream myfile;
     myfile.open(filename.data());
 
@@ -297,7 +297,15 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
 
     html << "<h1>" << input_video_metadata.name << "</h1>\n";
 
-    html << "<img src=\"" << thumbnail_file_relative << "\" alt=\"Preview\" width=\"800\">\n ";
+    if (!thumbnail_path_relative.empty() && video_path_relative.empty())
+        html << "<img src=\"" << thumbnail_path_relative << "\" alt=\"Preview\" width=\"800\">\n ";
+
+    if (!video_path_relative.empty()) {
+        html << "<video width = \"1280\" controls>\n";
+        html << "<source src = \"" << video_path_relative << "\" type = \"video/mp4\">\n";
+        html << "Your browser does not support HTML video.\n";
+        html << "</video>\n";
+    }
 
     html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " x pixels.</p>\n";
 
@@ -618,7 +626,7 @@ void metrics_html_test(std::string const& directory, std::array<std::string, 3> 
         metrics_array[i] = std::make_unique<metrics_copy>(*the_metrics);
         
         track_test_info_list.push_back({&metrics_array[i].get()->operator()(), thumbnail_filenames_relative_overview[i], html_filename_relative_overview});
-        the_metrics->save_html_report(html_filename_absolute, thumbnail_filenames_relative_html[i]);
+        the_metrics->save_html_report(html_filename_absolute, thumbnail_filenames_relative_html[i], std::string());
 
         // write prettified JSON to another file
         std::string json_filename = directory + "/report" + std::to_string(i + 1) + ".json";

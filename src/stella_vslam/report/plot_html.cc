@@ -20,6 +20,7 @@ struct LabelToValue {
 };
 
 struct LabelledCurve {
+    bool ghost = false; // No circles, and grey - e.g. indication of a ground truth value
     std::string name;
     std::vector<LabelToValue> dataValues;
 };
@@ -148,7 +149,7 @@ std::vector<std::vector<float>> generateColours(unsigned int n, float saturation
     return cols;
 }
 
-void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::string_view xLabel, std::list<LabelledCurve> const& curves, bool linearXLabels, int graphWidth, int graphHeight, bool drawVertexCircles, std::optional<double> hardMaxY) {
+void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::string_view xLabel, std::list<LabelledCurve> const& curves, bool linearXLabels, int graphWidth, int graphHeight, bool drawVertexCircles, std::optional<double> hard_max_x, std::optional<double> hard_max_y) {
    int valueNameSize(200); // Size of text xLabel
    int labelSize(200); // size of text dataValues[i].label - todo calculate based on string length - maybe use 'textLength' attriubute to force size
    int legendWidth(400);
@@ -160,7 +161,7 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
 
    // Horizontal axis (x-value 0, 1, 2, 3...)
    int xCanvas0(30);
-   int yCanvas0(height - labelSize); // bottom
+   int yCanvas0(linearXLabels ? height - 50 : height - labelSize); // bottom
    float xCanvasInc(0);
    float yCanvasInc(0);
    float xStartValue(0);
@@ -224,6 +225,8 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
                minXValue = dataValue.index;
          }
       }
+      if (hard_max_x && maxXValue > hard_max_x.value())
+          maxXValue = hard_max_x.value();
       std::list<std::pair<float, std::string>> ticks = tickMarksForValueRange(minXValue, maxXValue, approxTickCountX);
 
       //std::set<int> allTimeValues;
@@ -290,8 +293,8 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
          for (auto const& dataValue : curve.dataValues)
             if (maxYValue < dataValue.value)
                maxYValue = dataValue.value;
-      if (hardMaxY && maxYValue > hardMaxY.value())
-          maxYValue = hardMaxY.value();
+      if (hard_max_y && maxYValue > hard_max_y.value())
+          maxYValue = hard_max_y.value();
       float minYValue(0);
 
       std::list<std::pair<float, std::string>> ticks = tickMarksForValueRange(minYValue, maxYValue, approxTickCountY);
@@ -334,13 +337,16 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
       }
 
       // Plot the curve as a polyline
+      if (curve.ghost)
+          rgb[c] = { 128, 128, 128 }; // grey
       svg << "<polyline points=\"";
       for (auto const& xy : xyList)
           svg << xy.first << "," << xy.second << " ";
-      svg << "\" style=\"fill:none;stroke:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");stroke-width:3\" />" << std::endl;
+      int stroke_width(curve.ghost ? 1 : 3);
+      svg << "\" style=\"fill:none;stroke:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");stroke-width:" << stroke_width << "\" />" << std::endl;
 
       // Draw a circle on each vertex of the curve
-      if (drawVertexCircles)
+      if (drawVertexCircles && !curve.ghost)
          for (auto const& xy : xyList)
               svg << "<circle cx = \"" << xy.first << "\" cy = \"" << xy.second << "\" r = \"3\" fill = rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ") />" << std::endl;
 
@@ -377,33 +383,50 @@ double graph_median(std::set<Curve> const& curves)
 
 void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
 {
-   auto [xLabel, yLabel, curves, y_axis_scaling] = graph;
-   std::list<LabelledCurve> labelled_curves;
+    //auto [xLabel, yLabel, curves, y_axis_scaling, ground_truth_y] = graph;
+    std::list<LabelledCurve> labelled_curves;
 
-   for (auto const& curve : curves) {
-      LabelledCurve labelled_curve;
-      labelled_curve.name = curve.first;
-      labelled_curve.dataValues.resize(curve.second.size());
-      int i(0);
-      for (auto const& vertex : curve.second) {
+    for (auto const& curve : graph.curves) {
+        LabelledCurve labelled_curve;
+        labelled_curve.name = curve.first;
+        labelled_curve.dataValues.resize(curve.second.size());
+        int i(0);
+        for (auto const& vertex : curve.second) {
             labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
             labelled_curve.dataValues[i].value = (float)vertex.second;
             //labelled_curve.dataValues[i].label = std::string(); // the x-values can also have text labels
             ++i;
-      }
-      labelled_curves.push_back(labelled_curve);
-   }
-   bool linearXLabels(true);
+        }
+        labelled_curves.push_back(labelled_curve);
+    }
+    if (graph.ground_truth_y) {
+        std::set<float> x_values;
+        for (auto const& curve : graph.curves)
+            for (auto const& vertex : curve.second)
+                x_values.insert(vertex.first);
+        if (!x_values.empty()) {
+            LabelledCurve ghost_curve;
+            ghost_curve.ghost = true;
+            ghost_curve.dataValues = { LabelToValue("", graph.ground_truth_y.value(), *x_values.begin()),
+                                       LabelToValue("", graph.ground_truth_y.value(), *x_values.rbegin()) };
+            labelled_curves.push_back(ghost_curve);
+        }
+    }
+    bool linearXLabels(true);
 
+    std::optional<double> hard_max_x;
+    if (graph.x_axis_scaling.behaviour == range_behaviour::hard_max)
+        hard_max_x = graph.x_axis_scaling.max;
+//    if (graph.x_axis_scaling.behaviour == range_behaviour::max_from_median)
+  //      hard_max_x = 1.5 * graph_median(graph.curves);
 
-   std::optional<double> hard_max_y;
-   if (y_axis_scaling.behaviour == range_behaviour::hard_max)
-       hard_max_y = y_axis_scaling.max;
-   if (y_axis_scaling.behaviour == range_behaviour::max_from_median)
-       hard_max_y = 1.5 * graph_median(curves);
+    std::optional<double> hard_max_y;
+    if (graph.y_axis_scaling.behaviour == range_behaviour::hard_max)
+        hard_max_y = graph.y_axis_scaling.max;
+    if (graph.y_axis_scaling.behaviour == range_behaviour::max_from_median)
+        hard_max_y = 1.5 * graph_median(graph.curves);
 
-   write_graph_as_svg(svg, yLabel, xLabel, labelled_curves, linearXLabels, 1200, 600, true, hard_max_y);
-
+    write_graph_as_svg(svg, graph.y_label, graph.x_label, labelled_curves, linearXLabels, 1000, 500, true, hard_max_x, hard_max_y);
 }
 
 
@@ -421,52 +444,10 @@ html_file::~html_file()
 
 void write_graphs_html(std::string_view const& filename, std::set<Graph> graphs)
 {
-#if 1
     html_file html(filename);
     for (auto const& graph : graphs)
         write_graph_as_svg(html.html, graph);
     html << "<p>text</p>";
-#else
-
-   std::ofstream myfile;
-   myfile.open(filename.data());
-
-   std::stringstream html;
-   html << "<!DOCTYPE html><html><head></head><body>";
-
-   for (auto const& graph : graphs) {
-    
-      //auto [xLabel, yLabel, curves] = graph; 
-      //std::list<LabelledCurve> labelled_curves;
-
-      //for (auto const& curve : curves) {
-      //   LabelledCurve labelled_curve;
-      //   labelled_curve.name = curve.first;
-      //   labelled_curve.dataValues.resize(curve.second.size());
-      //   int i(0);
-      //   for (auto const& vertex : curve.second) {
-      //      labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
-      //      labelled_curve.dataValues[i].value = (float)vertex.second;
-      //      //labelled_curve.dataValues[i].label = std::string();
-      //      ++i;
-      //   }
-      //   labelled_curves.push_back(labelled_curve);
-      //}
-      //bool linearXLabels(true);
-
-      ////html << "<h3>" << title << "</h3>" << std::endl;
-
-      //write_graph_as_svg(html, yLabel, xLabel, labelled_curves, linearXLabels, 1200, 600, true);
-
-      write_graph_as_svg(html, graph);
-   }
-
-   html << "</body></html>";
-
-   myfile << html.str();
-   myfile.close();
-#endif
-
 }
 
 bool disable_all_html_graph_export() {

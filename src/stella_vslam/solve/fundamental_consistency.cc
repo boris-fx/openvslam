@@ -1547,6 +1547,13 @@ focal_length_estimator* focal_length_estimator::get_instance() {
     return instance;
 }
 
+void focal_length_estimator::clear() {
+    if (instance) {
+        delete instance;
+        instance = nullptr;
+    }
+}
+
 bool focal_length_estimator::add_frame_pair(const std::vector<cv::KeyPoint>& undist_keypts_1,
                                             const std::vector<cv::KeyPoint>& undist_keypts_2,
                                             const std::vector<std::pair<int, int>>& input_matches_12,
@@ -1563,6 +1570,27 @@ bool focal_length_estimator::add_frame_pair(const std::vector<cv::KeyPoint>& und
     auto f_undist_keypts_2 = m_matches.undist_keypts.find(frame_id_2);
     if (f_undist_keypts_2 == m_matches.undist_keypts.end())
         m_matches.undist_keypts[frame_id_2] = undist_keypts_2;
+
+#if 1
+    // sanity check
+    int count_pts_1(undist_keypts_1.size());
+    int count_pts_2(undist_keypts_2.size());
+
+    int max_match_pts_1 = std::max_element(input_matches_12.begin(), input_matches_12.end(),
+        [](std::pair<int, int> const& lhs, std::pair<int, int> const& rhs) { return lhs.first < rhs.first; })->first;
+    int max_match_pts_2 = std::max_element(input_matches_12.begin(), input_matches_12.end(),
+        [](std::pair<int, int> const& lhs, std::pair<int, int> const& rhs) { return lhs.second < rhs.second; })->second;
+
+    int count_pts_1b(m_matches.undist_keypts[frame_id_1].size());
+    int count_pts_2b(m_matches.undist_keypts[frame_id_2].size());
+
+    spdlog::info("-->frames {}-{} points {}-{} {}-{} matches {}-{}", current_frame_pair[0], current_frame_pair[1], count_pts_1, count_pts_2, count_pts_1b, count_pts_2b, max_match_pts_1, max_match_pts_2);
+    if (max_match_pts_1 >= count_pts_1 || max_match_pts_2 >= count_pts_2)
+        int yy = 0;
+    if (count_pts_1 != count_pts_1b || count_pts_2 != count_pts_2b)
+        int yyy = 0;
+#endif
+
 
     // Create a new frame_pair_matches entry in m_matches
     frame_pair_matches frame_matches;
