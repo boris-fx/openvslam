@@ -990,7 +990,7 @@ bool focal_length_estimator::test(const std::vector<cv::KeyPoint>& undist_keypts
     focal_length_changed = focal_length_estimate_is_stable;
 
     if (focal_length_estimate_is_stable) {
-        bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, focal_length_from_f_only);
+        bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_from_f_only);
         return set_f_ok;
     }
     return false;
@@ -1046,7 +1046,7 @@ bool focal_length_estimator::test_v2(const std::vector<cv::KeyPoint>& undist_key
     focal_length_changed = focal_length_estimate_is_stable;
 
     if (focal_length_estimate_is_stable) {
-        bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, metrics.focal_length_at_min_error);
+        bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, metrics.focal_length_at_min_error);
         return set_f_ok;
     }
 
@@ -1663,7 +1663,7 @@ bool focal_length_estimator::run_optimisation(stella_vslam::camera::base* camera
 //    focal_length_changed = focal_length_estimate_is_stable;
 //
 //    if (focal_length_estimate_is_stable) {
-//        bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, metrics.focal_length_at_min_error);
+//        bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, metrics.focal_length_at_min_error);
 //        return set_f_ok;
 //    }
 //#endif

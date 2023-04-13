@@ -1,6 +1,6 @@
 #include "video_evaluation.h"
 
-#define USE_OPENCV_VIDEO_IO 0
+#define USE_OPENCV_VIDEO_IO 1
 
 #include <spdlog/spdlog.h>
 
@@ -16,7 +16,6 @@
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/landmark.h>
-#include <stella_vslam/report/video_evaluation.h>
 #include <stella_vslam/solver.h>
 
 namespace stella_vslam_bfx {

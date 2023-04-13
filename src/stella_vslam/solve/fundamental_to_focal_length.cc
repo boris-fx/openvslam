@@ -74,19 +74,19 @@ std::shared_ptr<stella_vslam::camera::base> modified_focal_length_camera_copy(st
         case camera::model_type_t::Perspective: {
             auto c = static_cast<camera::perspective const*>(camera);
             auto camera_copy = std::make_shared<camera::perspective>(*c);
-            if (setCameraFocalLength(camera_copy.get(), focal_length_x_pixels))
+            if (set_camera_focal_length_x_pixels(camera_copy.get(), focal_length_x_pixels))
                return camera_copy;
         }
         case camera::model_type_t::Fisheye: {
             auto c = static_cast<camera::fisheye const*>(camera);
             auto camera_copy = std::make_shared<camera::fisheye>(*c);
-            if (setCameraFocalLength(camera_copy.get(), focal_length_x_pixels))
+            if (set_camera_focal_length_x_pixels(camera_copy.get(), focal_length_x_pixels))
                return camera_copy;
         }
         case camera::model_type_t::RadialDivision: {
             auto c = static_cast<camera::radial_division const*>(camera);
             auto camera_copy = std::make_shared<camera::radial_division>(*c);
-            if (setCameraFocalLength(camera_copy.get(), focal_length_x_pixels))
+            if (set_camera_focal_length_x_pixels(camera_copy.get(), focal_length_x_pixels))
                return camera_copy;
         }
     }
@@ -289,7 +289,7 @@ bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* ca
    double focal_length_estimate = min_geometric_error_focal_length(F_21, camera, focal_length_estimate_is_stable);
 
    if (focal_length_estimate_is_stable) {
-       bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(camera, focal_length_estimate);
+       bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_estimate);
        return set_f_ok;
    }
    return false;

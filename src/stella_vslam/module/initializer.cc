@@ -11,7 +11,6 @@
 #include "stella_vslam/match/prematched.h"
 #include "stella_vslam/module/initializer.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
-#include "stella_vslam/report/video_evaluation.h"
 #include "stella_vslam/report/metrics.h"
 #include "stella_vslam/solve/fundamental_consistency.h"
 
@@ -85,7 +84,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             }
 
             bool optimise_focal_length = curr_frm.camera_->autocalibration_parameters_.optimise_focal_length;
-            double last_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
+            double last_focal_length = stella_vslam_bfx::focal_length_x_pixels_from_camera(curr_frm.camera_);
             bool refine_initialisation(optimise_focal_length);
             bool destroy_initialiser_in_createMap(!refine_initialisation);
 
@@ -100,7 +99,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             }
 
             if (focal_length_was_modified) {
-                last_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
+                last_focal_length = stella_vslam_bfx::focal_length_x_pixels_from_camera(curr_frm.camera_);
                 // Update bearing vectors for the frame objects used by create_map_for_monocular
                 update_frame_bearing_vectors(curr_frm, curr_frm.camera_);
                 update_frame_bearing_vectors(init_frm_, curr_frm.camera_);
@@ -116,7 +115,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             if (refine_initialisation) {
                double const focal_length_change_percent_threshold(5.0); /// Stop iterating if the change percent falls below this
                for (int i = 0; i <4; ++i) {
-                   double new_focal_length = stella_vslam_bfx::getCameraFocalLengthXPixels(curr_frm.camera_);
+                   double new_focal_length = stella_vslam_bfx::focal_length_x_pixels_from_camera(curr_frm.camera_);
                    double focal_length_change_percent = fabs(100.0 * (new_focal_length - last_focal_length) / last_focal_length);
                    last_focal_length = new_focal_length;
                    if (focal_length_change_percent < focal_length_change_percent_threshold)

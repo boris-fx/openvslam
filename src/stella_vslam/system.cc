@@ -346,24 +346,9 @@ bool system::relocalize_by_first_map_keyframe_pose() {
 double system::focal_length_x_pixels() const {
     if (map_db_) {
         auto keyfrms = map_db_->get_all_keyframes();
-        if (!keyfrms.empty()) {
-
-            // Get the shared camera from a keyframe
-            stella_vslam::camera::base* camera(nullptr);
-            for (const auto& keyfrm : keyfrms) {
-                if (!keyfrm) {
-                    continue;
-                }
-                if (keyfrm->will_be_erased()) {
-                    continue;
-                }
-                camera = keyfrm->camera_;
-                break;
-            }
-
-            if (camera)
-               return stella_vslam_bfx::getCameraFocalLengthXPixels(camera);
-        }
+        stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+        if (camera)
+            return stella_vslam_bfx::focal_length_x_pixels_from_camera(camera);
     }
     return -1.0;
 }

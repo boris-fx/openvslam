@@ -38,10 +38,8 @@ namespace optimize {
 internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
                                                                         std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
 {
-    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
-    if (!autocalibration_wrapper())
-        return nullptr;
-    if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
+    stella_vslam::camera::base const* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
         return nullptr;
 
     // Convert the camera intrinsics to a g2o vertex
@@ -52,7 +50,7 @@ internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::s
 
     vtx->setId(vtx_id);
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
-    vtx->setEstimate(internal::camera_intrinsics_vertex_type(*autocalibration_wrapper.fx, 0.0, 0.0));
+    vtx->setEstimate(internal::camera_intrinsics_vertex_type(stella_vslam_bfx::focal_length_x_pixels_from_camera(camera), 0.0, 0.0));
 #else
     vtx->setEstimate(*autocalibration_wrapper.fx);
 #endif
@@ -70,11 +68,15 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
     if (!vertex)
         return false;
 
-    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
-    if (!autocalibration_wrapper())
+    stella_vslam::camera::base *camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
         return nullptr;
-    if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
-        return nullptr;
+
+    //stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    //if (!autocalibration_wrapper())
+    //    return nullptr;
+    //if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
+    //    return nullptr;
 
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
     double focal_length_x_pixels = vertex->estimate()(0);
@@ -83,7 +85,7 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
 #endif
 
 #if 1
-    bool set_f_ok = stella_vslam_bfx::setCameraFocalLength(autocalibration_wrapper.camera, focal_length_x_pixels);
+    bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_x_pixels);
     return set_f_ok;
 #else
     double par = *autocalibration_wrapper.fy / *autocalibration_wrapper.fx;
@@ -312,8 +314,8 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
 
     g2o::SparseOptimizer optimizer;
 
-    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
-    double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    double fx_before = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
 
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
                   marker_vtx_container, camera_intrinsics_vtx,
@@ -331,7 +333,7 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
     //}
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
-    double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+    double fx_after = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
 
     if (camera_was_modified)
         *camera_was_modified = focal_length_modified;
@@ -347,9 +349,9 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
 
         keyfrm->set_pose_cw(cam_pose_cw);
 
-        if (focal_length_modified && autocalibration_wrapper.camera) {
+        if (focal_length_modified && camera) {
             keyfrm->frm_obs_.bearings_.clear();
-            autocalibration_wrapper.camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
+            camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
         }
     }
 
@@ -438,8 +440,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
-    stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
-    double fx_before = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    double fx_before = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
 
     // NB: Uses num_iter, not num_iter_
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
@@ -457,7 +459,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
     // Extract the result
 
     bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
-    double fx_after = autocalibration_wrapper.fx ? *autocalibration_wrapper.fx : -1.0;
+    double fx_after = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
+
 
     if (camera_was_modified)
         *camera_was_modified = focal_length_modified;
@@ -470,9 +473,9 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
         const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
 
-        if (focal_length_modified && autocalibration_wrapper.camera) {
+        if (focal_length_modified && camera) {
             keyfrm->frm_obs_.bearings_.clear();
-            autocalibration_wrapper.camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
+            camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
         }
 
         keyfrm_to_pose_cw_after_global_BA[keyfrm->id_] = cam_pose_cw;

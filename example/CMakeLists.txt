@@ -42,7 +42,7 @@ set(EXECUTABLE_TARGETS "")
 #add_executable(run_image_slam run_image_slam.cc util/image_util.cc)
 #list(APPEND EXECUTABLE_TARGETS run_image_slam)
 
-add_executable(run_video_slam run_video_slam.cc util/tinyxml2.cc)
+add_executable(run_video_slam run_video_slam.cc util/tinyxml2.cc util/video_evaluation.cc)
 list(APPEND EXECUTABLE_TARGETS run_video_slam)
 
 #add_executable(run_euroc_slam run_euroc_slam.cc util/euroc_util.cc)

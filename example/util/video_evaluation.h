@@ -20,11 +20,11 @@ namespace stella_vslam_bfx {
 
 class solve;
 
-STELLA_VSLAM_API bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
+ bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
                             stella_vslam::data::map_database const* map_db, std::map<double, int> const& timestampToVideoFrame,
                             std::map<int, Eigen::Matrix4d> const* videoFrameToCamera);
 
-STELLA_VSLAM_API bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
+ bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
                                               stella_vslam_bfx::solve const& final_solve);
 
 // NB: See also (from Mocha/Cam3D/VideoEvaluation.h), which could be here

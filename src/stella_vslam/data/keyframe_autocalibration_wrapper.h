@@ -5,46 +5,29 @@
  */
 #pragma once
 
+#include <optional>
+
 #include "stella_vslam/exports.h"
 
 #include <nlohmann/json_fwd.hpp>
 
 namespace stella_vslam::data {
-class frame;
 class keyframe;
-class map_database;
 } // namespace stella_vslam::data
 namespace stella_vslam::camera {
 class base;
-struct autocalibration_parameters;
 } // namespace stella_vslam::camera
 
 namespace stella_vslam_bfx {
 
-struct autocalibration_parameters;
-
-/** Populate the shared keyframe camera from a camera intrinsics vertex **/
-struct keyframe_autocalibration_wrapper {
-    double* fx = nullptr;
-    double* fy = nullptr;
-    stella_vslam::camera::autocalibration_parameters* autocalibration_params = nullptr;
-    stella_vslam::camera::base* camera = nullptr;
-
-    //! \return true if none of the pointers is nullptr
-    bool operator()() const;
-
-    keyframe_autocalibration_wrapper(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms);
-};
-
-double getCameraFocalLengthXPixels(stella_vslam::camera::base const* camera);
+// NB: stella creates the camera in system (based on cfg) and frames and keyframes have a pointer to it  
+stella_vslam::camera::base* camera_from_keyframes(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms);
 
 bool intrinsics_from_camera(stella_vslam::camera::base const* camera, double& focal_length_x_pixels, double& par, double& cx, double& cy);
 
-bool setFocalLengthXPixels(stella_vslam::data::map_database * map_db, double focal_length_x_pixels);
+double focal_length_x_pixels_from_camera(stella_vslam::camera::base const* camera);
 
-bool setFocalLengthXPixels(stella_vslam::data::frame& frm, double focal_length_x_pixels);
-
-bool setCameraFocalLength(stella_vslam::camera::base* camera, double focal_length_x_pixels);
+bool set_camera_focal_length_x_pixels(stella_vslam::camera::base* camera, double focal_length_x_pixels);
 
 } // namespace stella_vslam_bfx
 

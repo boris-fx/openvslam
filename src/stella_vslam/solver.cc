@@ -323,7 +323,7 @@ void solver::send_frame_data(int frame,
         frame_data->frame = frame;
         if (camera && camera_pose) {
             frame_data->solve_success = true;
-            frame_data->focal_length = getCameraFocalLengthXPixels(camera);
+            frame_data->focal_length = focal_length_x_pixels_from_camera(camera);
             frame_data->camera_pose = *camera_pose;
             frame_data->final_points = final_points;
             if (send_points)

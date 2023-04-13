@@ -10,7 +10,7 @@
 #include "stella_vslam/config.h"
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/util/yaml.h"
-#include "stella_vslam/report/video_evaluation.h"
+#include "util/video_evaluation.h"
 #include "stella_vslam/report/debug_printer.h"
 #include "util/tinyxml2.h"
 #include "stella_vslam/solver.h"
@@ -1033,15 +1033,14 @@ void mono_tracking_2(
 
        printSolveSummary(solve, print_results);
 
-
        bool save_video_ok = stella_vslam_bfx::create_evaluation_video(video_file_path, "solve", solve);
 
+       std::filesystem::path fsVideo(video_file_path);
+       std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
+       stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "", "");
        if (debug_initialisation) {
-           std::filesystem::path fsVideo(video_file_path);
            std::string init_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_init.html";
            stella_vslam_bfx::metrics::initialisation_debug().save_html_report(init_html_filename, initialFocalLength);
-           std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
-           stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "", "");
        }
 
     // automatically close the viewer
