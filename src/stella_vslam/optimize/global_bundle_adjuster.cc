@@ -2,7 +2,7 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
-#include "stella_vslam/data/keyframe_autocalibration_wrapper.h"
+#include "stella_vslam/data/map_camera_helpers.h"
 #include "stella_vslam/marker_model/base.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
 #include "stella_vslam/optimize/terminate_action.h"

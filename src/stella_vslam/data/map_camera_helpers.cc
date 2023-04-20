@@ -1,4 +1,4 @@
-#include "stella_vslam/data/keyframe_autocalibration_wrapper.h"
+#include "map_camera_helpers.h"
 
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>

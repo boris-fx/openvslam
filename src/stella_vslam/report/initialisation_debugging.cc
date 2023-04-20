@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cmath>
+#include <numeric>
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -79,8 +80,9 @@ bool initialisation_debugging::active() const {
 
 void initialisation_debugging::submit_feature_match_debugging(unsigned int num_matches)
 {
-    if (!is_active)
-        return;
+    // a general metric
+    //if (!is_active)
+    //    return;
 
     p_num_matches.by_timestamp[current_init_frames] = double(num_matches);
 }
@@ -580,6 +582,24 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
 void initialisation_debugging::save_html_report(std::string_view const& filename, std::optional<double> ground_truth_focal_length_x_pixels) const {
     html_file html(filename);
     add_to_html(html.html, ground_truth_focal_length_x_pixels);
+}
+
+std::optional<int> initialisation_debugging::average_init_frame_feature_count() const
+{
+    if (feature_count_by_frame.empty())
+        return std::nullopt;
+    int sum = std::accumulate(std::begin(feature_count_by_frame), std::end(feature_count_by_frame), 0,
+                              [](int value, const std::map<int, int>::value_type& p){ return value + p.second; } );
+    return int(0.5 + double(sum) / double(feature_count_by_frame.size()));
+}
+
+std::optional<int> initialisation_debugging::average_init_frame_unguided_match_count() const
+{
+    if (p_num_matches.by_frame.empty())
+        return std::nullopt;
+    double sum = std::accumulate(std::begin(p_num_matches.by_frame), std::end(p_num_matches.by_frame), 0.0,
+        [](int value, const std::map<std::array<int, 2>, double>::value_type& p) { return value + p.second; });
+    return int(0.5 + sum / double(p_num_matches.by_frame.size()));
 }
 
 /////////////////////////////////////////////////////////////////////////

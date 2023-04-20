@@ -62,12 +62,15 @@ public:
 
     void submit_feature_motions(double quantile_25, double quantile_50, double quantile_75);
 
+    std::map<double, int> feature_count_by_timestamp;
+
     void create_frame_data(std::map<double, int> const& timestamp_to_video_frame);
 
     void add_to_html(std::stringstream& html, std::optional<double> ground_truth_focal_length_x_pixels) const;
     void save_html_report(std::string_view const& filename, std::optional<double> ground_truth_focal_length_x_pixels) const;
 
-    std::map<double, int> feature_count_by_timestamp;
+    std::optional<int> average_init_frame_feature_count() const;
+    std::optional<int> average_init_frame_unguided_match_count() const;
 
 protected:
     

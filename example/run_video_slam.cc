@@ -989,6 +989,8 @@ void mono_tracking_2(
     if (!images.open())
         return;
     std::function<bool(int, cv::Mat&)> get_frame = [&](int frame, cv::Mat& frame_data) { return images.get_frame(frame, frame_data); };
+    int video_width  = images.video.get(cv::CAP_PROP_FRAME_WIDTH);
+    int video_height = images.video.get(cv::CAP_PROP_FRAME_HEIGHT);
 
     // Extra input points
     std::map<int, stella_vslam_bfx::prematched_points> extraPointsPerFrame;
@@ -1024,24 +1026,33 @@ void mono_tracking_2(
     // run slam in another thread
     std::thread thread([&]() {
 
+        int first_frame = 0;
+        int last_frame = images.video.get(cv::CAP_PROP_FRAME_COUNT) - 1;
+        stella_vslam_bfx::metrics::get_instance()->input_video_metadata.start_frame = first_frame;
+        stella_vslam_bfx::metrics::get_instance()->input_video_metadata.end_frame = last_frame;
 
-       stella_vslam_bfx::metrics::get_instance()->input_video_metadata.groundTruthFocalLengthXPixels = initialFocalLength;
+        stella_vslam_bfx::metrics::get_instance()->input_video_metadata.video_width = images.video.get(cv::CAP_PROP_FRAME_WIDTH);
+        stella_vslam_bfx::metrics::get_instance()->input_video_metadata.video_height = images.video.get(cv::CAP_PROP_FRAME_HEIGHT);
+        stella_vslam_bfx::metrics::get_instance()->input_video_metadata.groundTruthFocalLengthXPixels = initialFocalLength;
         stella_vslam_bfx::metrics::get_instance()->input_video_metadata.name = "run_view_slam metrics";
 
-       // Run the solve
-       solver.track_frame_range(0, 500, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
+        stella_vslam_bfx::metrics::get_instance()->settings = cfg->settings_;
 
-       printSolveSummary(solve, print_results);
+        // Run the solve
+        solver.track_frame_range(first_frame, last_frame, stella_vslam_bfx::solver::tracking_direction_forwards, &solve);
 
-       bool save_video_ok = stella_vslam_bfx::create_evaluation_video(video_file_path, "solve", solve);
+        printSolveSummary(solve, print_results);
 
-       std::filesystem::path fsVideo(video_file_path);
-       std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
-       stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "", "");
-       if (debug_initialisation) {
-           std::string init_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_init.html";
-           stella_vslam_bfx::metrics::initialisation_debug().save_html_report(init_html_filename, initialFocalLength);
-       }
+        std::string output_video_name;
+        bool save_video_ok = stella_vslam_bfx::create_evaluation_video(video_file_path, "solve", solve, &output_video_name);
+
+        std::filesystem::path fsVideo(video_file_path);
+        std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
+        stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "", output_video_name, cfg->settings_.optimise_focal_length_ ? std::nullopt : std::optional<double>(initialFocalLength));
+        if (debug_initialisation) {
+            std::string init_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_init.html";
+            stella_vslam_bfx::metrics::initialisation_debug().save_html_report(init_html_filename, initialFocalLength);
+        }
 
     // automatically close the viewer
 #ifdef USE_PANGOLIN_VIEWER

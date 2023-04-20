@@ -25,7 +25,7 @@ class solve;
                             std::map<int, Eigen::Matrix4d> const* videoFrameToCamera);
 
  bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
-                                              stella_vslam_bfx::solve const& final_solve);
+                                              stella_vslam_bfx::solve const& final_solve, std::string* output_video_name);
 
 // NB: See also (from Mocha/Cam3D/VideoEvaluation.h), which could be here
 // 

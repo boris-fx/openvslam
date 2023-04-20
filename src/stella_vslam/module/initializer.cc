@@ -3,7 +3,7 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
-#include "stella_vslam/data/keyframe_autocalibration_wrapper.h"
+#include "stella_vslam/data/map_camera_helpers.h"
 #include "stella_vslam/initialize/bearing_vector.h"
 #include "stella_vslam/initialize/perspective.h"
 #include "stella_vslam/marker_model/base.h"
@@ -15,6 +15,7 @@
 #include "stella_vslam/solve/fundamental_consistency.h"
 
 #include <spdlog/spdlog.h>
+#include <spdlog/fmt/fmt.h>
 #include <nlohmann/json.hpp>
 
 #include <iostream>
@@ -109,7 +110,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
 
             stella_vslam_bfx::metrics& track_metrics = *stella_vslam_bfx::metrics::get_instance();
-            track_metrics.initialisation_frame_timestamps = {init_frm_.timestamp_, curr_frm.timestamp_ };
+            track_metrics.initialisation_frame_timestamps.insert({init_frm_.timestamp_, curr_frm.timestamp_ });
 
             // Try to improve the initialisation now that the focal length estimate has been improved
             if (refine_initialisation) {
@@ -121,6 +122,9 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                    if (focal_length_change_percent < focal_length_change_percent_threshold)
                        break;
 #if 1
+                   data::frame init_frm = init_frm_; // store the init frame
+                   data::frame curr_frm_cp = curr_frm; // store the curr frame
+
                    init_frm_.ref_keyfrm_.reset();
                    curr_frm.ref_keyfrm_.reset();
                    init_frm_.invalidate_pose();
@@ -129,14 +133,27 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                        curr_frm.landmarks_[idx].reset();
                    }
 
-                   data::frame init_frm = init_frm_; // store the init frame
-                   reset(); // reset the initialiser (this)
-                   map_db_->clear(); // reset the map_db
+                   reset(); // reset the initialisation data (initialiser impl and others)
+                   spdlog::debug("Refining initialisation, before initialiser create impl {:p}", (void*)initializer_.get());
                    create_initializer(init_frm); // create a new initialiser
+                   spdlog::debug("Refining initialisation,  after initialiser create impl {:p}", (void*)initializer_.get());
                    bool ok_initialize = try_initialize_for_monocular(curr_frm, 0.7, false, &focal_length_was_modified); // Reinitialise with the new focal length
                                                                                                                         // and lower parallax threshold
-                   if (ok_initialize)
+                   
+                   
+                   if (ok_initialize) {
+                       spdlog::debug("Refine initialisation success, recreating map. impl {:p} {}", (void*)initializer_.get(), ok_initialize);
+                       map_db_->clear(); // reset the map_db
                        create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
+                   }
+                   else {
+                       spdlog::debug("Refine initialisation fail, keeping old map. impl {:p} {}", (void*)initializer_.get(), ok_initialize);
+                       // keep the existing map
+                       state_ = initializer_state_t::Succeeded;
+                       init_frm_ = init_frm; // restore the init frame
+                       curr_frm = curr_frm_cp; // restore the curr frame
+                       break;
+                   }
 
 #else
 
@@ -189,11 +206,14 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
 
     // check the state is succeeded or not
     if (state_ == initializer_state_t::Succeeded) {
+        spdlog::debug("Initialisation Succeeded");
+
         init_frm_id_ = curr_frm.id_;
         init_frm_stamp_ = curr_frm.timestamp_;
         return true;
     }
     else {
+        spdlog::debug("Initialisation Failed");
         return false;
     }
 }
@@ -238,6 +258,8 @@ void initializer::create_initializer(data::frame& curr_frm) {
 bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier, bool initialize_focal_length, bool* focal_length_was_modified) {
     assert(state_ == initializer_state_t::Initializing);
 
+    spdlog::debug("try_initialize_for_monocular, start impl {:p}", (void*)initializer_.get());
+
     unsigned int num_matches = 0;
     if (use_orb_features_) {
         match::area matcher(0.9, true);
@@ -248,12 +270,15 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
     if (num_matches < min_num_valid_pts_) {
         // rebuild the initializer with the next frame
         reset();
+        spdlog::debug("try_initialize_for_monocular, fail impl {:p}", (void*)initializer_.get());
         return false;
     }
 
+    spdlog::debug("try_initialize_for_monocular, mid impl {:p}", (void*)initializer_.get());
+
     // try to initialize with the initial frame and the current frame
     if (!initializer_)
-       spdlog::debug("error!! initialiser is empty");
+       spdlog::debug("error!! initialiser impl is empty");
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
 

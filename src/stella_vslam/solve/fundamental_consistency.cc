@@ -23,7 +23,7 @@
 #include "spdlog/fmt/ostr.h"
 
 #include <stella_vslam/camera/perspective.h>
-#include <stella_vslam/data/keyframe_autocalibration_wrapper.h>
+#include <stella_vslam/data/map_camera_helpers.h>
 #include "stella_vslam/solve/essential_solver.h"
 #include "stella_vslam/util/converter.h"
 #include "stella_vslam/report/metrics.h"

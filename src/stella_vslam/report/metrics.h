@@ -15,6 +15,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "stella_vslam/exports.h"
+#include "stella_vslam/config_settings.h"
 
 #include "initialisation_debugging.h"
 
@@ -32,8 +33,6 @@ struct STELLA_VSLAM_API video_metadata {
     int    start_frame;
     int    end_frame;
     double pixel_aspect_ratio_used; // calculated from IS_FilmTypeFactory::bestMatchForSize
-
-    std::optional<double> knownFocalLengthXPixels;       // Can be used during tracking if set
 
     std::optional<double> groundTruthFocalLengthXPixels; // Not used in tracking, but in evaluation
     std::optional<double> groundTruthFilmBackWidthMM;    // Not used in tracking, but in evaluation
@@ -100,7 +99,9 @@ public:
     int unsolved_frame_count;
     int num_points;
 
-    std::set<int> initialisation_frames;
+    std::set < std::set<int>> initialisation_frames; // Multiple sets if multiple initialisations happened
+
+    stella_vslam_bfx::config_settings settings;
 
     // Convert the timestamped metrics to frame numbers
     void create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame);
@@ -109,7 +110,7 @@ public:
     std::set<std::pair<std::string, tracking_problem_level>> problems() const;
     std::optional<tracking_problem_level> max_problem_level() const;
 public:
-    std::set<double> initialisation_frame_timestamps; /// For tracker internal use
+    std::set<std::set<double>> initialisation_frame_timestamps; /// For tracker internal use
 
     static const double par_percent_error_trigger;
     static const double focal_percent_error_trigger;
@@ -125,7 +126,7 @@ public:
     nlohmann::json to_json() const;
     bool from_json(const nlohmann::json& json);
 
-    void save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative) const;
+    void save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative, std::optional<double> known_focal_length_x_pixels) const;
     void save_json_report(std::string_view const& filename) const;
     
     struct track_test_info {
@@ -134,7 +135,8 @@ public:
         std::string html_filename; // html for the track
     };
     static void save_html_overview(std::string_view const& filename,
-                                   std::list<track_test_info> const& track_test_info_list);
+                                   std::list<track_test_info> const& track_test_info_list,
+                                   bool initialisation_debug_test, bool known_focal_length_test);
 
 protected:
     friend class metrics_copy;

@@ -247,4 +247,25 @@ void set_module_log_level(spdlog::level::level_enum log_level) {
     spdlog::set_level(log_level);
 }
 
+unsigned min_feature_size_from_invariant_min_feature_size(unsigned invariant_min_feature_size, unsigned video_size_pixels)
+{
+    unsigned sd_video_size_pixels(720 * 576); // Size of SD (PAL) format video typically used by stella
+    return unsigned(double(invariant_min_feature_size) * double(video_size_pixels) / double(sd_video_size_pixels));
+}
+
+unsigned min_feature_size_from_feature_detail_level(double feature_detail_level_percent, unsigned video_size_pixels)
+{
+    // Stella vslam's default
+    unsigned const default_invariant_min_feature_size(800);
+
+    // Convert from a percent reduction in feature width to a scale of area
+    double feature_area_scaling = std::pow(100.0 / feature_detail_level_percent, 2.0);
+
+    // Apply the area scale
+    unsigned invariant_min_feature_size = unsigned(0.5 + double(default_invariant_min_feature_size) * feature_area_scaling);
+
+    unsigned sd_video_size_pixels(720 * 576); // Size of SD (PAL) format video typically used by stella
+    return unsigned(double(invariant_min_feature_size) * double(video_size_pixels) / double(sd_video_size_pixels));
+}
+
 } // namespace stella_vslam_bfx

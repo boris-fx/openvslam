@@ -61,7 +61,7 @@ void print_keyframe_info(std::unordered_map<unsigned int, std::shared_ptr<data::
 {
     std::stringstream ss;
 
-    ss << "local_bundle_adjuster frame: " << timestamp_as_string(curr_keyfrm->timestamp_) 
+    ss << "local_bundle_adjuster frame: " << (curr_keyfrm ? timestamp_as_string(curr_keyfrm->timestamp_) : std::string("{no current frame}"))
                                           << " - local frames: " << keyframe_map_as_string(local_keyfrms)
                                           << " - fixed frames : " << keyframe_map_as_string(fixed_keyfrms) 
                                           << " - keyframe count: " << map_frame_count << std::endl;
@@ -72,6 +72,8 @@ void print_keyframe_info(std::unordered_map<unsigned int, std::shared_ptr<data::
 void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
                                          const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
     // 1. Aggregate the local and fixed keyframes, and local landmarks
+
+    spdlog::info("local_bundle_adjuster start {}", (curr_keyfrm ? curr_keyfrm->timestamp_ : -1));
 
     // Correct the local keyframes of the current keyframe
     std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> local_keyfrms;

@@ -8,7 +8,7 @@
 #include <stella_vslam/camera/fisheye.h>
 #include <stella_vslam/camera/perspective.h>
 #include <stella_vslam/camera/radial_division.h>
-#include <stella_vslam/data/keyframe_autocalibration_wrapper.h>
+#include <stella_vslam/data/map_camera_helpers.h>
 #include <stella_vslam/report/plot_html.h>
 #include <stella_vslam/report/metrics.h>
 

@@ -231,7 +231,7 @@ bool create_evaluation_video(std::string const& trackedVideoName, std::string co
 }
 
 bool create_evaluation_video(std::string const& trackedVideoName, std::string const& testName,
-                             stella_vslam_bfx::solve const& final_solve) {
+                             stella_vslam_bfx::solve const& final_solve, std::string* output_video_name) {
 #if USE_OPENCV_VIDEO_IO
 
     int thickness = 2;
@@ -253,6 +253,8 @@ bool create_evaluation_video(std::string const& trackedVideoName, std::string co
     }
     string::size_type pAt = trackedVideoName.find_last_of('.');                               // Find extension point
     const string outputVideoName = trackedVideoName.substr(0, pAt) + "_" + testName + ".mp4"; // Form the new name with container
+    if (output_video_name)
+        *output_video_name = outputVideoName;
     int ex = static_cast<int>(inputVideo.get(CAP_PROP_FOURCC));                               // Get Codec Type- Int form
     // Transform from int to char via Bitwise operators
     char EXT[] = {(char)(ex & 0XFF), (char)((ex & 0XFF00) >> 8), (char)((ex & 0XFF0000) >> 16), (char)((ex & 0XFF000000) >> 24), 0};

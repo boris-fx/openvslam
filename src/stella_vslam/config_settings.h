@@ -98,6 +98,8 @@ public:
                     stella_vslam::camera::color_order_t colour_order,
                     int cols, int rows, double fps);
 
+    //! Default constructor used by the metrics class
+    config_settings() = default;
 
     ~config_settings() {}
 
@@ -231,6 +233,7 @@ public:
 
 void STELLA_VSLAM_API set_module_logger(std::shared_ptr<spdlog::logger> logger);
 void STELLA_VSLAM_API set_module_log_level(spdlog::level::level_enum log_level);
+unsigned STELLA_VSLAM_API min_feature_size_from_invariant_min_feature_size(unsigned invariant_min_feature_size, unsigned video_size_pixels);
 
 } // namespace stella_vslam_bfx
 

@@ -41,7 +41,6 @@ nlohmann::json video_metadata::to_json() const {
         {"end_frame", end_frame},
         {"pixel_aspect_ratio_used", pixel_aspect_ratio_used},
 
-        {"knownFocalLengthXPixels", nlohmann::optional_to_json(knownFocalLengthXPixels)},
         {"groundTruthFocalLengthXPixels", nlohmann::optional_to_json(groundTruthFocalLengthXPixels)},
         {"groundTruthFilmBackWidthMM", nlohmann::optional_to_json(groundTruthFilmBackWidthMM)},
         {"groundTruthFilmBackHeightMM", nlohmann::optional_to_json(groundTruthFilmBackHeightMM)},
@@ -61,7 +60,6 @@ bool video_metadata::from_json(const nlohmann::json& json) {
     end_frame = json.at("end_frame").get<int>();
     pixel_aspect_ratio_used = json.at("pixel_aspect_ratio_used").get<double>();
 
-    knownFocalLengthXPixels = nlohmann::optional_from_json<double>(json.at("knownFocalLengthXPixels"));
     groundTruthFocalLengthXPixels = nlohmann::optional_from_json<double>(json.at("groundTruthFocalLengthXPixels"));
     groundTruthFilmBackWidthMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackWidthMM"));
     groundTruthFilmBackHeightMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackHeightMM"));
@@ -186,17 +184,21 @@ bool metrics::from_json(const nlohmann::json& json) {
     solved_frame_count = json.at("solved_frame_count").get<int>();
     unsolved_frame_count = json.at("unsolved_frame_count").get<int>();
     num_points = json.at("num_points").get<int>();
-    initialisation_frames = json.at("initialisation_frames").get<std::set<int>>();
+    initialisation_frames = json.at("initialisation_frames").get<std::set<std::set<int>>>();
 
     return true;
 }
 
 void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame) {
     initialisation_frames.clear();
-    for (auto const& timestamp : initialisation_frame_timestamps) {
-        auto f = timestamp_to_video_frame.find(timestamp);
-        if (f != timestamp_to_video_frame.end())
-            initialisation_frames.insert(f->second);
+    for (auto const& initialisation_attempt_timestamps : initialisation_frame_timestamps) {
+        std::set<int> initialisation_attempt_frames;
+        for (auto const& timestamp : initialisation_attempt_timestamps) {
+            auto f = timestamp_to_video_frame.find(timestamp);
+            if (f != timestamp_to_video_frame.end())
+                initialisation_attempt_frames.insert(f->second);
+        }
+        initialisation_frames.insert(initialisation_attempt_frames);
     }
 
     initialisation_debug_object.create_frame_data(timestamp_to_video_frame);
@@ -276,7 +278,21 @@ std::string to_string(std::set<T> const& s)
     return str;
 }
 
-void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative) const {
+std::vector<std::string> splitString(const std::string& str)
+{
+    std::vector<std::string> tokens;
+
+    std::stringstream ss(str);
+    std::string token;
+    while (std::getline(ss, token, '\n')) {
+        tokens.push_back(token);
+    }
+
+    return tokens;
+}
+
+void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative,
+    std::optional<double> known_focal_length_x_pixels) const {
     std::ofstream myfile;
     myfile.open(filename.data());
 
@@ -315,16 +331,12 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     }
 
     html << "<h2>Parameters</h2>\n";
-    if (input_video_metadata.knownFocalLengthXPixels)
-        html << "<p> Calculation uses known focal length of " << input_video_metadata.knownFocalLengthXPixels.value() << " x pixels.</p>\n";
+    if (known_focal_length_x_pixels)
+        html << "<p> Calculation uses known focal length of " << known_focal_length_x_pixels.value() << " pixels.</p>\n";
     else
         html << "<p> Calculation run with unknown focal length.</p>\n";
 
     html << "<h2>Camera Intrinsics</h2>\n";
-
-    //Pixel aspect ratio used : 1.5064(ground truth 1.56) - <10 % difference>
-    //Focal length x pixels calculated : 1307.2(ground truth 1200) - <45 % difference>
-    //Focal length mm calculated : 15.9996(ground truth 1200) - <45 % difference>
 
     // Pixel aspect ratio
     html << "<p> Pixel aspect ratio used: " << input_video_metadata.pixel_aspect_ratio_used;
@@ -340,31 +352,42 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
         html << ".</p>\n";
 
     // Focal length x pixels
-    html << "<p> Focal length x pixels calculated: " << calculated_focal_length_x_pixels;
-    if (input_video_metadata.ground_truth_focal_length_x_pixels()) {
-        double diff_percent = percent_difference(input_video_metadata.ground_truth_focal_length_x_pixels().value(),
-                                                 calculated_focal_length_x_pixels);
-        if (diff_percent > focal_percent_error_trigger)
-            html << " (ground truth " << input_video_metadata.ground_truth_focal_length_x_pixels().value() << " - <mark class=\"red\">  " << diff_percent << "\% difference</mark>)</p>\n";
-        else
-            html << " (ground truth " << input_video_metadata.ground_truth_focal_length_x_pixels().value() << " - " << diff_percent << "\% difference)</p>\n";
+    if (known_focal_length_x_pixels) {
+        html << "<p> Fixed focal length of " << known_focal_length_x_pixels.value() << " pixels used.</p>\n";
     }
-    else
-        html << ".</p>\n";
-
-    // Focal length mm
-    if (input_video_metadata.calculated_focal_length_mm(calculated_focal_length_x_pixels)) {
-        html << "<p> Focal length mm calculated: " << input_video_metadata.calculated_focal_length_mm(calculated_focal_length_x_pixels).value();
-        if (input_video_metadata.groundTruthFocalLengthMM) {
-            double diff_percent = percent_difference(input_video_metadata.groundTruthFocalLengthMM.value(),
-                                                     input_video_metadata.calculated_focal_length_mm(calculated_focal_length_x_pixels).value());
+    else {
+        html << "<p> Focal length x pixels calculated: " << calculated_focal_length_x_pixels;
+        if (input_video_metadata.ground_truth_focal_length_x_pixels()) {
+            double diff_percent = percent_difference(input_video_metadata.ground_truth_focal_length_x_pixels().value(),
+                calculated_focal_length_x_pixels);
             if (diff_percent > focal_percent_error_trigger)
-                html << " (ground truth " << input_video_metadata.groundTruthFocalLengthMM.value() << " - <mark class=\"red\">  " << diff_percent << "\% difference</mark>)</p>\n";
+                html << " (ground truth " << input_video_metadata.ground_truth_focal_length_x_pixels().value() << " - <mark class=\"red\">  " << diff_percent << "\% difference</mark>)</p>\n";
             else
-                html << " (ground truth " << input_video_metadata.groundTruthFocalLengthMM.value() << " - " << diff_percent << "\% difference)</p>\n";
+                html << " (ground truth " << input_video_metadata.ground_truth_focal_length_x_pixels().value() << " - " << diff_percent << "\% difference)</p>\n";
         }
         else
             html << ".</p>\n";
+    }
+
+    // Focal length mm
+    if (known_focal_length_x_pixels) {
+        if (input_video_metadata.calculated_focal_length_mm(known_focal_length_x_pixels.value()))
+            html << "<p> Fixed focal length of " << input_video_metadata.calculated_focal_length_mm(known_focal_length_x_pixels.value()).value() << " mm used.</p>\n";
+    }
+    else {
+        if (input_video_metadata.calculated_focal_length_mm(calculated_focal_length_x_pixels)) {
+            html << "<p> Focal length mm calculated: " << input_video_metadata.calculated_focal_length_mm(calculated_focal_length_x_pixels).value();
+            if (input_video_metadata.groundTruthFocalLengthMM) {
+                double diff_percent = percent_difference(input_video_metadata.groundTruthFocalLengthMM.value(),
+                    input_video_metadata.calculated_focal_length_mm(calculated_focal_length_x_pixels).value());
+                if (diff_percent > focal_percent_error_trigger)
+                    html << " (ground truth " << input_video_metadata.groundTruthFocalLengthMM.value() << " - <mark class=\"red\">  " << diff_percent << "\% difference</mark>)</p>\n";
+                else
+                    html << " (ground truth " << input_video_metadata.groundTruthFocalLengthMM.value() << " - " << diff_percent << "\% difference)</p>\n";
+            }
+            else
+                html << ".</p>\n";
+        }
     }
 
     html << "<h2> Map</h2>\n";
@@ -373,7 +396,12 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     if (unsolved_frame_count!=0)
         html << " - <mark class=\"red\"> \<" << unsolved_frame_count << " frames not tracked\></mark></p>\n";
     html << "<p> " << num_points << " 3D points</p>\n";
-    html << "<p> Initialisation Frames: {" << to_string(initialisation_frames) << "}</p>\n";
+    for (auto const& initialisation_attempt_frames : initialisation_frames)
+        html << "<p> Initialisation Frames: {" << to_string(initialisation_attempt_frames) << "}</p>\n";
+    if (initialisation_debug_object.average_init_frame_feature_count())
+        html << "<p> Initialisation average feature count: " << initialisation_debug_object.average_init_frame_feature_count().value() << "</p>\n";
+    if (initialisation_debug_object.average_init_frame_unguided_match_count())
+        html << "<p> Initialisation average match count: " << initialisation_debug_object.average_init_frame_unguided_match_count().value() << "</p>\n";
 
     // Timing
     html << "<h2> Timing</h2>\n";
@@ -388,6 +416,17 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "<p> Optimisation: " << track_timings.optimisation << ".</p>\n";
     html << "<p> Final Tracking: " << track_timings.tracking << ".</p>\n";
 
+    // Print the config settings
+    std::stringstream ss_settings;
+    ss_settings << settings;
+    std::vector<std::string> split_settings = splitString(ss_settings.str());
+    html << "<h2> Settings</h2>\n";
+    for (auto const& settings_line : split_settings)
+        if (settings_line.rfind("\t", 0) == 0)
+            html << "<p  style=\"margin-left: 40px\">" << settings_line << "</p>";
+        else
+            html << "<h3  style=\"margin-left: 20px\">" << settings_line << "</h3>";
+
     html << "</body></html>";
 
     myfile << html.str();
@@ -401,7 +440,9 @@ void metrics::save_json_report(std::string_view const& filename) const
 }
 
 void metrics::save_html_overview(std::string_view const& filename,
-                                 std::list<track_test_info> const& track_test_info_list) {
+                                 std::list<track_test_info> const& track_test_info_list,
+                                 bool initialisation_debug_test,
+                                 bool known_focal_length_test) {
     std::ofstream myfile;
     myfile.open(filename.data());
 
@@ -490,8 +531,13 @@ void metrics::save_html_overview(std::string_view const& filename,
 
     html << "		<h1>Camera tracking evaluation run</h1> \n";
 
-    html << "		<p>  Test run id: b6dafc8e-6c2b-478b-8dfe-55df227e8739 </p> \n";
-
+    html << "		<p style=\"margin-left: 10px\">  Test run id: b6dafc8e-6c2b-478b-8dfe-55df227e8739 </p> \n";
+    if (initialisation_debug_test)
+        html << "		<p style=\"margin-left: 10px\">Initialisation debugging test</p> \n";
+    if (known_focal_length_test)
+        html << "		<p style=\"margin-left: 10px\">Known focal length test</p> \n";
+    else
+        html << "		<p style=\"margin-left: 10px\">Auto focal length test</p> \n";
 
     int pass_count(0), warn_count(0), fail_count(0);
     for (auto const& test_info : track_test_info_list) {
@@ -503,7 +549,7 @@ void metrics::save_html_overview(std::string_view const& filename,
             ++fail_count;
     }
 
-    html << "		<p>  Pass " << pass_count << ", warning " << warn_count << ", fail " << fail_count << "</p> \n";
+    html << "		<p style=\"margin-left: 10px\">  Pass " << pass_count << ", warning " << warn_count << ", fail " << fail_count << "</p> \n";
 
     html << "<hr>\n";
 
@@ -578,7 +624,7 @@ static void fill_dummy_metrics(int i, metrics *m)
     m->solved_frame_count = vector({0, 100, 201})[i];
     m->unsolved_frame_count = vector({76, 5, 0})[i];
     m->num_points = num * 17735;
-    m->initialisation_frames = vector<std::set<int>>({{13, 14}, {2, 23}, {0, 10}})[i];
+    m->initialisation_frames = { vector<std::set<int>>({{13, 14}, {2, 23}, {0, 10}})[i] };
 
     // input video metadata
     m->input_video_metadata.name = vector({"Hillshot7", "Cup Final", "Fishtank"})[i];// A name used in reporting
@@ -589,7 +635,6 @@ static void fill_dummy_metrics(int i, metrics *m)
     m->input_video_metadata.start_frame = vector({0, 100, 0})[i];
     m->input_video_metadata.end_frame = vector({77, 201, 200})[i];
     m->input_video_metadata.pixel_aspect_ratio_used = vector({1.5064, 1.0, 1.5064})[i];
-    m->input_video_metadata.knownFocalLengthXPixels = opt({1000.0, {}, {}})[i];
     m->input_video_metadata.groundTruthFocalLengthXPixels = opt({{}, {}, {}})[i];
     m->input_video_metadata.groundTruthFilmBackWidthMM = 23.5;
     m->input_video_metadata.groundTruthFilmBackHeightMM = 15.6;
@@ -626,7 +671,7 @@ void metrics_html_test(std::string const& directory, std::array<std::string, 3> 
         metrics_array[i] = std::make_unique<metrics_copy>(*the_metrics);
         
         track_test_info_list.push_back({&metrics_array[i].get()->operator()(), thumbnail_filenames_relative_overview[i], html_filename_relative_overview});
-        the_metrics->save_html_report(html_filename_absolute, thumbnail_filenames_relative_html[i], std::string());
+        the_metrics->save_html_report(html_filename_absolute, thumbnail_filenames_relative_html[i], std::string(), std::nullopt);
 
         // write prettified JSON to another file
         std::string json_filename = directory + "/report" + std::to_string(i + 1) + ".json";
@@ -637,7 +682,7 @@ void metrics_html_test(std::string const& directory, std::array<std::string, 3> 
         nlohmann::json j;
         in >> j;
     }
-    metrics::save_html_overview(directory + "/overview.html", track_test_info_list);
+    metrics::save_html_overview(directory + "/overview.html", track_test_info_list, false, false);
 }
 
 

@@ -6,11 +6,12 @@
 
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/frame.h>
-#include <stella_vslam/data/keyframe_autocalibration_wrapper.h>
+#include <stella_vslam/data/map_camera_helpers.h>
 #include <stella_vslam/data/map_database.h>
 #include <stella_vslam/data/landmark.h>
 #include <stella_vslam/report/plot_html.h>
 #include <stella_vslam/report/metrics.h>
+#include <stella_vslam/config.h>
 
 #include "type.h"
 #include "system.h"
@@ -37,15 +38,17 @@ void frame_display_data::clear() {
 solver::solver(const std::shared_ptr<config>& cfg,
                const std::string& vocab_file_path,
                std::function<bool(int, cv::Mat&)> get_frame)
-: get_frame_(get_frame) {
-    spdlog::debug("debug log message test solver");
-    spdlog::info("info log message test solver");
-    // spdlog::set_level(spdlog::level::from_str(log_level->value()));
+: get_frame_(get_frame)
+{
+    // Set the min_pixel_size based on video size
+    unsigned& min_feature_size = const_cast<unsigned&>(cfg->settings_.min_feature_size_);
+    unsigned  invariant_min_feature_size = min_feature_size;
+    min_feature_size = stella_vslam_bfx::min_feature_size_from_invariant_min_feature_size(invariant_min_feature_size, cfg->settings_.cols_ * cfg->settings_.rows_);
+
+    spdlog::info("cols {}, rows {}, inv_min_feature_size {}, min_feature_size {}", cfg->settings_.cols_, cfg->settings_.rows_, invariant_min_feature_size, min_feature_size);
+
     // build the slam system
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_file_path);
-
-    spdlog::debug("debug log message test solver 2");
-    spdlog::info("info log message test solver 2");
 
     bool already_have_map(false); // see run_video_slam for the case where we already have a map
     slam_->startup(!already_have_map);
@@ -164,6 +167,14 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         metrics& track_metrics = *metrics::get_instance();
         track_metrics.create_frame_metrics(timestampToVideoFrame);
         
+        track_metrics.calculated_focal_length_x_pixels = -1;
+        track_metrics.solved_frame_count = 0;
+        track_metrics.unsolved_frame_count = end - begin + 1;
+        track_metrics.num_points = 0;
+
+        timings& track_timings = track_metrics.track_timings;
+        track_timings.forward_mapping = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_forward_mapping - tp_start).count();
+
         return false;
     }
     bool resultRelocalise = slam_->relocalize_by_pose(first_keyframe_data->get_pose_wc());
