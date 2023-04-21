@@ -1,6 +1,8 @@
 #ifndef STELLA_VSLAM_OPTIMIZE_GLOBAL_BUNDLE_ADJUSTER_H
 #define STELLA_VSLAM_OPTIMIZE_GLOBAL_BUNDLE_ADJUSTER_H
 
+#include <stella_vslam/optimize/internal/camera_intrinsics_vertex.h> // For camera_intrinsics_vertex. Should be forward declared, but that's not currently straightforward
+
 namespace stella_vslam {
 
 namespace data {
@@ -8,6 +10,8 @@ class map_database;
 } // namespace data
 
 namespace optimize {
+
+//namespace internal { class camera_intrinsics_vertex; }
 
 class global_bundle_adjuster {
 public:
@@ -52,6 +56,9 @@ private:
     //! use Huber loss or not
     const bool use_huber_kernel_;
 };
+
+internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
+                                                                    std::vector<std::shared_ptr<data::keyframe>> const& keyfrms);
 
 } // namespace optimize
 } // namespace stella_vslam

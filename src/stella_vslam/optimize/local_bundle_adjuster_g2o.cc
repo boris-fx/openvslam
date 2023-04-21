@@ -226,6 +226,11 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
 
     print_keyframe_info(fixed_keyfrms, local_keyfrms, curr_keyfrm, map_db->get_num_keyframes());
 
+    // 3(b). Camera intrinsics
+    internal::camera_intrinsics_vertex* null_camera_intrinsics_vtx(nullptr);
+
+
+
     // 4. Connect the vertices of the keyframe and the landmark by using an edge of reprojection constraint
 
     // Container of the landmark vertices
@@ -276,7 +281,6 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
             const auto sqrt_chi_sq = (keyfrm->camera_->setup_type_ == camera::setup_type_t::Monocular)
                                          ? sqrt_chi_sq_2D
                                          : sqrt_chi_sq_3D;
-            internal::camera_intrinsics_vertex* null_camera_intrinsics_vtx(nullptr); // NB: Intrinsics are never optimised locally
             auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx, null_camera_intrinsics_vtx,
                                                         idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
                                                         inv_sigma_sq, sqrt_chi_sq);
@@ -317,7 +321,7 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
                 const auto& undist_pt = mkr_2d.undist_corners_.at(corner_idx);
                 const float x_right = -1.0;
                 const float inv_sigma_sq = 1.0;
-                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, nullptr, corner_vtx,
+                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, nullptr, corner_vtx, null_camera_intrinsics_vtx,
                                                             0, undist_pt.x, undist_pt.y, x_right,
                                                             inv_sigma_sq, 0.0, false);
                 mkr_reproj_edge_wraps.push_back(reproj_edge_wrap);
