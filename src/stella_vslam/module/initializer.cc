@@ -283,7 +283,7 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
 
     // store the timestamps of the two frames - perhaps combine these
-    stella_vslam_bfx::metrics::initialisation_debug().current_init_frames = {init_frm_.timestamp_, curr_frm.timestamp_};
+    stella_vslam_bfx::metrics::initialisation_debug().current_init_frame_timestamps = {init_frm_.timestamp_, curr_frm.timestamp_};
     stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
     
     stella_vslam_bfx::metrics::initialisation_debug().submit_feature_match_debugging(num_matches);

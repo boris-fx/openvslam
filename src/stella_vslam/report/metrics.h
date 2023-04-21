@@ -79,6 +79,14 @@ enum tracking_problem_level {
     tracking_problem_fatal
 };
 
+enum class focal_estimation_stage {
+    initialisation_before_ba=0,
+    initialisation_after_ba=1,
+    local_optimisation=2,
+    global_optimisation=3
+};
+const std::array<std::string, 4> focal_estimation_stage_to_string = { {"Unoptimised initialisation", "Optimised initialisation", "Local optimisation", "Global optimisation"} };
+
 /**
  * \brief Metrics for the tracking of one video section
  */
@@ -93,15 +101,19 @@ public:
 
     timings track_timings;
 
+    // Basic information about the final solve
     double calculated_focal_length_x_pixels;
-
     int solved_frame_count;
     int unsolved_frame_count;
     int num_points;
 
-    std::set < std::set<int>> initialisation_frames; // Multiple sets if multiple initialisations happened
+    std::set<std::set<int>> initialisation_frames; // Multiple sets if multiple initialisations happened
 
     stella_vslam_bfx::config_settings settings;
+
+    void submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate);
+
+    double current_frame_timestamp;
 
     // Convert the timestamped metrics to frame numbers
     void create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame);
@@ -116,7 +128,6 @@ public:
     static const double focal_percent_error_trigger;
     
     metrics& operator=(const metrics&) = delete;
-
 
     static metrics* get_instance();
     static void clear(); // clear for a new camera track
@@ -138,7 +149,19 @@ public:
                                    std::list<track_test_info> const& track_test_info_list,
                                    bool initialisation_debug_test, bool known_focal_length_test);
 
+
+    struct focal_estimate
+    {
+        double estimate;
+        focal_estimation_stage stage;
+        double timestamp;
+        int frame; // set in create_frame_metrics
+    };
 protected:
+
+
+    std::list<focal_estimate> intermediate_focal_estimates;
+
     friend class metrics_copy;
 
     initialisation_debugging initialisation_debug_object;

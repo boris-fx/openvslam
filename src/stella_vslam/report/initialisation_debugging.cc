@@ -70,7 +70,7 @@ std::map<std::array<int, 2>, double> error_for_focal_length(double ground_truth_
 }
 
 initialisation_debugging::initialisation_debugging()
-: video_width(-1), current_init_frames({-1,-1})
+: video_width(-1), current_init_frame_timestamps({-1,-1})
 {
 }
 
@@ -84,7 +84,7 @@ void initialisation_debugging::submit_feature_match_debugging(unsigned int num_m
     //if (!is_active)
     //    return;
 
-    p_num_matches.by_timestamp[current_init_frames] = double(num_matches);
+    p_num_matches.by_timestamp[current_init_frame_timestamps] = double(num_matches);
 }
 
 void initialisation_debugging::submit_parallax_debugging(double parallax)
@@ -92,7 +92,7 @@ void initialisation_debugging::submit_parallax_debugging(double parallax)
     if (!is_active)
         return;
 
-    p_parallax.by_timestamp[current_init_frames] = parallax;
+    p_parallax.by_timestamp[current_init_frame_timestamps] = parallax;
 }
 
 void initialisation_debugging::submit_homography_fundamental_cost(double cost_H, double cost_F)
@@ -100,8 +100,8 @@ void initialisation_debugging::submit_homography_fundamental_cost(double cost_H,
     if (!is_active)
         return;
 
-    p_cost_H.by_timestamp[current_init_frames] = cost_H;
-    p_cost_F.by_timestamp[current_init_frames] = cost_F;
+    p_cost_H.by_timestamp[current_init_frame_timestamps] = cost_H;
+    p_cost_F.by_timestamp[current_init_frame_timestamps] = cost_F;
 }
 
 void initialisation_debugging::submit_fundamental_to_focal_length_debugging(double error_for_max_focal_length,
@@ -117,16 +117,16 @@ void initialisation_debugging::submit_fundamental_to_focal_length_debugging(doub
     if (!is_active)
         return;
 
-    p_error_for_max_focal_length.by_timestamp[current_init_frames] = error_for_max_focal_length;
-    p_min_error.by_timestamp[current_init_frames] = min_error;
-    p_best_focal_length.by_timestamp[current_init_frames] = best_focal_length;
-    p_best_focal_length_bisection.by_timestamp[current_init_frames] = best_focal_length_bisection;
-    p_de_df_plus.by_timestamp[current_init_frames] = de_df_plus;
-    p_de_df_minus.by_timestamp[current_init_frames] = de_df_minus;
-    p_min_error_percent_max_focal_error.by_timestamp[current_init_frames] = min_error_percent_max_focal_error;
+    p_error_for_max_focal_length.by_timestamp[current_init_frame_timestamps] = error_for_max_focal_length;
+    p_min_error.by_timestamp[current_init_frame_timestamps] = min_error;
+    p_best_focal_length.by_timestamp[current_init_frame_timestamps] = best_focal_length;
+    p_best_focal_length_bisection.by_timestamp[current_init_frame_timestamps] = best_focal_length_bisection;
+    p_de_df_plus.by_timestamp[current_init_frame_timestamps] = de_df_plus;
+    p_de_df_minus.by_timestamp[current_init_frame_timestamps] = de_df_minus;
+    p_min_error_percent_max_focal_error.by_timestamp[current_init_frame_timestamps] = min_error_percent_max_focal_error;
 
-    p_focal_length_to_error.by_timestamp[current_init_frames] = focal_length_to_error;
-    p_fov_to_error.by_timestamp[current_init_frames] = fov_to_error;
+    p_focal_length_to_error.by_timestamp[current_init_frame_timestamps] = focal_length_to_error;
+    p_fov_to_error.by_timestamp[current_init_frame_timestamps] = fov_to_error;
 }
 
 void initialisation_debugging::submit_fundamental_decomp_debugging(double error_for_max_focal_length,
@@ -140,14 +140,14 @@ void initialisation_debugging::submit_fundamental_decomp_debugging(double error_
     if (!is_active)
         return;
 
-    p_dec_error_for_max_focal_length.by_timestamp[current_init_frames] = error_for_max_focal_length;
-    p_dec_min_error.by_timestamp[current_init_frames] = min_error;
-    p_dec_best_focal_length.by_timestamp[current_init_frames] = best_focal_length;
-    p_dec_de_df_plus.by_timestamp[current_init_frames] = de_df_plus;
-    p_dec_de_df_minus.by_timestamp[current_init_frames] = de_df_minus;
-    p_dec_min_error_percent_max_focal_error.by_timestamp[current_init_frames] = min_error_percent_max_focal_error;
+    p_dec_error_for_max_focal_length.by_timestamp[current_init_frame_timestamps] = error_for_max_focal_length;
+    p_dec_min_error.by_timestamp[current_init_frame_timestamps] = min_error;
+    p_dec_best_focal_length.by_timestamp[current_init_frame_timestamps] = best_focal_length;
+    p_dec_de_df_plus.by_timestamp[current_init_frame_timestamps] = de_df_plus;
+    p_dec_de_df_minus.by_timestamp[current_init_frame_timestamps] = de_df_minus;
+    p_dec_min_error_percent_max_focal_error.by_timestamp[current_init_frame_timestamps] = min_error_percent_max_focal_error;
 
-    p_dec_focal_length_to_error.by_timestamp[current_init_frames] = focal_length_to_error;
+    p_dec_focal_length_to_error.by_timestamp[current_init_frame_timestamps] = focal_length_to_error;
 
 }
 
@@ -158,23 +158,23 @@ void initialisation_debugging::submit_epipolar_estimator_debugging(double min_er
     if (!is_active)
         return;
 
-    p_ep_min_error.by_timestamp[current_init_frames] = min_error;
-    p_ep_initial_focal_length.by_timestamp[current_init_frames] = initial_focal_length;
-    p_ep_best_focal_length.by_timestamp[current_init_frames] = best_focal_length;
+    p_ep_min_error.by_timestamp[current_init_frame_timestamps] = min_error;
+    p_ep_initial_focal_length.by_timestamp[current_init_frame_timestamps] = initial_focal_length;
+    p_ep_best_focal_length.by_timestamp[current_init_frame_timestamps] = best_focal_length;
 
-    p_ep_dedf.by_timestamp[current_init_frames] = dedf;
-    p_ep_dedtu.by_timestamp[current_init_frames] = dedtu;
-    p_ep_dedtv.by_timestamp[current_init_frames] = dedtv;
-    p_ep_dedrx.by_timestamp[current_init_frames] = dedrx;
-    p_ep_dedry.by_timestamp[current_init_frames] = dedry;
-    p_ep_dedrz.by_timestamp[current_init_frames] = dedrz;
+    p_ep_dedf.by_timestamp[current_init_frame_timestamps] = dedf;
+    p_ep_dedtu.by_timestamp[current_init_frame_timestamps] = dedtu;
+    p_ep_dedtv.by_timestamp[current_init_frame_timestamps] = dedtv;
+    p_ep_dedrx.by_timestamp[current_init_frame_timestamps] = dedrx;
+    p_ep_dedry.by_timestamp[current_init_frame_timestamps] = dedry;
+    p_ep_dedrz.by_timestamp[current_init_frame_timestamps] = dedrz;
 
-    p_ep_sd_dedf.by_timestamp[current_init_frames] = sd_dedf;
-    p_ep_sd_dedtu.by_timestamp[current_init_frames] = sd_dedtu;
-    p_ep_sd_dedtv.by_timestamp[current_init_frames] = sd_dedtv;
-    p_ep_sd_dedrx.by_timestamp[current_init_frames] = sd_dedrx;
-    p_ep_sd_dedry.by_timestamp[current_init_frames] = sd_dedry;
-    p_ep_sd_dedrz.by_timestamp[current_init_frames] = sd_dedrz;
+    p_ep_sd_dedf.by_timestamp[current_init_frame_timestamps] = sd_dedf;
+    p_ep_sd_dedtu.by_timestamp[current_init_frame_timestamps] = sd_dedtu;
+    p_ep_sd_dedtv.by_timestamp[current_init_frame_timestamps] = sd_dedtv;
+    p_ep_sd_dedrx.by_timestamp[current_init_frame_timestamps] = sd_dedrx;
+    p_ep_sd_dedry.by_timestamp[current_init_frame_timestamps] = sd_dedry;
+    p_ep_sd_dedrz.by_timestamp[current_init_frame_timestamps] = sd_dedrz;
 }
 
 void initialisation_debugging::submit_feature_motions(double quantile_25, double quantile_50, double quantile_75)
@@ -182,9 +182,9 @@ void initialisation_debugging::submit_feature_motions(double quantile_25, double
     if (!is_active)
         return;
 
-    feature_motion_quantile_25.by_timestamp[current_init_frames] = quantile_25;
-    feature_motion_quantile_50.by_timestamp[current_init_frames] = quantile_50;
-    feature_motion_quantile_75.by_timestamp[current_init_frames] = quantile_75;
+    feature_motion_quantile_25.by_timestamp[current_init_frame_timestamps] = quantile_25;
+    feature_motion_quantile_50.by_timestamp[current_init_frame_timestamps] = quantile_50;
+    feature_motion_quantile_75.by_timestamp[current_init_frame_timestamps] = quantile_75;
 }
 
 template<typename T>

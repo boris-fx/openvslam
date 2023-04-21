@@ -140,6 +140,20 @@ double timings::total_time_sec() const {
 
 //////////////////////////////////////////////////////////////
 
+void to_json(nlohmann::json& j, const metrics::focal_estimate& e)
+{
+    j = { {"estimate", e.estimate}, {"stage", e.stage}, {"timestamp", e.timestamp}, {"frame", e.frame} };
+}
+
+void from_json(const nlohmann::json& j, metrics::focal_estimate& e) {
+    j.at("estimate").get_to(e.estimate);
+    j.at("stage").get_to(e.stage);
+    j.at("timestamp").get_to(e.timestamp);
+    j.at("frame").get_to(e.frame);
+}
+
+//////////////////////////////////////////////////////////////
+
 const double metrics::par_percent_error_trigger = 20.0;
 const double metrics::focal_percent_error_trigger = 50.0;
 
@@ -172,6 +186,7 @@ nlohmann::json metrics::to_json() const {
         {"unsolved_frame_count", unsolved_frame_count},
         {"num_points", num_points},
         {"initialisation_frames", initialisation_frames},
+        {"intermediate_focal_estimates", intermediate_focal_estimates}
     };
 }
 
@@ -185,8 +200,14 @@ bool metrics::from_json(const nlohmann::json& json) {
     unsolved_frame_count = json.at("unsolved_frame_count").get<int>();
     num_points = json.at("num_points").get<int>();
     initialisation_frames = json.at("initialisation_frames").get<std::set<std::set<int>>>();
+    intermediate_focal_estimates = json.at("intermediate_focal_estimates").get<std::list<focal_estimate>>();
 
     return true;
+}
+
+void metrics::submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate)
+{
+    intermediate_focal_estimates.push_back({ estimate, stage, current_frame_timestamp });
 }
 
 void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame) {
@@ -202,6 +223,12 @@ void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_vid
     }
 
     initialisation_debug_object.create_frame_data(timestamp_to_video_frame);
+
+    for (auto& estimate : intermediate_focal_estimates) {
+        auto f = timestamp_to_video_frame.find(estimate.timestamp);
+        if (f != timestamp_to_video_frame.end())
+            estimate.frame = f->second;
+    }
 
 }
 
@@ -323,7 +350,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
         html << "</video>\n";
     }
 
-    html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " x pixels.</p>\n";
+    html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " pixels.</p>\n";
 
     if (debugging.debug_initialisation) {
         html << "<h2>Initialisation debug</h2>\n";
@@ -356,7 +383,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
         html << "<p> Fixed focal length of " << known_focal_length_x_pixels.value() << " pixels used.</p>\n";
     }
     else {
-        html << "<p> Focal length x pixels calculated: " << calculated_focal_length_x_pixels;
+        html << "<p> Focal length (pixels) calculated: " << calculated_focal_length_x_pixels;
         if (input_video_metadata.ground_truth_focal_length_x_pixels()) {
             double diff_percent = percent_difference(input_video_metadata.ground_truth_focal_length_x_pixels().value(),
                 calculated_focal_length_x_pixels);
@@ -390,12 +417,19 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
         }
     }
 
+    if (!known_focal_length_x_pixels) {
+        for (auto const& estimate : intermediate_focal_estimates)
+            html << "<p>Intermediate focal estimate [" << focal_estimation_stage_to_string.at(static_cast<unsigned int>(estimate.stage)) << "] at " << estimate.frame << " is " << estimate.estimate;
+    }
+
     html << "<h2> Map</h2>\n";
     // Solved/unsolved cameras
     html << "<p> " << solved_frame_count << " cameras created from the " << total_frames() << " frames of video";
     if (unsolved_frame_count!=0)
         html << " - <mark class=\"red\"> \<" << unsolved_frame_count << " frames not tracked\></mark></p>\n";
     html << "<p> " << num_points << " 3D points</p>\n";
+    if (initialisation_frames.empty())
+        html << "<p> No successful initialisations</p>\n";
     for (auto const& initialisation_attempt_frames : initialisation_frames)
         html << "<p> Initialisation Frames: {" << to_string(initialisation_attempt_frames) << "}</p>\n";
     if (initialisation_debug_object.average_init_frame_feature_count())

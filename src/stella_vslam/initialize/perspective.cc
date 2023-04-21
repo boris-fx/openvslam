@@ -2,6 +2,7 @@
 #include "stella_vslam/camera/radial_division.h"
 #include "stella_vslam/camera/fisheye.h"
 #include "stella_vslam/data/frame.h"
+#include "stella_vslam/data/map_camera_helpers.h"
 #include "stella_vslam/initialize/perspective.h"
 #include "stella_vslam/solve/homography_solver.h"
 #include "stella_vslam/solve/fundamental_solver.h"
@@ -84,32 +85,35 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
 
 
            bool focal_length_estimate_is_stable(true);
-           bool focal_length_changed(false);
-           
-           bool const focal_length_via_points_test(false);
-           if (focal_length_via_points_test) {
-               stella_vslam_bfx::focal_length_estimator::test_v2(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_,
-                                      focal_length_estimate_is_stable, focal_length_changed);
+            bool focal_length_changed(false);
 
-               stella_vslam_bfx::focal_length_estimator::get_instance()->add_frame_pair(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur);
-               stella_vslam_bfx::focal_length_estimator::get_instance()->run_optimisation(ref_camera_, focal_length_estimate_is_stable, focal_length_changed);
-           }
-           else
-               focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_, &focal_length_estimate_is_stable); // May update the camera if auto focal length is active
+            bool const focal_length_via_points_test(false);
+            if (focal_length_via_points_test) {
+                stella_vslam_bfx::focal_length_estimator::test_v2(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_,
+                                                                  focal_length_estimate_is_stable, focal_length_changed);
 
-           // If the focal length was changed we also need to update the bearing vectors,
-           //   and indicate to our calling function that it should do the same
-           if (focal_length_changed) {
-              const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_).clear();
-              ref_camera_->convert_keypoints_to_bearings(ref_undist_keypts_, const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_));
-              cur_bearings_.clear();
-              ref_camera_->convert_keypoints_to_bearings(cur_undist_keypts_, cur_bearings_);
-           }
-           *focal_length_was_modified = focal_length_changed;
+                stella_vslam_bfx::focal_length_estimator::get_instance()->add_frame_pair(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur);
+                stella_vslam_bfx::focal_length_estimator::get_instance()->run_optimisation(ref_camera_, focal_length_estimate_is_stable, focal_length_changed);
+            }
+            else
+                focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_, &focal_length_estimate_is_stable); // May update the camera if auto focal length is active
 
-           // If focal length estimation was required but failed, then intiialisation should fail
-           if (!focal_length_estimate_is_stable)
-              return false;
+            // If the focal length was changed we also need to update the bearing vectors,
+            //   and indicate to our calling function that it should do the same
+            if (focal_length_changed) {
+                //auto stage = stella_vslam_bfx::focal_estimation_stage::initialisation_before_ba;
+                //stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, stella_vslam_bfx::focal_length_x_pixels_from_camera(ref_camera_));
+
+                const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_).clear();
+                ref_camera_->convert_keypoints_to_bearings(ref_undist_keypts_, const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_));
+                cur_bearings_.clear();
+                ref_camera_->convert_keypoints_to_bearings(cur_undist_keypts_, cur_bearings_);
+            }
+            *focal_length_was_modified = focal_length_changed;
+
+            // If focal length estimation was required but failed, then intiialisation should fail
+            if (!focal_length_estimate_is_stable)
+                return false;
 
         }
         else {

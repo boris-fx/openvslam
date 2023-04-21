@@ -30,7 +30,7 @@ public:
 
     initialisation_debugging();
 
-    std::array<double, 2> current_init_frames; 
+    std::array<double, 2> current_init_frame_timestamps;
     double video_width;
     
     bool active() const;

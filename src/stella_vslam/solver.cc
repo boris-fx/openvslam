@@ -143,6 +143,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
             continue;
 
         timestamp = (double)frame;
+        metrics::get_instance()->current_frame_timestamp = timestamp;
 
         timestampToVideoFrame[timestamp] = frame;
 
@@ -200,6 +201,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
             continue;
 
         timestamp = videoFrameToTimestamp[frame];
+        metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
         send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
@@ -231,7 +233,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         // Wait for map optimisation to finish
         while (slam_->loop_BA_is_running() || !slam_->mapping_module_is_enabled()) {
             spdlog::info("### solver[{}] 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
-            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             spdlog::info("### solver[{}] 4", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         }
         spdlog::info("### solver[{}] 5", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
@@ -253,6 +255,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         }
 
         timestamp = videoFrameToTimestamp[frame];
+        metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
 

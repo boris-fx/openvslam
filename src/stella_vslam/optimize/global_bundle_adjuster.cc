@@ -11,6 +11,7 @@
 #include "stella_vslam/optimize/internal/se3/shot_vertex_container.h"
 #include "stella_vslam/optimize/internal/se3/reproj_edge_wrapper.h"
 #include "stella_vslam/util/converter.h"
+#include "stella_vslam/report/metrics.h"
 
 #include <g2o/core/solver.h>
 #include <g2o/core/block_solver.h>
@@ -337,8 +338,12 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
 
     if (camera_was_modified)
         *camera_was_modified = focal_length_modified;
+    if (focal_length_modified) {
+        auto stage = stella_vslam_bfx::focal_estimation_stage::initialisation_after_ba;
+        stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, fx_after);
 
-    spdlog::warn("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+        spdlog::warn("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    }
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
@@ -464,7 +469,12 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
 
     if (camera_was_modified)
         *camera_was_modified = focal_length_modified;
-    spdlog::warn("global bundle focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    if (focal_length_modified) {
+        auto stage = stella_vslam_bfx::focal_estimation_stage::global_optimisation;
+        stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, fx_after);
+
+        spdlog::warn("global bundle focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    }
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {

@@ -290,6 +290,8 @@ bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* ca
 
    if (focal_length_estimate_is_stable) {
        bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_estimate);
+       auto stage = stella_vslam_bfx::focal_estimation_stage::initialisation_before_ba;
+       stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, focal_length_estimate);
        return set_f_ok;
    }
    return false;
