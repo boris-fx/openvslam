@@ -23,6 +23,7 @@ namespace stella_vslam_bfx {
 void solve::clear() {
     frame_to_camera.clear();
     world_points.clear();
+    prematched_id_to_idx.clear();
     camera_lens.reset();
 }
 
@@ -33,11 +34,12 @@ void frame_display_data::clear() {
     focal_length = 0.0;
     camera_pose.setIdentity();
     world_points.clear();
+    prematched_id_to_idx.clear();
 }
 
 solver::solver(const std::shared_ptr<config>& cfg,
                const std::string& vocab_file_path,
-               std::function<bool(int, cv::Mat&)> get_frame)
+               std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
 : get_frame_(get_frame)
 {
     // Set the min_pixel_size based on video size
@@ -57,7 +59,7 @@ solver::solver(const std::shared_ptr<config>& cfg,
 #if !defined(USE_DBOW2)
 solver::solver(const std::shared_ptr<config>& cfg,
                std::ifstream & vocab_data,
-               std::function<bool(int, cv::Mat&)> get_frame)
+               std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
 : get_frame_(get_frame) {
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_data);
     slam_->startup();
@@ -114,7 +116,7 @@ double overall_progress_percent(double stage_progress, double stage_start_progre
 bool solver::track_frame_range(int begin, int end, tracking_direction direction, solve* final_solve) {
     cv::Mat frame_image;
     cv::Mat mask; // to do!!
-    prematched_points* extra_keypoints(nullptr); // to do!!
+    prematched_points extra_keypoints;
     if (final_solve)
         final_solve->clear();
 
@@ -138,7 +140,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Track forwards to create the map
     for (int frame = begin; frame <= end; ++frame) {
-        bool got_frame = get_frame_(frame, frame_image);
+        bool got_frame = get_frame_(frame, frame_image, extra_keypoints);
         if (!got_frame || frame_image.empty())
             continue;
 
@@ -147,7 +149,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         timestampToVideoFrame[timestamp] = frame;
 
-        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
         send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
 
         double stage_progress = double(frame - begin + 1) / double(1 + end - begin);
@@ -196,14 +198,14 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Track backwards from the initialization point to finish the map
     for (int frame = first_keyframe.value() - 1; frame >= begin; --frame) {
-        bool got_frame = get_frame_(frame, frame_image);
+        bool got_frame = get_frame_(frame, frame_image, extra_keypoints);
         if (!got_frame || frame_image.empty())
             continue;
 
         timestamp = videoFrameToTimestamp[frame];
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
-        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
         send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
 
         double stage_progress = double(first_keyframe.value() - frame) / double(first_keyframe.value() - begin);
@@ -248,7 +250,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     slam_->disable_mapping_module();
     int solved_frame_count(0), unsolved_frame_count(0);
     for (int frame = begin; frame <= end; ++frame) {
-        bool got_frame = get_frame_(frame, frame_image);
+        bool got_frame = get_frame_(frame, frame_image, extra_keypoints);
         if (!got_frame || frame_image.empty()) {
             ++unsolved_frame_count;
             continue;
@@ -257,7 +259,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         timestamp = videoFrameToTimestamp[frame];
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
-        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, extra_keypoints);
+        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
 
         camera_pose ? ++solved_frame_count : ++unsolved_frame_count;
 
@@ -287,7 +289,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         }
 
         // Store the map points
-        get_world_points(final_solve->world_points);
+        get_world_points(final_solve->world_points, final_solve->prematched_id_to_idx);
     }
 
     // Store the metrics
@@ -318,11 +320,14 @@ std::shared_ptr<stella_vslam::system> solver::system() {
     return slam_;
 }
 
-void solver::get_world_points(std::vector<Eigen::Vector3d>& world_points) const {
-    world_points.clear();
+void solver::get_world_points(std::vector<Eigen::Vector3d>& world_points,
+                              std::unordered_map<unsigned, unsigned>& prematched_id_to_idx) const {
     std::vector<std::shared_ptr<data::landmark>> all_landmarks = slam_->map_db_->get_all_landmarks();
-    std::transform(all_landmarks.cbegin(), all_landmarks.cend(), std::back_inserter(world_points),
-                   [](const std::shared_ptr<data::landmark>& value) { return value->get_pos_in_world(); });
+    world_points.resize(all_landmarks.size());
+    prematched_id_to_idx.clear();
+    for (unsigned i = 0; i < all_landmarks.size(); ++i) {
+        world_points[i] = all_landmarks[i]->get_pos_in_world();
+    }
 }
 
 void solver::send_frame_data(int frame,
@@ -341,7 +346,7 @@ void solver::send_frame_data(int frame,
             frame_data->camera_pose = *camera_pose;
             frame_data->final_points = final_points;
             if (send_points)
-                get_world_points(frame_data->world_points);
+                get_world_points(frame_data->world_points, frame_data->prematched_id_to_idx);
         }
 
         display_frame_(frame_data);

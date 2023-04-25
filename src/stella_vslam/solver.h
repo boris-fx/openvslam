@@ -31,6 +31,7 @@ class solve {
 public:
     std::map<int, Eigen::Matrix4d> frame_to_camera;
     std::vector<Eigen::Vector3d> world_points;
+    std::unordered_map<unsigned, unsigned> prematched_id_to_idx;
     std::shared_ptr<stella_vslam::camera::perspective> camera_lens;
 
     void clear();
@@ -49,6 +50,7 @@ public:
     double focal_length = 0.0;
     Eigen::Matrix4d camera_pose;
     std::vector<Eigen::Vector3d> world_points;
+    std::unordered_map<unsigned, unsigned> prematched_id_to_idx;
 
     void clear();
 };
@@ -61,12 +63,12 @@ class STELLA_VSLAM_API solver {
 public:
     solver(const std::shared_ptr<stella_vslam::config>& cfg,
            const std::string& vocab_file_path,
-           std::function<bool(int, cv::Mat&)> get_frame);
+           std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame);
 
 #if !defined(USE_DBOW2)
     solver(const std::shared_ptr<stella_vslam::config>& cfg,
            std::ifstream & vocab_data,
-           std::function<bool(int, cv::Mat&)> get_frame);
+           std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame);
 #endif
 
     virtual ~solver();
@@ -90,10 +92,11 @@ public:
     std::shared_ptr<stella_vslam::system> system();
 
 protected:
-    std::function<bool(int, cv::Mat&)> get_frame_;
+    std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame_;
 
     /// Retrieve landmark positions from map db
-    void get_world_points(std::vector<Eigen::Vector3d>& world_points) const;
+    void get_world_points(std::vector<Eigen::Vector3d>& world_points,
+                          std::unordered_map<unsigned, unsigned>& prematched_id_to_idx) const;
 
     /// Package data and send to the calling application via display_frame_ callback
     void send_frame_data(int frame,

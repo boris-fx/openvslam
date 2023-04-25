@@ -573,10 +573,21 @@ void display_frame(std::shared_ptr<stella_vslam_bfx::frame_display_data> frame_d
     if (frame_data->solve_success) {
         msg_str << std::fixed << "\tFocal length: " << frame_data->focal_length << std::endl;
         msg_str << std::fixed << "\tCamera pose: " << frame_data->camera_pose.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
-        if (!frame_data->world_points.empty()) {
-            msg_str << "\t" << frame_data->world_points.size() << " " << (frame_data->final_points ? "final" : "estimated") << " world points\n";
-            for (auto p : frame_data->world_points)
-                msg_str << std::fixed << "\t\t" << p.format(stella_vslam_bfx::debug_printer::eigen_format) << std::endl;
+        const auto & points = frame_data->world_points;
+        if (!points.empty()) {
+            msg_str << "\t" << points.size() << " " << (frame_data->final_points ? "final" : "estimated") << " world points\n";
+
+            std::unordered_map<unsigned, unsigned> idx_to_id;
+            for (auto id_idx : frame_data->prematched_id_to_idx)
+                idx_to_id[id_idx.second] = id_idx.first;
+
+            for (unsigned i = 0; i < points.size(); ++i) {
+                msg_str << std::fixed << "\t\t" << points[i].format(stella_vslam_bfx::debug_printer::eigen_format);
+                auto id = idx_to_id.find(i);
+                if (id != idx_to_id.end())
+                    msg_str << "\t Prematched id: " << id->second;
+                msg_str << std::endl;
+            }
         }
     }
     else
@@ -915,8 +926,10 @@ int mono_tracking(const std::shared_ptr<stella_vslam::system>& slam,
 }
 
 struct image_source {
-    image_source(std::string_view video_file_path, unsigned int start_time)
-        : video_file_path(video_file_path), start_time(start_time) {
+    image_source(std::string_view video_file_path, unsigned int start_time,
+                 const std::string& planar_path, const std::string& mesh_path, unsigned int grid_size)
+        : video_file_path(video_file_path), planar_tracks_path(planar_path), mesh_tracks_path(mesh_path),
+          start_time(start_time), planar_grid_size(grid_size) {
     }
 
     bool open() {
@@ -930,10 +943,21 @@ struct image_source {
             std::cerr << "Unable to set video position to " << start_time << "ms." << std::endl;
             return false;
         }
+
+        // Read and store extra input points from file(s)
+        if (!planar_tracks_path.empty())
+            planar_points(planar_tracks_path, tracked_points,
+                            video.get(cv::CAP_PROP_FRAME_WIDTH), video.get(cv::CAP_PROP_FRAME_HEIGHT),
+                            planar_grid_size);
+        if (!mesh_tracks_path.empty())
+            mesh_points(mesh_tracks_path, tracked_points,
+                            video.get(cv::CAP_PROP_FRAME_WIDTH), video.get(cv::CAP_PROP_FRAME_HEIGHT));
+
         return true;
     }
 
-    bool get_frame(int frame, cv::Mat& frame_data) {
+    bool get_frame(int frame, cv::Mat& frame_data,
+                   stella_vslam_bfx::prematched_points& extra_points) {
         bool ok = video.set(cv::CAP_PROP_POS_FRAMES, frame);
         if (!ok) {
             spdlog::warn("Failed to seek to video frame {}", frame);
@@ -946,12 +970,20 @@ struct image_source {
             return false;
         }
 
+        extra_points.first.clear();
+        extra_points.second.clear();
+        auto frame_pts = tracked_points.find(frame);
+        if (frame_pts != tracked_points.end() && !frame_pts->second.first.empty())
+            extra_points = tracked_points.at(frame);
+
         return true;
     }
 
     std::string_view video_file_path;
-    unsigned int start_time;
+    std::string planar_tracks_path, mesh_tracks_path;
+    unsigned int start_time, planar_grid_size;
     cv::VideoCapture video;
+    std::map<int, stella_vslam_bfx::prematched_points> tracked_points;
 };
 
 void mono_tracking_2(
@@ -985,20 +1017,13 @@ void mono_tracking_2(
     double initialFocalLength = (cfg->settings_.camera_model_ == stella_vslam::camera::model_type_t::Perspective) ? cfg->settings_.perspective_settings_.fx_ : 0;
 
     // Set up the video frame source
-    image_source images(video_file_path, start_time);
+    image_source images(video_file_path, start_time, planar_path, mesh_path, gridSize);
     if (!images.open())
         return;
-    std::function<bool(int, cv::Mat&)> get_frame = [&](int frame, cv::Mat& frame_data) { return images.get_frame(frame, frame_data); };
-    int video_width  = images.video.get(cv::CAP_PROP_FRAME_WIDTH);
-    int video_height = images.video.get(cv::CAP_PROP_FRAME_HEIGHT);
-
-    // Extra input points
-    std::map<int, stella_vslam_bfx::prematched_points> extraPointsPerFrame;
-    if (!planar_path.empty())
-        planar_points(planar_path, extraPointsPerFrame, images.video.get(cv::CAP_PROP_FRAME_WIDTH), images.video.get(cv::CAP_PROP_FRAME_HEIGHT), gridSize);
-    if (!mesh_path.empty())
-        mesh_points(mesh_path, extraPointsPerFrame, images.video.get(cv::CAP_PROP_FRAME_WIDTH), images.video.get(cv::CAP_PROP_FRAME_HEIGHT));
-    const bool useExtraPoints = !extraPointsPerFrame.empty();
+    std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame = 
+        [&](int frame, cv::Mat& frame_data, stella_vslam_bfx::prematched_points& tracked_points) {
+            return images.get_frame(frame, frame_data, tracked_points);
+        };
 
     // Create a solver (in this thread because the viewer needs access to its stella_vslam::system) 
     stella_vslam_bfx::solver solver(cfg, vocab_file_path, get_frame);
