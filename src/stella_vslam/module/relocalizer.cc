@@ -111,11 +111,13 @@ bool relocalizer::reloc_by_candidate(data::frame& curr_frm,
     if (use_orb_features_) {
         // Prematched points will all have been dealt with so no point looking for more
         ok = refine_pose(curr_frm, candidate_keyfrm, already_found_landmarks);
-    }
-	else
-		ok = true;
+        if (!ok)
+            return false;
 
-    return ok;
+        return refine_pose_by_local_map(curr_frm, candidate_keyfrm);
+    }
+	
+    return true;
 }
 
 bool relocalizer::relocalize_by_pnp_solver(data::frame& curr_frm,
