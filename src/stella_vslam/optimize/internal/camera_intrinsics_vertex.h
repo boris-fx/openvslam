@@ -32,6 +32,8 @@ public:
     void setToOriginImpl() override;
 
     void oplusImpl(const double* update) override;
+
+    double focal_length_x_pixels() const { return estimate(); }
 };
 
 inline camera_intrinsics_vertex_1::camera_intrinsics_vertex_1()
@@ -76,6 +78,8 @@ public:
     void setToOriginImpl() override;
 
     void oplusImpl(const double* update) override;
+
+    double focal_length_x_pixels() const { return estimate()(0); }
 };
 
 inline camera_intrinsics_vertex_2::camera_intrinsics_vertex_2()
@@ -109,20 +113,10 @@ inline void camera_intrinsics_vertex_2::oplusImpl(const double* update) {
 #define USE_PADDED_CAMERA_INTRINSICS_VERTEX
 
 #ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
-// temp
 using camera_intrinsics_vertex = camera_intrinsics_vertex_2;
 using camera_intrinsics_vertex_type = Vec3_t;
-
-
-
-//#include "landmark_vertex.h"
-//using camera_intrinsics_vertex = landmark_vertex;
-//using camera_intrinsics_vertex_type = Vec3_t;
-
 #else
-// temp
 using camera_intrinsics_vertex = camera_intrinsics_vertex_1;
-
 #endif
 
 } // namespace internal

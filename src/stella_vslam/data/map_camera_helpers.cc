@@ -102,6 +102,24 @@ stella_vslam::camera::base* camera_from_keyframes(std::vector<std::shared_ptr<st
     return camera;
 }
 
+stella_vslam::camera::base* camera_from_keyframes(std::unordered_map<unsigned int, std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms)
+{
+    // Get the shared camera from a keyframe
+    stella_vslam::camera::base* camera(nullptr);
+    for (const auto& keyfrm : keyfrms) {
+        if (!keyfrm.second) {
+            continue;
+        }
+        if (keyfrm.second->will_be_erased()) {
+            continue;
+        }
+        camera = keyfrm.second->camera_;
+        break;
+    }
+
+    return camera;
+}
+
 //keyframe_autocalibration_wrapper::keyframe_autocalibration_wrapper(std::vector<std::shared_ptr<stella_vslam::data::keyframe>> const& keyfrms)
 //{
 //   using namespace stella_vslam;

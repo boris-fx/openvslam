@@ -227,7 +227,7 @@ void global_optimization_module::run_forced_loop_bundle() {
 
     spdlog::info("global_optimization_module::run_forced_loop_bundle");
 
-    if (map_db_->get_all_keyframes().empty()) {
+    if (map_db_->get_num_keyframes()==0) {
         spdlog::info("global_optimization_module::run_forced_loop_bundle terminated (no map keyframes)");
         return;
     }

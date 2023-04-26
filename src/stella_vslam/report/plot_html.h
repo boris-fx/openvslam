@@ -26,7 +26,9 @@ using Curve = std::pair<std::string, std::map<double, double>>; /// Data name, m
 
 struct Graph
 {
-    Graph(std::string x_label, std::string y_label, std::set<Curve> curves, axis_scaling x_axis_scaling, axis_scaling y_axis_scaling, std::optional<double> ground_truth_y=std::nullopt)
+    Graph(std::string x_label, std::string y_label, std::set<Curve> curves,
+          axis_scaling x_axis_scaling = range_behaviour::no_max, axis_scaling y_axis_scaling = range_behaviour::no_max,
+          std::optional<double> ground_truth_y=std::nullopt)
         : x_label(x_label), y_label(y_label), curves(curves), ground_truth_y(ground_truth_y)
         , x_axis_scaling(x_axis_scaling), y_axis_scaling(y_axis_scaling)
     {}
