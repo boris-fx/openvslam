@@ -108,6 +108,32 @@ bool bundle_adjust_map(data::map_database* map_db)
     return ok;;
 }
 
+/** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
+internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
+    stella_vslam::camera::base const* camera)
+{
+    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
+        return nullptr;
+
+    // Convert the camera intrinsics to a g2o vertex
+    auto vtx = new internal::camera_intrinsics_vertex();
+
+    const auto vtx_id = *offset;
+    (*offset)++;
+
+    vtx->setId(vtx_id);
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    vtx->setEstimate(internal::camera_intrinsics_vertex_type(stella_vslam_bfx::focal_length_x_pixels_from_camera(camera), 0.0, 0.0));
+#else
+    vtx->setEstimate(*autocalibration_wrapper.fx);
+#endif
+    vtx->setFixed(false);
+    vtx->setMarginalized(false); // "this node is marginalized out during the optimization"
+                                 // This is set to false for camera positions, true for points
+
+    return vtx;
+}
+
 void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
                                          const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
 

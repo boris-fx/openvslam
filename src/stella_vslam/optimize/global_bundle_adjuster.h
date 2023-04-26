@@ -57,7 +57,8 @@ private:
     const bool use_huber_kernel_;
 };
 
-internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset, stella_vslam::camera::base const* camera);
+internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
+                                                                    std::vector<std::shared_ptr<data::keyframe>> const& keyfrms);
 
 } // namespace optimize
 } // namespace stella_vslam
