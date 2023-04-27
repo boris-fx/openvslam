@@ -421,20 +421,22 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     }
 
     // Intermediate focal length estimates
-    //if (!known_focal_length_x_pixels) {
+    if (!known_focal_length_x_pixels) {
 
-    //    // Convert to a map<double,double> for presentation as a graph
-    //    std::array<std::map<double, double>, 4> graph_intermediate_focal_length_estimate;
-    //    for (auto const& estimate : intermediate_focal_estimates)
-    //        graph_intermediate_focal_length_estimate[static_cast<unsigned int>(estimate.stage)][estimate.frame] = estimate.estimate;
-    //    std::set<Curve> curves;
-    //    for (int i = 0; i < 4; ++i)
-    //        curves.insert({ focal_estimation_stage_to_string.at(static_cast<unsigned int>(i)), graph_intermediate_focal_length_estimate[i] });
-    //    write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves));
+        // Convert to a map<double,double> for presentation as a graph
+        std::array<std::map<double, double>, 4> graph_intermediate_focal_length_estimate;
+        for (auto const& estimate : intermediate_focal_estimates)
+            graph_intermediate_focal_length_estimate[static_cast<unsigned int>(estimate.stage)][estimate.frame] = estimate.estimate;
+        std::set<Curve> curves;
+        for (int i = 0; i < 4; ++i)
+            curves.insert({ focal_estimation_stage_to_string.at(static_cast<unsigned int>(i)), graph_intermediate_focal_length_estimate[i] });
+        
+        std::optional<double> focal_gt(input_video_metadata.ground_truth_focal_length_x_pixels());
+        write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::no_max, range_behaviour::no_max, focal_gt));
 
-    //    for (auto const& estimate : intermediate_focal_estimates)
-    //        html << "<p>Intermediate focal estimate [" << focal_estimation_stage_to_string.at(static_cast<unsigned int>(estimate.stage)) << "] at " << estimate.frame << " is " << estimate.estimate;
-    //}
+        //for (auto const& estimate : intermediate_focal_estimates)
+        //    html << "<p>Intermediate focal estimate [" << focal_estimation_stage_to_string.at(static_cast<unsigned int>(estimate.stage)) << "] at " << estimate.frame << " is " << estimate.estimate;
+    }
 
     html << "<h2> Map</h2>\n";
     // Solved/unsolved cameras

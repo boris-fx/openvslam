@@ -47,7 +47,7 @@ private:
     //!
     const unsigned int use_additional_keyframes_for_monocular_ = false;
 
-    void optimize2(data::map_database* map_db, const std::shared_ptr<data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const;
+   // void optimize2(data::map_database* map_db, const std::shared_ptr<data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const;
 };
 
 } // namespace optimize

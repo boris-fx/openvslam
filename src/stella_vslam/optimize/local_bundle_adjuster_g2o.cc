@@ -108,32 +108,6 @@ bool bundle_adjust_map(data::map_database* map_db)
     return ok;;
 }
 
-/** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
-internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
-    stella_vslam::camera::base const* camera)
-{
-    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
-        return nullptr;
-
-    // Convert the camera intrinsics to a g2o vertex
-    auto vtx = new internal::camera_intrinsics_vertex();
-
-    const auto vtx_id = *offset;
-    (*offset)++;
-
-    vtx->setId(vtx_id);
-#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
-    vtx->setEstimate(internal::camera_intrinsics_vertex_type(stella_vslam_bfx::focal_length_x_pixels_from_camera(camera), 0.0, 0.0));
-#else
-    vtx->setEstimate(*autocalibration_wrapper.fx);
-#endif
-    vtx->setFixed(false);
-    vtx->setMarginalized(false); // "this node is marginalized out during the optimization"
-                                 // This is set to false for camera positions, true for points
-
-    return vtx;
-}
-
 void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
                                          const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
 
@@ -250,7 +224,13 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
         }
     }
 
+    // Get the camera and if focal length is to be optimised create a camera intrinsics vertex
+    auto vtx_id_offset = std::make_shared<unsigned int>(0);
     stella_vslam::camera::base *camera = stella_vslam_bfx::camera_from_keyframes(local_keyfrms);
+    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, camera);
+    const unsigned int active_num_first_iter = camera_intrinsics_vtx ? 100 : num_first_iter_;
+    const unsigned int active_num_second_iter = camera_intrinsics_vtx ? 100 : num_second_iter_;
+    spdlog::warn("using {}/{} iterations (default is {}/{})", active_num_first_iter, active_num_second_iter, num_first_iter_, num_second_iter_);
 
     // 2. Construct an optimizer
 
@@ -272,7 +252,8 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
 
     g2o::SparseOptimizer optimizer;
     auto terminateAction = new terminate_action;
-    terminateAction->setGainThreshold(1e-3);
+    if (!camera_intrinsics_vtx) // Set a lower gain threshold (the default of 1e-6) if focal length is being optimised
+        terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
     optimizer.setAlgorithm(algorithm);
 
@@ -283,7 +264,6 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
     // 3. Convert each of the keyframe to the g2o vertex, then set it to the optimizer
 
     // Container of the shot vertices
-    auto vtx_id_offset = std::make_shared<unsigned int>(0);
     internal::se3::shot_vertex_container keyfrm_vtx_container(vtx_id_offset, local_keyfrms.size() + fixed_keyfrms.size());
     // Save the converted keyframes
     std::unordered_map<unsigned int, std::shared_ptr<data::keyframe>> all_keyfrms;
@@ -308,8 +288,7 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
 
     print_keyframe_info(fixed_keyfrms, local_keyfrms, curr_keyfrm, map_db->get_num_keyframes());
 
-    // 3(b). Camera intrinsics
-    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, camera);
+    // 3(b). Add the camera intrinsics vertex to the optimiser, if one was created
     if (camera_intrinsics_vtx)
         optimizer.addVertex(camera_intrinsics_vtx);
 
@@ -426,7 +405,7 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
 
 
     optimizer.initializeOptimization();
-    optimizer.optimize(num_first_iter_);
+    optimizer.optimize(active_num_first_iter);
 
 
     if (camera_intrinsics_vtx) {
@@ -466,7 +445,7 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
         }
 
         optimizer.initializeOptimization();
-        optimizer.optimize(num_second_iter_);
+        optimizer.optimize(active_num_second_iter);
     }
 
     delete terminateAction;
@@ -546,6 +525,7 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
     }
 }
 
+#if 0
 void local_bundle_adjuster_g2o::optimize2(data::map_database* map_db,
     const std::shared_ptr<stella_vslam::data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const {
     // 1. Aggregate the local and fixed keyframes, and local landmarks
@@ -976,6 +956,7 @@ void local_bundle_adjuster_g2o::optimize2(data::map_database* map_db,
     //    bool ok_global = bundle_adjust_map(map_db);
 
 }
+#endif
 
 } // namespace optimize
 } // namespace stella_vslam

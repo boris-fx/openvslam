@@ -37,9 +37,8 @@ namespace optimize {
 
 /** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
 internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
-                                                                        std::vector<std::shared_ptr<data::keyframe>> const& keyfrms)
+                                                                    stella_vslam::camera::base const* camera)
 {
-    stella_vslam::camera::base const* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
     if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
         return nullptr;
 
@@ -311,11 +310,11 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
     // Camera intrinsics vertex
-    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
+    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, camera);
 
     g2o::SparseOptimizer optimizer;
 
-    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
     double fx_before = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
 
     optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
@@ -436,7 +435,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
     // Camera intrinsics vertex
-    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, keyfrms);
+    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, camera);
 
     g2o::SparseOptimizer optimizer;
 
@@ -445,7 +445,6 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
-    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
     double fx_before = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
 
     // NB: Uses num_iter, not num_iter_
@@ -476,6 +475,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         spdlog::warn("global bundle focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
     }
 
+    spdlog::warn("global bundle setting cameras...");
+
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
             continue;
@@ -491,6 +492,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         keyfrm_to_pose_cw_after_global_BA[keyfrm->id_] = cam_pose_cw;
         optimized_keyfrm_ids.insert(keyfrm->id_);
     }
+
+    spdlog::warn("global bundle setting landmarks...");
 
     for (unsigned int i = 0; i < lms.size(); ++i) {
         if (!is_optimized_lm.at(i)) {
@@ -511,6 +514,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         lm_to_pos_w_after_global_BA[lm->id_] = pos_w;
         optimized_landmark_ids.insert(lm->id_);
     }
+
+    spdlog::warn("global bundle end");
 
     return true;
 }
