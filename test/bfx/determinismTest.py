@@ -32,10 +32,12 @@ def fileDiff(file1, file2, printDiff):
         'start .+ module$', \
         'terminate .+ module$', \
         'resume .+ module$', \
+        'reset .+ module$', \
         'tracking_module: start keyframe insertion', \
         'mapping_module::async_pause', \
         'global_optimization_module::run', \
         'Stage "Analysing video" progress', \
+        'relocalization succeeded', \
         '###'
         )
     
