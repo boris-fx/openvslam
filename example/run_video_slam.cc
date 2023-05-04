@@ -956,7 +956,7 @@ struct image_source {
         return true;
     }
 
-    bool get_frame(int frame, cv::Mat& frame_data,
+    bool get_frame(int frame, cv::Mat& frame_data, cv::Mat& mask, 
                    stella_vslam_bfx::prematched_points& extra_points) {
         bool ok = video.set(cv::CAP_PROP_POS_FRAMES, frame);
         if (!ok) {
@@ -969,6 +969,8 @@ struct image_source {
             spdlog::warn("Failed to read video frame  {}", frame);
             return false;
         }
+
+        mask = cv::Mat{};
 
         extra_points.first.clear();
         extra_points.second.clear();
@@ -1020,9 +1022,9 @@ void mono_tracking_2(
     image_source images(video_file_path, start_time, planar_path, mesh_path, gridSize);
     if (!images.open())
         return;
-    std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame = 
-        [&](int frame, cv::Mat& frame_data, stella_vslam_bfx::prematched_points& tracked_points) {
-            return images.get_frame(frame, frame_data, tracked_points);
+    std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame = 
+        [&](int frame, cv::Mat& frame_data, cv::Mat& mask, stella_vslam_bfx::prematched_points& tracked_points) {
+            return images.get_frame(frame, frame_data, mask, tracked_points);
         };
 
     // Create a solver (in this thread because the viewer needs access to its stella_vslam::system) 

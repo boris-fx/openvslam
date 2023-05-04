@@ -39,7 +39,7 @@ void frame_display_data::clear() {
 
 solver::solver(const std::shared_ptr<config>& cfg,
                const std::string& vocab_file_path,
-               std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
+               std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
 : get_frame_(get_frame)
 {
     // Set the min_pixel_size based on video size
@@ -59,7 +59,7 @@ solver::solver(const std::shared_ptr<config>& cfg,
 #if !defined(USE_DBOW2)
 solver::solver(const std::shared_ptr<config>& cfg,
                std::ifstream & vocab_data,
-               std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
+               std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
 : get_frame_(get_frame) {
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_data);
     slam_->startup();
@@ -115,7 +115,7 @@ double overall_progress_percent(double stage_progress, double stage_start_progre
 
 bool solver::track_frame_range(int begin, int end, tracking_direction direction, solve* final_solve) {
     cv::Mat frame_image;
-    cv::Mat mask; // to do!!
+    cv::Mat mask;
     prematched_points extra_keypoints;
     if (final_solve)
         final_solve->clear();
@@ -140,7 +140,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Track forwards to create the map
     for (int frame = begin; frame <= end; ++frame) {
-        bool got_frame = get_frame_(frame, frame_image, extra_keypoints);
+        bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
         if (!got_frame || frame_image.empty())
             continue;
 
@@ -198,7 +198,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Track backwards from the initialization point to finish the map
     for (int frame = first_keyframe.value() - 1; frame >= begin; --frame) {
-        bool got_frame = get_frame_(frame, frame_image, extra_keypoints);
+        bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
         if (!got_frame || frame_image.empty())
             continue;
 
@@ -250,7 +250,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     slam_->disable_mapping_module();
     int solved_frame_count(0), unsolved_frame_count(0);
     for (int frame = begin; frame <= end; ++frame) {
-        bool got_frame = get_frame_(frame, frame_image, extra_keypoints);
+        bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
         if (!got_frame || frame_image.empty()) {
             ++unsolved_frame_count;
             continue;

@@ -63,12 +63,12 @@ class STELLA_VSLAM_API solver {
 public:
     solver(const std::shared_ptr<stella_vslam::config>& cfg,
            const std::string& vocab_file_path,
-           std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame);
+           std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame);
 
 #if !defined(USE_DBOW2)
     solver(const std::shared_ptr<stella_vslam::config>& cfg,
            std::ifstream & vocab_data,
-           std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame);
+           std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame);
 #endif
 
     virtual ~solver();
@@ -92,7 +92,7 @@ public:
     std::shared_ptr<stella_vslam::system> system();
 
 protected:
-    std::function<bool(int, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame_;
+    std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame_;
 
     /// Retrieve landmark positions from map db
     void get_world_points(std::vector<Eigen::Vector3d>& world_points,
