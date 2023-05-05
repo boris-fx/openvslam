@@ -1076,6 +1076,8 @@ void mono_tracking_2(
         std::filesystem::path fsVideo(video_file_path);
         std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
         stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "", output_video_name, cfg->settings_.optimise_focal_length_ ? std::nullopt : std::optional<double>(initialFocalLength));
+        std::string metrics_json_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.json";
+        stella_vslam_bfx::metrics::get_instance()->save_json_report(metrics_json_filename);
         if (debug_initialisation) {
             std::string init_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_init.html";
             stella_vslam_bfx::metrics::initialisation_debug().save_html_report(init_html_filename, initialFocalLength);

@@ -252,7 +252,9 @@ double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camer
     *focal_length_estimate_is_stable = stability > 2.0;
     //*focal_length_estimate_is_stable = error_for_max_focal_length > 0.04; // to be explored more
 
-    spdlog::info("Initial focal length estimate: nearest {}, bisection {} (stability {})", focal_length_x_pixels_0, focal_length_x_pixels_2, error_for_max_focal_length);
+    spdlog::info("Initialisation focal length: error_for_max_focal_length {}, error_min_value {} (stability {})", error_for_max_focal_length, error_min_value, stability);
+
+    spdlog::info("Initialisation focal length: nearest {}, bisection {} (stability {})", focal_length_x_pixels_0, focal_length_x_pixels_2, stability);
 
     if (metrics::initialisation_debug().active()) {
 
@@ -288,7 +290,7 @@ bool initialize_focal_length(stella_vslam::Mat33_t const& F_21, camera::base* ca
    }
    double focal_length_estimate = min_geometric_error_focal_length(F_21, camera, focal_length_estimate_is_stable);
 
-   if (focal_length_estimate_is_stable) {
+   if (*focal_length_estimate_is_stable) {
        bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_estimate);
        auto stage = stella_vslam_bfx::focal_estimation_stage::initialisation_before_ba;
        stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, focal_length_estimate);

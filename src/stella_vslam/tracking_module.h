@@ -11,6 +11,7 @@
 #include <mutex>
 #include <memory>
 #include <future>
+#include <optional>
 
 #include <opencv2/core/types.hpp>
 #include <opencv2/features2d/features2d.hpp>
@@ -132,6 +133,9 @@ public:
 
     //! current frame and its image
     data::frame curr_frm_;
+
+    //! optional hard on/off control for running re-initialisation when tracking fails
+    std::optional<bool> init_retry_on_;
 
 protected:
     //-----------------------------------------

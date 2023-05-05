@@ -113,6 +113,8 @@ public:
 
     void submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate);
 
+    void submit_mapping_reset(double timestamp);
+
     double current_frame_timestamp;
 
     // Convert the timestamped metrics to frame numbers
@@ -159,8 +161,10 @@ public:
     };
 protected:
 
-
     std::list<focal_estimate> intermediate_focal_estimates;
+
+    std::list<double> mapping_reset_timestamps;
+    std::list<int> mapping_reset_frames;
 
     friend class metrics_copy;
 

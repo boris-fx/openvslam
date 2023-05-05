@@ -9,6 +9,8 @@
 
 #include "plot_html.h"
 
+#include "stella_vslam/solve/fundamental_consistency.h"
+
 namespace nlohmann {
 
 template<class T>
@@ -31,295 +33,398 @@ std::optional<T> optional_from_json(const nlohmann::json& j) {
 
 namespace stella_vslam_bfx {
 
-nlohmann::json video_metadata::to_json() const {
+    nlohmann::json video_metadata::to_json() const {
 
-    return {
-        {"name", name},
-        {"filename", filename},
-        {"gDriveID", gDriveID},
+        return {
+            {"name", name},
+            {"filename", filename},
+            {"gDriveID", gDriveID},
 
-        {"video_width", video_width},
-        {"video_height", video_height},
-        {"start_frame", start_frame},
-        {"end_frame", end_frame},
-        {"pixel_aspect_ratio_used", pixel_aspect_ratio_used},
+            {"video_width", video_width},
+            {"video_height", video_height},
+            {"start_frame", start_frame},
+            {"end_frame", end_frame},
+            {"pixel_aspect_ratio_used", pixel_aspect_ratio_used},
 
-        {"groundTruthFocalLengthXPixels", nlohmann::optional_to_json(groundTruthFocalLengthXPixels)},
-        {"groundTruthFilmBackWidthMM", nlohmann::optional_to_json(groundTruthFilmBackWidthMM)},
-        {"groundTruthFilmBackHeightMM", nlohmann::optional_to_json(groundTruthFilmBackHeightMM)},
-        {"groundTruthFocalLengthMM", nlohmann::optional_to_json(groundTruthFocalLengthMM)}
-    };
-}
-
-bool video_metadata::from_json(const nlohmann::json& json) {
-
-    name = json.at("name").get<std::string>();
-    filename = json.at("filename").get<std::string>();
-    gDriveID = json.at("gDriveID").get<std::string>();
-
-    video_width = json.at("video_width").get<int>();
-    video_height = json.at("video_height").get<int>();
-    start_frame = json.at("start_frame").get<int>();
-    end_frame = json.at("end_frame").get<int>();
-    pixel_aspect_ratio_used = json.at("pixel_aspect_ratio_used").get<double>();
-
-    groundTruthFocalLengthXPixels = nlohmann::optional_from_json<double>(json.at("groundTruthFocalLengthXPixels"));
-    groundTruthFilmBackWidthMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackWidthMM"));
-    groundTruthFilmBackHeightMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackHeightMM"));
-    groundTruthFocalLengthMM = nlohmann::optional_from_json<double>(json.at("groundTruthFocalLengthMM"));
-
-    return true;
-}
-
-std::optional<double> video_metadata::ground_truth_pixel_aspect_ratio() const
-{
-    if (groundTruthFilmBackWidthMM && groundTruthFilmBackHeightMM) {
-        double film_back_aspect_ratio = groundTruthFilmBackWidthMM.value() / groundTruthFilmBackHeightMM.value();
-        double image_aspect_ratio = double(video_width) / double(video_height);
-        return film_back_aspect_ratio / image_aspect_ratio;
-
-    } 
-    return {};
-}
-
-std::optional<double> video_metadata::ground_truth_focal_length_x_pixels() const {
-    if (groundTruthFocalLengthXPixels)
-        return groundTruthFocalLengthXPixels.value();
-    if (groundTruthFilmBackWidthMM && groundTruthFocalLengthMM)
-        return groundTruthFocalLengthMM.value() * video_width / groundTruthFilmBackWidthMM.value();
-    return {};
-}
-
-std::optional<double> video_metadata::calculated_focal_length_mm(double calculated_focal_length_x_pixels) const
-{
-    if (groundTruthFilmBackWidthMM)
-        return calculated_focal_length_x_pixels * groundTruthFilmBackWidthMM.value() / video_width;
-    return {};
-}
-
-//////////////////////////////////////////////////////////////
-
-debugging_setup::debugging_setup()
-: debug_initialisation(false)
-{
-}
-
-nlohmann::json debugging_setup::to_json() const {
-    return {
-        {"debug_initialisation", debug_initialisation}
-    };
-}
-
-bool debugging_setup::from_json(const nlohmann::json& json) {
-    debug_initialisation = json.at("debug_initialisation").get<bool>();
-
-    return true;
-}
-//////////////////////////////////////////////////////////////
-
-nlohmann::json timings::to_json() const {
-    return {
-        {"forward_mapping", forward_mapping},
-        {"backward_mapping", backward_mapping},
-        {"loop_closing", loop_closing},
-        {"optimisation", optimisation},
-        {"tracking", tracking}
-    };
-}
-
-bool timings::from_json(const nlohmann::json& json) {
-    forward_mapping = json.at("forward_mapping").get<double>();
-    backward_mapping = json.at("backward_mapping").get<double>();
-    loop_closing = json.at("loop_closing").get<double>();
-    optimisation = json.at("optimisation").get<double>();
-    tracking = json.at("tracking").get<double>();
-
-    return true;
-}
-
-double timings::total_time_sec() const {
-    return  forward_mapping + backward_mapping + loop_closing + optimisation + tracking;
-}
-
-//////////////////////////////////////////////////////////////
-
-void to_json(nlohmann::json& j, const metrics::focal_estimate& e)
-{
-    j = { {"estimate", e.estimate}, {"stage", e.stage}, {"timestamp", e.timestamp}, {"frame", e.frame} };
-}
-
-void from_json(const nlohmann::json& j, metrics::focal_estimate& e) {
-    j.at("estimate").get_to(e.estimate);
-    j.at("stage").get_to(e.stage);
-    j.at("timestamp").get_to(e.timestamp);
-    j.at("frame").get_to(e.frame);
-}
-
-//////////////////////////////////////////////////////////////
-
-const double metrics::par_percent_error_trigger = 20.0;
-const double metrics::focal_percent_error_trigger = 50.0;
-
-metrics* metrics::get_instance() {
-    if (!instance)
-        instance = new metrics();
-    return instance;
-}
-
-void metrics::clear() {
-    if (instance) {
-        delete instance;
-        instance = nullptr;
-    }
-}
-
-initialisation_debugging& metrics::initialisation_debug() {
-    metrics* m = get_instance();
-    m->initialisation_debug_object.is_active = m->debugging.debug_initialisation;
-    return m->initialisation_debug_object;
-}
-
-nlohmann::json metrics::to_json() const {
-    return {
-        {"debugging", debugging.to_json()},
-        {"input_video_metadata", input_video_metadata.to_json()}, 
-        {"track_timings", track_timings.to_json()}, 
-        {"calculated_focal_length_x_pixels", calculated_focal_length_x_pixels}, 
-        {"solved_frame_count", solved_frame_count},
-        {"unsolved_frame_count", unsolved_frame_count},
-        {"num_points", num_points},
-        {"initialisation_frames", initialisation_frames},
-        {"intermediate_focal_estimates", intermediate_focal_estimates}
-    };
-}
-
-bool metrics::from_json(const nlohmann::json& json) {
-
-    debugging.from_json(json.at("debugging"));
-    input_video_metadata.from_json(json.at("input_video_metadata"));
-    track_timings.from_json(json.at("track_timings"));
-    calculated_focal_length_x_pixels = json.at("calculated_focal_length_x_pixels").get<double>();
-    solved_frame_count = json.at("solved_frame_count").get<int>();
-    unsolved_frame_count = json.at("unsolved_frame_count").get<int>();
-    num_points = json.at("num_points").get<int>();
-    initialisation_frames = json.at("initialisation_frames").get<std::set<std::set<int>>>();
-    intermediate_focal_estimates = json.at("intermediate_focal_estimates").get<std::list<focal_estimate>>();
-
-    return true;
-}
-
-void metrics::submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate)
-{
-    intermediate_focal_estimates.push_back({ estimate, stage, current_frame_timestamp });
-}
-
-void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame) {
-    initialisation_frames.clear();
-    for (auto const& initialisation_attempt_timestamps : initialisation_frame_timestamps) {
-        std::set<int> initialisation_attempt_frames;
-        for (auto const& timestamp : initialisation_attempt_timestamps) {
-            auto f = timestamp_to_video_frame.find(timestamp);
-            if (f != timestamp_to_video_frame.end())
-                initialisation_attempt_frames.insert(f->second);
-        }
-        initialisation_frames.insert(initialisation_attempt_frames);
+            {"groundTruthFocalLengthXPixels", nlohmann::optional_to_json(groundTruthFocalLengthXPixels)},
+            {"groundTruthFilmBackWidthMM", nlohmann::optional_to_json(groundTruthFilmBackWidthMM)},
+            {"groundTruthFilmBackHeightMM", nlohmann::optional_to_json(groundTruthFilmBackHeightMM)},
+            {"groundTruthFocalLengthMM", nlohmann::optional_to_json(groundTruthFocalLengthMM)}
+        };
     }
 
-    initialisation_debug_object.create_frame_data(timestamp_to_video_frame);
+    bool video_metadata::from_json(const nlohmann::json& json) {
 
-    for (auto& estimate : intermediate_focal_estimates) {
-        auto f = timestamp_to_video_frame.find(estimate.timestamp);
-        if (f != timestamp_to_video_frame.end())
-            estimate.frame = f->second;
-    }
+        name = json.at("name").get<std::string>();
+        filename = json.at("filename").get<std::string>();
+        gDriveID = json.at("gDriveID").get<std::string>();
 
-}
+        video_width = json.at("video_width").get<int>();
+        video_height = json.at("video_height").get<int>();
+        start_frame = json.at("start_frame").get<int>();
+        end_frame = json.at("end_frame").get<int>();
+        pixel_aspect_ratio_used = json.at("pixel_aspect_ratio_used").get<double>();
 
-int metrics::total_frames() const
-{
-    return solved_frame_count + unsolved_frame_count;
-}
+        groundTruthFocalLengthXPixels = nlohmann::optional_from_json<double>(json.at("groundTruthFocalLengthXPixels"));
+        groundTruthFilmBackWidthMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackWidthMM"));
+        groundTruthFilmBackHeightMM = nlohmann::optional_from_json<double>(json.at("groundTruthFilmBackHeightMM"));
+        groundTruthFocalLengthMM = nlohmann::optional_from_json<double>(json.at("groundTruthFocalLengthMM"));
 
-double percent_difference(double a, double b)
-{
-    if (a < b)
-        return (100.0 * (b - a) / a);
-    else
-        return (100.0 * (a - b) / b);
-}
-
-bool within_percent(double a, double b, double percent) {
-    return percent_difference(a, b) < percent;
-}
-
-bool within_percent(std::optional<double> a, double b, double percent) {
-    if (!a.has_value())
         return true;
-    return within_percent(a.value(), b, percent);
-}
+    }
 
-bool within_percent(double a, std::optional<double> b, double percent) {
-    return within_percent(b, a, percent);
-}
+    std::optional<double> video_metadata::ground_truth_pixel_aspect_ratio() const
+    {
+        if (groundTruthFilmBackWidthMM && groundTruthFilmBackHeightMM) {
+            double film_back_aspect_ratio = groundTruthFilmBackWidthMM.value() / groundTruthFilmBackHeightMM.value();
+            double image_aspect_ratio = double(video_width) / double(video_height);
+            return film_back_aspect_ratio / image_aspect_ratio;
 
-std::set<std::pair<std::string, tracking_problem_level>> metrics::problems() const
-{
-    std::set<std::pair<std::string, tracking_problem_level>> problem_set;
-    if (unsolved_frame_count!=0)
-        if (solved_frame_count==0)
-            problem_set.insert({"No tracked frames", tracking_problem_fatal});
+        }
+        return {};
+    }
+
+    std::optional<double> video_metadata::ground_truth_focal_length_x_pixels() const {
+        if (groundTruthFocalLengthXPixels)
+            return groundTruthFocalLengthXPixels.value();
+        if (groundTruthFilmBackWidthMM && groundTruthFocalLengthMM)
+            return groundTruthFocalLengthMM.value() * video_width / groundTruthFilmBackWidthMM.value();
+        return {};
+    }
+
+    std::optional<double> video_metadata::calculated_focal_length_mm(double calculated_focal_length_x_pixels) const
+    {
+        if (groundTruthFilmBackWidthMM)
+            return calculated_focal_length_x_pixels * groundTruthFilmBackWidthMM.value() / video_width;
+        return {};
+    }
+
+    //////////////////////////////////////////////////////////////
+
+    debugging_setup::debugging_setup()
+        : debug_initialisation(false)
+    {
+    }
+
+    nlohmann::json debugging_setup::to_json() const {
+        return {
+            {"debug_initialisation", debug_initialisation}
+        };
+    }
+
+    bool debugging_setup::from_json(const nlohmann::json& json) {
+        debug_initialisation = json.at("debug_initialisation").get<bool>();
+
+        return true;
+    }
+    //////////////////////////////////////////////////////////////
+
+    nlohmann::json timings::to_json() const {
+        return {
+            {"forward_mapping", forward_mapping},
+            {"backward_mapping", backward_mapping},
+            {"loop_closing", loop_closing},
+            {"optimisation", optimisation},
+            {"tracking", tracking}
+        };
+    }
+
+    bool timings::from_json(const nlohmann::json& json) {
+        forward_mapping = json.at("forward_mapping").get<double>();
+        backward_mapping = json.at("backward_mapping").get<double>();
+        loop_closing = json.at("loop_closing").get<double>();
+        optimisation = json.at("optimisation").get<double>();
+        tracking = json.at("tracking").get<double>();
+
+        return true;
+    }
+
+    double timings::total_time_sec() const {
+        return  forward_mapping + backward_mapping + loop_closing + optimisation + tracking;
+    }
+
+    //////////////////////////////////////////////////////////////
+
+    void to_json(nlohmann::json& j, const metrics::focal_estimate& e)
+    {
+        j = { {"estimate", e.estimate}, {"stage", e.stage}, {"timestamp", e.timestamp}, {"frame", e.frame} };
+    }
+
+    void from_json(const nlohmann::json& j, metrics::focal_estimate& e) {
+        j.at("estimate").get_to(e.estimate);
+        j.at("stage").get_to(e.stage);
+        j.at("timestamp").get_to(e.timestamp);
+        j.at("frame").get_to(e.frame);
+    }
+
+    //////////////////////////////////////////////////////////////
+
+    const double metrics::par_percent_error_trigger = 20.0;
+    const double metrics::focal_percent_error_trigger = 50.0;
+
+    metrics* metrics::get_instance() {
+        if (!instance)
+            instance = new metrics();
+        return instance;
+    }
+
+    void metrics::clear() {
+        if (instance) {
+            delete instance;
+            instance = nullptr;
+        }
+    }
+
+    initialisation_debugging& metrics::initialisation_debug() {
+        metrics* m = get_instance();
+        m->initialisation_debug_object.is_active = m->debugging.debug_initialisation;
+        return m->initialisation_debug_object;
+    }
+
+    nlohmann::json metrics::to_json() const {
+        return {
+            {"debugging", debugging.to_json()},
+            {"input_video_metadata", input_video_metadata.to_json()},
+            {"track_timings", track_timings.to_json()},
+            {"calculated_focal_length_x_pixels", calculated_focal_length_x_pixels},
+            {"solved_frame_count", solved_frame_count},
+            {"unsolved_frame_count", unsolved_frame_count},
+            {"num_points", num_points},
+            {"initialisation_frames", initialisation_frames},
+            {"intermediate_focal_estimates", intermediate_focal_estimates},
+            {"mapping_reset_timestamps", mapping_reset_timestamps},
+            {"mapping_reset_frames", mapping_reset_frames}
+
+        };
+    }
+
+    bool metrics::from_json(const nlohmann::json& json) {
+
+        debugging.from_json(json.at("debugging"));
+        input_video_metadata.from_json(json.at("input_video_metadata"));
+        track_timings.from_json(json.at("track_timings"));
+        calculated_focal_length_x_pixels = json.at("calculated_focal_length_x_pixels").get<double>();
+        solved_frame_count = json.at("solved_frame_count").get<int>();
+        unsolved_frame_count = json.at("unsolved_frame_count").get<int>();
+        num_points = json.at("num_points").get<int>();
+        initialisation_frames = json.at("initialisation_frames").get<std::set<std::set<int>>>();
+        intermediate_focal_estimates = json.at("intermediate_focal_estimates").get<std::list<focal_estimate>>();
+        mapping_reset_timestamps = json.at("mapping_reset_timestamps").get<std::list<double>>();
+        mapping_reset_frames = json.at("mapping_reset_frames").get<std::list<int>>();
+
+        return true;
+    }
+
+    void metrics::submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate)
+    {
+        intermediate_focal_estimates.push_back({ estimate, stage, current_frame_timestamp });
+    }
+
+    void metrics::submit_mapping_reset(double timestamp)
+    {
+        mapping_reset_timestamps.push_back(timestamp);
+    }
+
+    std::optional<int> timestamp_to_frame(double timestamp, std::map<double, int> const& timestamp_to_video_frame)
+    {
+        auto f = timestamp_to_video_frame.find(timestamp);
+        if (f != timestamp_to_video_frame.end())
+            return f->second;
+        return std::nullopt;
+    }
+
+    void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame) {
+        initialisation_frames.clear();
+        for (auto const& initialisation_attempt_timestamps : initialisation_frame_timestamps) {
+            std::set<int> initialisation_attempt_frames;
+            for (auto const& timestamp : initialisation_attempt_timestamps) {
+                auto f = timestamp_to_video_frame.find(timestamp);
+                if (f != timestamp_to_video_frame.end())
+                    initialisation_attempt_frames.insert(f->second);
+            }
+            initialisation_frames.insert(initialisation_attempt_frames);
+        }
+
+        initialisation_debug_object.create_frame_data(timestamp_to_video_frame);
+
+        for (auto& estimate : intermediate_focal_estimates)
+            if (auto frame = timestamp_to_frame(estimate.timestamp, timestamp_to_video_frame))
+                estimate.frame = frame.value();
+
+        mapping_reset_frames.clear();
+        for (auto const& timestamp : mapping_reset_timestamps)
+            if (auto frame = timestamp_to_frame(timestamp, timestamp_to_video_frame))
+                mapping_reset_frames.push_back(frame.value());
+    }
+
+    int metrics::total_frames() const
+    {
+        return solved_frame_count + unsolved_frame_count;
+    }
+
+    double percent_difference(double a, double b)
+    {
+        if (a < b)
+            return (100.0 * (b - a) / a);
         else
-            problem_set.insert({std::to_string(unsolved_frame_count)+" untracked frames", tracking_problem_warning});
-    if (!within_percent(input_video_metadata.ground_truth_focal_length_x_pixels(), calculated_focal_length_x_pixels, focal_percent_error_trigger))
-        problem_set.insert({"Wrong focal length", tracking_problem_warning});
-    if (!within_percent(input_video_metadata.pixel_aspect_ratio_used, input_video_metadata.ground_truth_pixel_aspect_ratio(), par_percent_error_trigger))
-        problem_set.insert({"Wrong par", tracking_problem_warning});
-    return problem_set;
-}
-
-std::optional<tracking_problem_level> metrics::max_problem_level() const
-{
-    bool have_warning(false), have_fatal(false);
-    auto probs = problems();
-    for (auto const& problem : probs) {
-        if (problem.second == tracking_problem_warning)
-            have_warning = true;
-        if (problem.second == tracking_problem_fatal)
-            have_fatal = true;
-    }
-    if (have_fatal)
-        return tracking_problem_fatal;
-    if (have_warning)
-        return tracking_problem_warning;
-    return {};
-}
-
-template<typename T>
-std::string to_string(std::set<T> const& s)
-{
-    std::string str; 
-    int n(s.size()-1), i(0);
-    for (auto const& item : s) {
-        str += std::to_string(item);
-        if (i != n)
-            str += ", ";
-        ++i;
-    }
-    return str;
-}
-
-std::vector<std::string> splitString(const std::string& str)
-{
-    std::vector<std::string> tokens;
-
-    std::stringstream ss(str);
-    std::string token;
-    while (std::getline(ss, token, '\n')) {
-        tokens.push_back(token);
+            return (100.0 * (a - b) / b);
     }
 
-    return tokens;
-}
+    bool within_percent(double a, double b, double percent) {
+        return percent_difference(a, b) < percent;
+    }
+
+    bool within_percent(std::optional<double> a, double b, double percent) {
+        if (!a.has_value())
+            return true;
+        return within_percent(a.value(), b, percent);
+    }
+
+    bool within_percent(double a, std::optional<double> b, double percent) {
+        return within_percent(b, a, percent);
+    }
+
+    std::set<std::pair<std::string, tracking_problem_level>> metrics::problems() const
+    {
+        std::set<std::pair<std::string, tracking_problem_level>> problem_set;
+        if (unsolved_frame_count != 0)
+            if (solved_frame_count == 0)
+                problem_set.insert({ "No tracked frames", tracking_problem_fatal });
+            else
+                problem_set.insert({ std::to_string(unsolved_frame_count) + " untracked frames", tracking_problem_warning });
+        if (!within_percent(input_video_metadata.ground_truth_focal_length_x_pixels(), calculated_focal_length_x_pixels, focal_percent_error_trigger))
+            problem_set.insert({ "Wrong focal length", tracking_problem_warning });
+        if (!within_percent(input_video_metadata.pixel_aspect_ratio_used, input_video_metadata.ground_truth_pixel_aspect_ratio(), par_percent_error_trigger))
+            problem_set.insert({ "Wrong par", tracking_problem_warning });
+        return problem_set;
+    }
+
+    std::optional<tracking_problem_level> metrics::max_problem_level() const
+    {
+        bool have_warning(false), have_fatal(false);
+        auto probs = problems();
+        for (auto const& problem : probs) {
+            if (problem.second == tracking_problem_warning)
+                have_warning = true;
+            if (problem.second == tracking_problem_fatal)
+                have_fatal = true;
+        }
+        if (have_fatal)
+            return tracking_problem_fatal;
+        if (have_warning)
+            return tracking_problem_warning;
+        return {};
+    }
+
+    template<typename T>
+    std::string to_string(std::set<T> const& s)
+    {
+        std::string str;
+        int n(s.size() - 1), i(0);
+        for (auto const& item : s) {
+            str += std::to_string(item);
+            if (i != n)
+                str += ", ";
+            ++i;
+        }
+        return str;
+    }
+
+    std::vector<std::string> splitString(const std::string& str)
+    {
+        std::vector<std::string> tokens;
+
+        std::stringstream ss(str);
+        std::string token;
+        while (std::getline(ss, token, '\n')) {
+            tokens.push_back(token);
+        }
+
+        return tokens;
+    }
+
+    std::array< std::map<double, double>, 2> split_graph_by_frame(std::map<double, double> const& graph, double frame)
+    {
+        std::array<std::map<double, double>, 2> result;
+        for (auto const& point : graph)
+            result[point.first < frame ? 0 : 1][point.first] = point.second;
+        return result;
+    }
+#if 0
+    // Split a graph at the largest frame in a set
+    std::set<std::map<double, double>> split_graph_by_frame_set(std::map<double, double> const& graph, std::set<std::set<int>> const& frames)
+    {
+        std::set<double> split_points;
+        for (auto const& frame_set : frames)
+            if (!frame_set.empty())
+                split_points.insert(0.5 + *frame_set.rbegin());
+
+        if (split_points.empty())
+            return { graph };
+
+        for (auto const& split_point : split_points)
+            spdlog::info("split_graph_by_frame_set: split point: {}", split_point);
+
+        std::set<std::map<double, double>> split_graph;
+        std::map<double, double> remaining_graph = graph;
+        for (auto const& split_point : split_points) {
+            std::array<std::map<double, double>, 2> graph_pair = split_graph_by_frame(remaining_graph, split_point);
+            remaining_graph = graph_pair[1];
+            split_graph.insert(graph_pair[0]);
+        }
+        split_graph.insert(remaining_graph);
+
+        return split_graph;
+    }
+#endif
+
+    void spdlog_frame_map(std::string const& name, std::map<double, double> const& frame_map)
+    {
+        std::stringstream ss;
+        ss << name << " - (" << frame_map.size() << " frames) ";
+        for (auto const& f : frame_map)
+            ss << f.first << ", ";
+        spdlog::info("{}", ss.str());
+    }
+
+    // Split a graph at the largest frame in a set
+    std::set<std::map<double, double>> split_graph_by_frames(std::string const& name, std::map<double, double> const& graph, std::list<int> const& frames)
+    {
+        std::set<double> split_points;
+        for (auto const& frame : frames)
+            split_points.insert(0.5 + frame);
+
+        if (split_points.empty())
+            return { graph };
+
+        //for (auto const& split_point : split_points)
+        //    spdlog::info("split_graph_by_frames: {} split point: {}", name, split_point);
+
+        std::set<std::map<double, double>> split_graph;
+        std::map<double, double> remaining_graph = graph;
+        for (auto const& split_point : split_points) {
+            std::array<std::map<double, double>, 2> graph_pair = split_graph_by_frame(remaining_graph, split_point);
+            remaining_graph = graph_pair[1];
+            split_graph.insert(graph_pair[0]);
+        }
+        split_graph.insert(remaining_graph);
+
+        //spdlog_frame_map("Unsplit graph", graph);
+        //for (auto const& s : split_graph)
+        //    spdlog_frame_map("Split graph", s);
+
+        return split_graph;
+    }
+
+    double percentile_y_value(std::array<std::map<double, double>, 4> graphs, double percentile) 
+    {
+
+        std::vector<double> ys;
+        for (int i = 0; i < 4; ++i)
+            for (auto const& xy : graphs[i])
+                ys.push_back(xy.second);
+        return stella_vslam_bfx::quantile(ys, {percentile})[0];
+    }
 
 void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative,
     std::optional<double> known_focal_length_x_pixels) const {
@@ -423,20 +528,53 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     // Intermediate focal length estimates
     if (!known_focal_length_x_pixels) {
 
-        // Convert to a map<double,double> for presentation as a graph
         std::array<std::map<double, double>, 4> graph_intermediate_focal_length_estimate;
         for (auto const& estimate : intermediate_focal_estimates)
             graph_intermediate_focal_length_estimate[static_cast<unsigned int>(estimate.stage)][estimate.frame] = estimate.estimate;
-        std::set<Curve> curves;
-        for (int i = 0; i < 4; ++i)
-            curves.insert({ focal_estimation_stage_to_string.at(static_cast<unsigned int>(i)), graph_intermediate_focal_length_estimate[i] });
+
+        //{
+        //    // Convert to a map<double,double> for presentation as a graph
+        //    std::set<SplitCurve> curves;
+        //    for (unsigned int i = 0; i < 4; ++i)
+        //        curves.insert({ focal_estimation_stage_to_string.at(i), split_graph_by_frame_set(graph_intermediate_focal_length_estimate[i], initialisation_frames) });
+
+
+        //    std::optional<double> focal_gt(input_video_metadata.ground_truth_focal_length_x_pixels());
+        //    axis_scaling y_axis_scaling = focal_gt ? axis_scaling(2.0 * focal_gt.value()) : range_behaviour::no_max;
+        //    write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::no_max, y_axis_scaling, focal_gt));
+        //}
+
+        {
+            // Convert to a map<double,double> for presentation as a graph
+            std::set<SplitCurve> curves;
+            for (unsigned int i = 0; i < 4; ++i)
+                curves.insert({ focal_estimation_stage_to_string.at(i), split_graph_by_frames(focal_estimation_stage_to_string.at(i), graph_intermediate_focal_length_estimate[i], mapping_reset_frames) });
+
+            std::optional<double> focal_gt(input_video_metadata.ground_truth_focal_length_x_pixels());
+            axis_scaling y_axis_scaling = focal_gt ? axis_scaling(2.0 * focal_gt.value()) : range_behaviour::no_max;
+            write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::no_max, y_axis_scaling, focal_gt));
         
-        std::optional<double> focal_gt(input_video_metadata.ground_truth_focal_length_x_pixels());
-        write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::no_max, range_behaviour::no_max, focal_gt));
+            double percentile90 = percentile_y_value(graph_intermediate_focal_length_estimate, 0.9);
+            write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::no_max, percentile90, focal_gt));
+        }
+
+        //for (unsigned int i = 0; i < 4; ++i) {
+        //    std::set<std::map<double, double>> s = split_graph_by_frames(focal_estimation_stage_to_string.at(i), graph_intermediate_focal_length_estimate[i], mapping_reset_frames);
+        //    for (auto const& m : s) {
+        //        html << "<p>Split " << focal_estimation_stage_to_string.at(i) << " ";
+        //        for (auto const& i : m)
+        //            html << i.first << ", ";
+        //    }
+        //}
 
         //for (auto const& estimate : intermediate_focal_estimates)
         //    html << "<p>Intermediate focal estimate [" << focal_estimation_stage_to_string.at(static_cast<unsigned int>(estimate.stage)) << "] at " << estimate.frame << " is " << estimate.estimate;
     }
+
+    // Mapping reset frames
+    html << "<p>Reset frames: ";
+    for (auto const& reset_frame : mapping_reset_frames)
+        html << reset_frame << ", ";
 
     html << "<h2> Map</h2>\n";
     // Solved/unsolved cameras

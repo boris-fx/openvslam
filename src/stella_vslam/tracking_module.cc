@@ -11,6 +11,7 @@
 #include "stella_vslam/module/local_map_updater.h"
 #include "stella_vslam/optimize/pose_optimizer_factory.h"
 #include "stella_vslam/report/initialisation_debugging.h"
+#include "stella_vslam/report/metrics.h"
 
 #include <chrono>
 #include <unordered_map>
@@ -174,12 +175,23 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
         tracking_state_ = tracker_state_t::Lost;
 
         spdlog::info("tracking lost: frame {}", curr_frm_.id_);
-        // if tracking is failed within 60.0 sec after initialization, reset the system
-        constexpr float init_retry_thr = 60.0;
-        if (!mapper_->is_paused() && curr_frm_.timestamp_ - initializer_.get_initial_frame_timestamp() < init_retry_thr) {
-            spdlog::info("tracking lost within {} sec after initialization", init_retry_thr);
-            reset();
-            return nullptr;
+        if (init_retry_on_.has_value()) {
+            if (!mapper_->is_paused() && init_retry_on_.value()) {
+                spdlog::info("re-running initialization");
+                reset();
+                stella_vslam_bfx::metrics::get_instance()->submit_mapping_reset(curr_frm_.timestamp_);
+                return nullptr;
+            }
+        }
+        else {
+            // if tracking is failed within 60.0 sec after initialization, reset the system
+            constexpr float init_retry_thr = 60.0;
+            if (!mapper_->is_paused() && curr_frm_.timestamp_ - initializer_.get_initial_frame_timestamp() < init_retry_thr) {
+                spdlog::info("tracking lost within {} sec after initialization", init_retry_thr);
+                reset();
+                stella_vslam_bfx::metrics::get_instance()->submit_mapping_reset(curr_frm_.timestamp_);
+                return nullptr;
+            }
         }
     }
 

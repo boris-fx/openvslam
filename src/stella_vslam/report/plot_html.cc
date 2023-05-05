@@ -9,6 +9,16 @@
 
 #include <stella_vslam/solve/fundamental_consistency.h> // just for the median function, which should be somewhere else
 
+Graph::Graph(std::string x_label, std::string y_label, std::set<Curve> curves,
+             axis_scaling x_axis_scaling, axis_scaling y_axis_scaling,
+             std::optional<double> ground_truth_y)
+: x_label(x_label), y_label(y_label), ground_truth_y(ground_truth_y)
+, x_axis_scaling(x_axis_scaling), y_axis_scaling(y_axis_scaling)
+{
+    for (auto const& curve : curves)
+        this->curves.insert({ curve.first, { curve.second } });
+}
+
 struct LabelToValue {
     LabelToValue(std::string label, float value, int index)
         : label(label), value(value), index(index) {}
@@ -22,7 +32,7 @@ struct LabelToValue {
 struct LabelledCurve {
     bool ghost = false; // No circles, and grey - e.g. indication of a ground truth value
     std::string name;
-    std::vector<LabelToValue> dataValues;
+    std::list<std::vector<LabelToValue>> dataValues;
 };
 
 std::string floatLabelString(float v, int decimalPlaces)
@@ -156,7 +166,6 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
 
    int width(graphWidth), height(graphHeight);
 
-
    svg << "<svg height=\"" << height << "\" width=\"" << width + legendWidth << "\">" << std::endl;
 
    // Horizontal axis (x-value 0, 1, 2, 3...)
@@ -170,9 +179,11 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
       std::set<int> allTimeValues;
       std::map<int, std::string> timeValueToLabel;
       for (auto const& curve : curves)
-         for (auto const& dataValue : curve.dataValues) {
-            allTimeValues.insert(dataValue.index);
-            timeValueToLabel[dataValue.index] = dataValue.label;
+         for (auto const& data_value_set : curve.dataValues) {
+             for (auto const& data_value : data_value_set) {
+                 allTimeValues.insert(data_value.index);
+                 timeValueToLabel[data_value.index] = data_value.label;
+             }
          }
       std::vector<std::string> labels(timeValueToLabel.size());
       int iLabel(0);
@@ -208,7 +219,7 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
          svg << "<line x1=\"" << tick.first << "\" y1=\"" << yCanvas0 << "\" x2=\"" << tick.first << "\" y2=\"" << yCanvas0 + 5 << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
          float tx(tick.first + textOffset);
          float ty(yCanvas0 + 7);
-         svg << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << ", " << ty << ")\">" << tick.second << "</text>" << std::endl;
+         svg << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << "," << ty << ")\">" << tick.second << "</text>" << std::endl;
       }
    }
    else // linearLabels
@@ -218,11 +229,13 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
       // Get the min/max x value
       float minXValue(9999999), maxXValue(0);
       for (auto const& curve : curves) {
-         for (auto const& dataValue : curve.dataValues) {
-            if (maxXValue < dataValue.index)
-               maxXValue = dataValue.index;
-            if (minXValue > dataValue.index)
-               minXValue = dataValue.index;
+          for (auto const& data_value_set : curve.dataValues) {
+              for (auto const& data_value : data_value_set) {
+                  if (maxXValue < data_value.index)
+                      maxXValue = data_value.index;
+                  if (minXValue > data_value.index)
+                      minXValue = data_value.index;
+              }
          }
       }
       if (hard_max_x && maxXValue > hard_max_x.value())
@@ -275,7 +288,7 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
          svg << "<line x1=\"" << xPos << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xPos << "\" y2=\"" << yCanvas0 + 5 << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
          float tx(xPos + textOffset);
          float ty(yCanvas0 + 7);
-         svg << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << ", " << ty << ")\">" << tick.second << "</text>" << std::endl;
+         svg << "<text x=\"" << tx << "\" y=\"" << ty << "\" fill=\"black\" transform=\"rotate(90 " << tx << "," << ty << ")\">" << tick.second << "</text>" << std::endl;
       }
    }
 
@@ -290,9 +303,12 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
       // Get the max y value
       float maxYValue(0);
       for (auto const& curve : curves)
-         for (auto const& dataValue : curve.dataValues)
-            if (maxYValue < dataValue.value)
-               maxYValue = dataValue.value;
+          for (auto const& data_value_set : curve.dataValues) {
+              for (auto const& data_value : data_value_set) {
+                  if (maxYValue < data_value.value)
+                      maxYValue = data_value.value;
+              }
+          }
       if (hard_max_y && maxYValue > hard_max_y.value())
           maxYValue = hard_max_y.value();
       float minYValue(0);
@@ -329,35 +345,36 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
    int c(0);
    for (auto const& curve : curves) {
 
-      // Collect the curve's point positions in canvas space
-      std::list<std::pair<float, float>> xyList;
-      for (auto const& dataValue : curve.dataValues) {
-         xyList.push_back({ xCanvas0 + (dataValue.index - xStartValue)*xCanvasInc,
-                            yCanvas0 +  dataValue.value               *yCanvasInc });
-      }
+       for (auto const& data_value_set : curve.dataValues) {
+           // Collect the curve segments's point positions in canvas space
+           std::list<std::pair<float, float>> xyList;
+           for (auto const& data_value : data_value_set) {
+               xyList.push_back({ xCanvas0 + (data_value.index - xStartValue) * xCanvasInc,
+                                    yCanvas0 + data_value.value * yCanvasInc });
+           }
 
-      // Plot the curve as a polyline
-      if (curve.ghost)
-          rgb[c] = { 128, 128, 128 }; // grey
-      svg << "<polyline points=\"";
-      for (auto const& xy : xyList)
-          svg << xy.first << "," << xy.second << " ";
-      int stroke_width(curve.ghost ? 1 : 3);
-      svg << "\" style=\"fill:none;stroke:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");stroke-width:" << stroke_width << "\" />" << std::endl;
+           // Plot the curve segment as a polyline
+           if (curve.ghost)
+               rgb[c] = { 128, 128, 128 }; // grey
+           svg << "<polyline points=\"";
+           for (auto const& xy : xyList)
+               svg << xy.first << "," << xy.second << " ";
+           int stroke_width(curve.ghost ? 1 : 3);
+           svg << "\" style=\"fill:none;stroke:rgb(" << rgb[c][0] << "," << rgb[c][1] << "," << rgb[c][2] << ");stroke-width:" << stroke_width << "\" />" << std::endl;
 
-      // Draw a circle on each vertex of the curve
-      if (drawVertexCircles && !curve.ghost)
-         for (auto const& xy : xyList)
-              svg << "<circle cx = \"" << xy.first << "\" cy = \"" << xy.second << "\" r = \"3\" fill = rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ") />" << std::endl;
-
-      ++c;
+           // Draw a circle on each vertex of the curve
+           if (drawVertexCircles && !curve.ghost)
+               for (auto const& xy : xyList)
+                   svg << "<circle cx = \"" << xy.first << "\" cy = \"" << xy.second << "\" r = \"3\" fill = rgb(" << rgb[c][0] << "," << rgb[c][1] << "," << rgb[c][2] << ") />" << std::endl;
+       }
+       ++c;
    }
 
    // Add a legend
    int y(30);
    c = 0;
    for (auto const& curve : curves) {
-       svg << "<text x=\"" << width << "\" y=\"" << y << "\" style=\"fill:rgb(" << rgb[c][0] << ", " << rgb[c][1] << ", " << rgb[c][2] << ");\">" << curve.name << "</text>" << std::endl;
+       svg << "<text x=\"" << width << "\" y=\"" << y << "\" style=\"fill:rgb(" << rgb[c][0] << "," << rgb[c][1] << "," << rgb[c][2] << ");\">" << curve.name << "</text>" << std::endl;
       ++c;
       y += 30;
    }
@@ -366,14 +383,15 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
    svg << "</svg>" << std::endl;
 }
 
-double graph_median(std::set<Curve> const& curves)
+double graph_median(std::set<SplitCurve> const& curves)
 {
     // Take the largest median of each curve
     double largest(0.0);
     for (auto const& curve : curves) {
         std::vector<double> y_values;
-        for (auto const& data_point : curve.second)
-            y_values.push_back(data_point.second);
+        for (auto const& data_point_set : curve.second)
+            for (auto const& data_point : data_point_set)
+                y_values.push_back(data_point.second);
         double median = stella_vslam_bfx::median(y_values);
         if (largest < median)
             largest = median;
@@ -383,32 +401,49 @@ double graph_median(std::set<Curve> const& curves)
 
 void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
 {
+
     //auto [xLabel, yLabel, curves, y_axis_scaling, ground_truth_y] = graph;
     std::list<LabelledCurve> labelled_curves;
 
     for (auto const& curve : graph.curves) {
         LabelledCurve labelled_curve;
         labelled_curve.name = curve.first;
-        labelled_curve.dataValues.resize(curve.second.size());
-        int i(0);
-        for (auto const& vertex : curve.second) {
-            labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
-            labelled_curve.dataValues[i].value = (float)vertex.second;
-            //labelled_curve.dataValues[i].label = std::string(); // the x-values can also have text labels
-            ++i;
+
+        //labelled_curve.dataValues.resize(curve.second.size());
+        //int i(0);
+        //for (auto const& vertex : curve.second) {
+        //    labelled_curve.dataValues[i].index = int(vertex.first + 0.5);
+        //    labelled_curve.dataValues[i].value = (float)vertex.second;
+        //    //labelled_curve.dataValues[i].label = std::string(); // the x-values can also have text labels
+        //    ++i;
+        //}
+
+        for (auto const& vertex_set : curve.second) {
+            std::vector<LabelToValue> point_set(vertex_set.size());
+            int i(0);
+            for (auto const& vertex : vertex_set) {
+                point_set[i].index = int(vertex.first + 0.5);
+                point_set[i].value = (float)vertex.second;
+                //point_set[i].label = std::string(); // the x-values can also have text labels
+                ++i;
+            }
+            labelled_curve.dataValues.push_back(point_set);
         }
+
         labelled_curves.push_back(labelled_curve);
     }
+
     if (graph.ground_truth_y) {
         std::set<float> x_values;
         for (auto const& curve : graph.curves)
-            for (auto const& vertex : curve.second)
-                x_values.insert(vertex.first);
+            for (auto const& data_point_set : curve.second)
+                for (auto const& vertex : data_point_set)
+                    x_values.insert(vertex.first);
         if (!x_values.empty()) {
             LabelledCurve ghost_curve;
             ghost_curve.ghost = true;
-            ghost_curve.dataValues = { LabelToValue("", graph.ground_truth_y.value(), *x_values.begin()),
-                                       LabelToValue("", graph.ground_truth_y.value(), *x_values.rbegin()) };
+            ghost_curve.dataValues = { { LabelToValue("", graph.ground_truth_y.value(), *x_values.begin()),
+                                         LabelToValue("", graph.ground_truth_y.value(), *x_values.rbegin()) } } ;
             labelled_curves.push_back(ghost_curve);
         }
     }

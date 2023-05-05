@@ -377,6 +377,11 @@ bool system::mapping_module_is_enabled() const {
     return !mapper_->is_paused();
 }
 
+void system::enable_map_reinitialisation(std::optional<bool> always_enabled)
+{
+    tracker_->init_retry_on_ = always_enabled;
+}
+
 void system::enable_loop_detector() {
     std::lock_guard<std::mutex> lock(mtx_loop_detector_);
     global_optimizer_->enable_loop_detector();

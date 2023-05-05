@@ -12,6 +12,7 @@
 #include <mutex>
 #include <atomic>
 #include <memory>
+#include <optional>
 
 #include <opencv2/core/mat.hpp>
 
@@ -120,6 +121,9 @@ public:
 
     //! The mapping module is enabled or not
     bool mapping_module_is_enabled() const;
+
+    //! Optional hard on/off control for running re-initialisation when tracking fails
+    void enable_map_reinitialisation(std::optional<bool> always_enabled);
 
     //! Enable the loop detector
     void enable_loop_detector();

@@ -139,6 +139,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     const auto tp_start = std::chrono::steady_clock::now();
 
     // Track forwards to create the map
+    slam_->enable_map_reinitialisation(true);
     for (int frame = begin; frame <= end; ++frame) {
         bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
         if (!got_frame || frame_image.empty())
@@ -197,7 +198,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         set_stage_description_("Revisiting video");
 
     // Track backwards from the initialization point to finish the map
+    slam_->enable_map_reinitialisation(false);
     for (int frame = first_keyframe.value() - 1; frame >= begin; --frame) {
+
         bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
         if (!got_frame || frame_image.empty())
             continue;
@@ -213,9 +216,25 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
             set_progress_(overall_progress_percent(stage_progress, 0.4, 0.5));
         if (cancel_ && cancel_())
             return false;
+
+        spdlog::info("Tracking backwards at {} of {} done", frame, begin);
     }
 
     const auto tp_after_backward_mapping = std::chrono::steady_clock::now();
+
+    // Fail if there are no keyframes after tracking backwards (tracking got lost, tried to reinitialise, and failed)
+    std::vector<std::shared_ptr<stella_vslam::data::keyframe>> all_keyframes;
+    if (slam_->map_db_)
+        all_keyframes = slam_->map_db_->get_all_keyframes();
+    bool have_keyframes = !all_keyframes.empty();
+    //bool have_keyframes = (slam_->map_db_->get_num_keyframes() > 0); // seems less reliable
+    //bool have_keyframes = false;
+    if (!have_keyframes) {
+        spdlog::error("Map creation failed while tracking backwards from the initialisation frame");
+        return false;
+    }
+    else
+        spdlog::info("Map creation succeeded after tracking backwards from the initialisation frame");
 
     // Wait for map optimisation after loop closing to finish
     while (slam_->loop_BA_is_running() || !slam_->mapping_module_is_enabled()) {

@@ -22,20 +22,25 @@ struct axis_scaling
 };
 
 using Curve = std::pair<std::string, std::map<double, double>>; /// Data name, map from x value to y
+using SplitCurve = std::pair<std::string, std::set<std::map<double, double>>>; /// Data name, set of map from x value to y - curve is split into non-connected parts 
 //using Graph = std::tuple<std::string, std::string, std::set<Curve>, axis_scaling, std::optional<double>>; /// x label, y label, set of curves, Y-axis scaling, ground truth y-value
 
 struct Graph
 {
-    Graph(std::string x_label, std::string y_label, std::set<Curve> curves,
+    Graph(std::string x_label, std::string y_label, std::set<SplitCurve> curves,
           axis_scaling x_axis_scaling = range_behaviour::no_max, axis_scaling y_axis_scaling = range_behaviour::no_max,
           std::optional<double> ground_truth_y=std::nullopt)
         : x_label(x_label), y_label(y_label), curves(curves), ground_truth_y(ground_truth_y)
         , x_axis_scaling(x_axis_scaling), y_axis_scaling(y_axis_scaling)
     {}
 
+    Graph(std::string x_label, std::string y_label, std::set<Curve> curves,
+        axis_scaling x_axis_scaling = range_behaviour::no_max, axis_scaling y_axis_scaling = range_behaviour::no_max,
+        std::optional<double> ground_truth_y = std::nullopt);
+
     std::string x_label;
     std::string y_label;
-    std::set<Curve> curves;
+    std::set<SplitCurve> curves;
     axis_scaling x_axis_scaling;
     axis_scaling y_axis_scaling;
     std::optional<double> ground_truth_y;
