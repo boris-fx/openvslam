@@ -43,6 +43,31 @@ double get_use_robust_matcher_for_relocalization_request(const stella_vslam_bfx:
 
 namespace stella_vslam {
 
+
+bool map_reset_controller::should_reset_map_for_tracking_failure(data::map_database const* map_db) {
+    if (!enabled)
+        return false;
+    if (!allow_reset)
+        return false;
+    ++track_fail_count;
+    int keyframe_count = map_db->get_num_keyframes();
+
+    if (keyframe_count < 5)
+        return track_fail_count > 0; // Allow no fails for less than 5 keyframes
+    if (keyframe_count < 10)
+        return track_fail_count > 1; // Allow 1 fail for 5-9 keyframes
+    if (keyframe_count < 15)
+        return track_fail_count > 2; // Allow 2 fails for 10-14 keyframes
+    if (keyframe_count < 25)
+        return track_fail_count > 2; // Allow 3 fails for 15-24 keyframes
+    return false; // Allow unlimited fails for more than 25 keyframes
+}
+
+void map_reset_controller::map_was_reset()
+{
+    track_fail_count = 0;
+}
+
 tracking_module::tracking_module(const std::shared_ptr<config>& cfg, camera::base* camera, data::map_database* map_db,
                                  data::bow_vocabulary* bow_vocab, data::bow_database* bow_db)
     : camera_(camera),
@@ -134,6 +159,8 @@ void tracking_module::reset() {
     last_reloc_frm_timestamp_ = 0.0;
 
     tracking_state_ = tracker_state_t::Initializing;
+
+    map_reset_controller_.map_was_reset();
 }
 
 std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
@@ -175,12 +202,15 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
         tracking_state_ = tracker_state_t::Lost;
 
         spdlog::info("tracking lost: frame {}", curr_frm_.id_);
-        if (init_retry_on_.has_value()) {
-            if (!mapper_->is_paused() && init_retry_on_.value()) {
-                spdlog::info("re-running initialization");
-                reset();
-                stella_vslam_bfx::metrics::get_instance()->submit_mapping_reset(curr_frm_.timestamp_);
-                return nullptr;
+        if (map_reset_controller_.enabled) {
+            if (map_reset_controller_.allow_reset) {
+                bool reset_map(map_reset_controller_.should_reset_map_for_tracking_failure(map_db_));
+                if (!mapper_->is_paused() && reset_map) { // reset the map
+                    spdlog::info("re-running initialization");
+                    reset();
+                    stella_vslam_bfx::metrics::get_instance()->submit_mapping_reset(curr_frm_.timestamp_);
+                    return nullptr;
+                }
             }
         }
         else {

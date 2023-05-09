@@ -42,6 +42,15 @@ struct pose_request {
     Vec3_t normal_vector_;
 };
 
+struct map_reset_controller {
+    bool enabled = false; // In use or not
+    bool allow_reset = true;
+    int track_fail_count = 0;
+    //! Call when tracking fails to register the failure. Returns true if the map should be reset.
+    bool should_reset_map_for_tracking_failure(data::map_database const* map_db);
+    void map_was_reset();
+};
+
 class tracking_module {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -135,7 +144,7 @@ public:
     data::frame curr_frm_;
 
     //! optional hard on/off control for running re-initialisation when tracking fails
-    std::optional<bool> init_retry_on_;
+    map_reset_controller map_reset_controller_;
 
 protected:
     //-----------------------------------------

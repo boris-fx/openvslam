@@ -379,7 +379,12 @@ bool system::mapping_module_is_enabled() const {
 
 void system::enable_map_reinitialisation(std::optional<bool> always_enabled)
 {
-    tracker_->init_retry_on_ = always_enabled;
+    if (always_enabled.has_value()) {
+        tracker_->map_reset_controller_.enabled = true;
+        tracker_->map_reset_controller_.allow_reset = always_enabled.value();
+    }
+    else
+        tracker_->map_reset_controller_.enabled = false;
 }
 
 void system::enable_loop_detector() {
