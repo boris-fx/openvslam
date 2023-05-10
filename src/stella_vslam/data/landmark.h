@@ -118,6 +118,7 @@ public:
     unsigned int id_;
     unsigned int first_keyfrm_id_ = 0;
     unsigned int num_observations_ = 0;
+    int prematched_id_ = -1;   // >= 0 if landmark corresponds to an input prematched point
 
 protected:
     void compute_mean_normal(const observations_t& observations,

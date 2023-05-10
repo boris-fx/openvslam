@@ -305,7 +305,7 @@ void mapping_module::create_new_landmarks(std::atomic<bool>& abort_create_new_la
         if (use_orb_features_) {
             robust_matcher.match_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches);
         }
-        stella_vslam_bfx::get_prematches_for_triangulation(cur_keyfrm_, ngh_keyfrm, matches);
+        stella_vslam_bfx::get_prematches_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches, false);
 
         // triangulation
         triangulate_with_two_keyframes(cur_keyfrm_, ngh_keyfrm, matches);
@@ -372,13 +372,15 @@ void mapping_module::update_new_keyframe() {
         if (lm->will_be_erased()) {
             continue;
         }
-        if (!lm->has_representative_descriptor()) {
-            spdlog::warn("has not representative descriptor {}", lm->id_);
-            lm->compute_descriptor();
-        }
-        if (!lm->has_valid_prediction_parameters()) {
-            spdlog::warn("has not valid prediction parameters");
-            lm->update_mean_normal_and_obs_scale_variance();
+        if (lm->prematched_id_ < 0) {
+            if (!lm->has_representative_descriptor()) {
+                spdlog::warn("has not representative descriptor {}", lm->id_);
+                lm->compute_descriptor();
+            }
+            if (!lm->has_valid_prediction_parameters()) {
+                spdlog::warn("has not valid prediction parameters");
+                lm->update_mean_normal_and_obs_scale_variance();
+            }
         }
     }
 
@@ -389,6 +391,48 @@ void mapping_module::update_new_keyframe() {
 void mapping_module::fuse_landmark_duplication(const std::vector<std::shared_ptr<data::keyframe>>& fuse_tgt_keyfrms,
                                                nondeterministic::unordered_map<std::shared_ptr<data::landmark>, std::shared_ptr<data::landmark>>& replaced_lms) {
     match::fuse fuse_matcher(0.6);
+
+    {
+        // handle prematched points separately; simply look for corresponding IDs
+        auto cur_landmarks = cur_keyfrm_->get_landmarks();
+        for (auto& lm : cur_landmarks) {
+            if (!lm) {
+                continue;
+            }
+            if (lm->will_be_erased()) {
+                continue;
+            }
+            if (lm->prematched_id_ < 0) {
+                continue;
+            }
+
+            for (const auto& fuse_tgt_keyfrm : fuse_tgt_keyfrms) {
+                if (lm->is_observed_in_keyframe(fuse_tgt_keyfrm)) {
+                    continue;
+                }
+
+                for (auto& tgt_lm : fuse_tgt_keyfrm->get_landmarks()) {
+                    if (!tgt_lm) {
+                        continue;
+                    }
+                    if (tgt_lm->will_be_erased()) {
+                        continue;
+                    }
+
+                    if (tgt_lm->id_ != lm->id_ && tgt_lm->prematched_id_ == lm->prematched_id_) {
+                        if (tgt_lm->num_observations() > lm->num_observations()) {
+                            replaced_lms[lm] = tgt_lm;
+                            lm->replace(tgt_lm, map_db_);
+                        }
+                        else{
+                            replaced_lms[tgt_lm] = lm;
+                            tgt_lm->replace(lm, map_db_);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     {
         // reproject the landmarks observed in the current keyframe to each of the targets, and acquire

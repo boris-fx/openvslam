@@ -71,6 +71,15 @@ bool frame::can_observe(const std::shared_ptr<landmark>& lm, const float ray_cos
         return false;
     }
 
+    // Check whether the keypoint is prematched in the frame
+    if (lm->prematched_id_ >= 0) {
+        if (frm_obs_.idx_is_prematched(lm->prematched_id_)) {
+            pred_scale_level = 0;
+            return true;
+        }
+        return false;
+    }
+
     const Vec3_t cam_to_lm_vec = pos_w - trans_wc_;
     const auto cam_to_lm_dist = cam_to_lm_vec.norm();
     const auto margin_far = 1.3;
@@ -98,6 +107,15 @@ void frame::add_landmark(const std::shared_ptr<landmark>& lm, const unsigned int
     assert(!has_landmark(lm));
     landmarks_.at(idx) = lm;
     landmarks_idx_map_[lm] = idx;
+    auto pmid = frm_obs_.prematched_idx_to_id_.find(idx);
+    if (pmid != frm_obs_.prematched_idx_to_id_.end()) {
+        if (lm->prematched_id_ < 0)
+            lm->prematched_id_ = pmid->second;
+        else
+            assert(lm->prematched_id_ == pmid->second);
+    }
+    else
+        assert(lm->prematched_id_ < 0);
 }
 
 std::shared_ptr<landmark> frame::get_landmark(const unsigned int idx) const {

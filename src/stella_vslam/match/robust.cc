@@ -285,6 +285,7 @@ unsigned int robust::brute_force_match(const data::frame_observation& frm_obs, c
         if (lm_2->will_be_erased()) {
             continue;
         }
+        assert(lm_2->prematched_id_ < 0);
 
         // Acquire the descriptor for index 2
         const auto& desc_2 = descs_2.row(idx_2);
@@ -358,7 +359,7 @@ unsigned int robust::brute_force_match(const data::frame_observation& frm_obs, c
 }
 
 bool robust::check_epipolar_constraint(const Vec3_t& bearing_1, const Vec3_t& bearing_2,
-                                       const Mat33_t& E_12, const float bearing_1_scale_factor) const {
+                                       const Mat33_t& E_12, const float bearing_1_scale_factor) {
     // Normal vector of the epipolar plane on keyframe 1
     const Vec3_t epiplane_in_1 = E_12 * bearing_2;
 

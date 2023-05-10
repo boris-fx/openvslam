@@ -8,6 +8,7 @@
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/data/bow_database.h"
 #include "stella_vslam/match/projection.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/module/local_map_updater.h"
 #include "stella_vslam/optimize/pose_optimizer_factory.h"
 #include "stella_vslam/report/initialisation_debugging.h"
@@ -465,10 +466,7 @@ bool tracking_module::optimize_current_frame_with_local_map(unsigned int& num_tr
                                                             unsigned int& num_reliable_lms,
                                                             const unsigned int min_num_obs_thr) {
     // acquire more 2D-3D matches by reprojecting the local landmarks to the current frame
-    // (shouldn't make any difference if all points are prematched)
-    if (use_orb_features_) {
-        search_local_landmarks();
-    }
+    search_local_landmarks();
 
     // optimize the pose
     Mat44_t optimized_pose;
@@ -617,6 +615,7 @@ void tracking_module::search_local_landmarks() {
                                     ? 10.0
                                     : 5.0);
     projection_matcher.match_frame_and_landmarks(curr_frm_, local_landmarks_, lm_to_reproj, lm_to_x_right, lm_to_scale, margin);
+    stella_vslam_bfx::add_prematched_landmarks(curr_frm_, local_landmarks_, lm_to_reproj, margin);
 }
 
 bool tracking_module::new_keyframe_is_needed(unsigned int num_tracked_lms,

@@ -108,14 +108,11 @@ bool relocalizer::reloc_by_candidate(data::frame& curr_frm,
         already_found_landmarks.insert(matched_landmarks.at(idx));
     }
 
-    if (use_orb_features_) {
-        // Prematched points will all have been dealt with so no point looking for more
-        ok = refine_pose(curr_frm, candidate_keyfrm, already_found_landmarks);
-        if (!ok)
-            return false;
+    ok = refine_pose(curr_frm, candidate_keyfrm, already_found_landmarks);
+    if (!ok)
+        return false;
 
-        return refine_pose_by_local_map(curr_frm, candidate_keyfrm);
-    }
+    return refine_pose_by_local_map(curr_frm, candidate_keyfrm);
 	
     return true;
 }
@@ -130,7 +127,7 @@ bool relocalizer::relocalize_by_pnp_solver(data::frame& curr_frm,
         num_matches = use_robust_matcher ? robust_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, matched_landmarks)
                                                 : bow_matcher_.match_frame_and_keyframe(candidate_keyfrm, curr_frm, matched_landmarks);
     }
-    stella_vslam_bfx::get_frame_and_keyframe_prematches(candidate_keyfrm, curr_frm, matched_landmarks);
+    num_matches += stella_vslam_bfx::get_frame_and_keyframe_prematches(candidate_keyfrm, curr_frm, matched_landmarks, false);
 
     // Discard the candidate if the number of 2D-3D matches is less than the threshold
     if (num_matches < min_num_bow_matches_) {
@@ -192,7 +189,8 @@ bool relocalizer::refine_pose(data::frame& curr_frm,
     auto num_valid_obs = already_found_landmarks.size();
 
     // Projection match based on the pre-optimized camera pose
-    auto num_found = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks, 10, 100);
+    auto num_found = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks, 10, 100)
+        + stella_vslam_bfx::add_keyframe_prematches(curr_frm, candidate_keyfrm, already_found_landmarks, 10);
     // Discard the candidate if the number of the inliers is less than the threshold
     if (num_valid_obs + num_found < min_num_valid_obs_) {
         spdlog::debug("Number of inliers ({}) < threshold ({}). candidate keyframe id is {}", num_valid_obs + num_found, min_num_valid_obs_, candidate_keyfrm->id_);
@@ -215,7 +213,8 @@ bool relocalizer::refine_pose(data::frame& curr_frm,
         already_found_landmarks1.insert(lm);
     }
     // Apply projection match again, then set the 2D-3D matches
-    auto num_additional = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks1, 3, 64);
+    auto num_additional = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks1, 3, 64)
+        + stella_vslam_bfx::add_keyframe_prematches(curr_frm, candidate_keyfrm, already_found_landmarks, 3);
 
     // Discard if the number of the observations is less than the threshold
     if (num_valid_obs1 + num_additional < min_num_valid_obs_) {
@@ -310,7 +309,8 @@ bool relocalizer::refine_pose_by_local_map(data::frame& curr_frm,
         // acquire more 2D-3D matches by projecting the local landmarks to the current frame
         match::projection projection_matcher(0.8);
         const float margin = margins[i];
-        auto num_additional_matches = projection_matcher.match_frame_and_landmarks(curr_frm, local_landmarks, lm_to_reproj, lm_to_x_right, lm_to_scale, margin);
+        auto num_additional_matches = projection_matcher.match_frame_and_landmarks(curr_frm, local_landmarks, lm_to_reproj, lm_to_x_right, lm_to_scale, margin)
+            + stella_vslam_bfx::add_prematched_landmarks(curr_frm, local_landmarks, lm_to_reproj, margin);
 
         // optimize the pose
         Mat44_t optimized_pose;

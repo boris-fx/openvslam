@@ -43,6 +43,7 @@ unsigned int bow_tree::match_frame_and_keyframe(const std::shared_ptr<data::keyf
                 if (lm->will_be_erased()) {
                     continue;
                 }
+                assert(lm->prematched_id_ < 0);
 
                 const auto& keyfrm_desc = keyfrm->frm_obs_.descriptors_.row(keyfrm_idx);
 
@@ -149,6 +150,7 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
                 if (lm_1->will_be_erased()) {
                     continue;
                 }
+                assert(lm_1->prematched_id_ < 0);
 
                 const auto& desc_1 = keyfrm_1->frm_obs_.descriptors_.row(idx_1);
 
@@ -176,6 +178,8 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
                     if (is_already_matched_in_keyfrm_2.at(idx_2)) {
                         continue;
                     }
+                    
+                    assert(lm_2->prematched_id_ < 0);
 
                     if (check_orientation_ && std::abs(util::angle::diff(keyfrm_1->frm_obs_.undist_keypts_.at(idx_1).angle, keyfrm_2->frm_obs_.undist_keypts_.at(idx_2).angle)) > 30.0) {
                         continue;

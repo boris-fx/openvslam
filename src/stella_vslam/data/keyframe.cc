@@ -173,6 +173,15 @@ void keyframe::compute_bow(bow_vocabulary* bow_vocab) {
 void keyframe::add_landmark(std::shared_ptr<landmark> lm, const unsigned int idx) {
     std::lock_guard<std::mutex> lock(mtx_observations_);
     landmarks_.at(idx) = lm;
+    auto pmid = frm_obs_.prematched_idx_to_id_.find(idx);
+    if (pmid != frm_obs_.prematched_idx_to_id_.end()) {
+        if (lm->prematched_id_ < 0)
+            lm->prematched_id_ = pmid->second;
+        else
+            assert(lm->prematched_id_ == pmid->second);
+    }
+    else
+        assert(lm->prematched_id_ < 0);
 }
 
 void keyframe::erase_landmark_with_index(const unsigned int idx) {

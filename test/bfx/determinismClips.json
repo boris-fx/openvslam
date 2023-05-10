@@ -2,7 +2,10 @@
     "active_clips": [
         {
             "clip": "Gesture_Clip_8_1.mov",
-            "config": "1920-108-1988-25.yaml"
+            "config": "1920-108-1988-25.yaml",
+            "planar": "tablet",
+            "grid_size": "3",
+            "mesh": "tablet/mesh"
         },
         {
             "clip": "4k-aerial-panning-around-rocky-mountain_nyhqugkn__D.mp4",
@@ -14,7 +17,9 @@
         },
         {
             "clip": "065878410-woman-walking-abandoned-plane.mov",
-            "config": "1920-1080-1500-25.yaml"
+            "config": "1920-1080-1500-25.yaml",
+            "planar": "plane",
+            "grid_size": "5"
         },
         {
             "clip": "WalkingPastBuildings.mov",
@@ -30,11 +35,15 @@
         },
         {
             "clip": "Pexels Videos 2253472.mp4",
-            "config": "3840-2160-2500-24.yaml"
+            "config": "3840-2160-2500-24.yaml",
+            "mesh": "waterfall/mesh"
         },
         {
             "clip": "FP001548MD03.mp4",
-            "config": "3480-2160-2000-23_98.yaml"
+            "config": "3480-2160-2000-23_98.yaml",
+            "planar": "lighthouse-pan",
+            "grid_size": "10",
+            "mesh": "lighthouse-pan/mesh"
         },
         {
             "clip": "videoblocks-a-young-man-in-a-black-jacket-goes-to-the-large-wooden-gate-and-looks-at-the-burning-lighthouse-against-the-background-of-the-sea-slow-motion_B03iQ7InP.mov",
@@ -42,7 +51,8 @@
         },
         {
             "clip": "videoblocks-medium-shot-of-serious-caucasian-male-supervisor-in-yellow-hard-hat-walking-along-assembly-shop-of-big-tractor-plant-inspecting-machinery-equipment-and-work-of-employees_svwd4kswu.mov",
-            "config": "1920-1080-2300-50.yaml"
+            "config": "1920-1080-2300-50.yaml",
+            "mesh": "hatman/mesh"
         },
         {
             "clip": "FP005183HD07.mp4",
@@ -56,7 +66,8 @@
         },
         {
             "clip": "FP001033HD02.mp4",
-            "config": "1920-1080-1000-24.yaml"
+            "config": "1920-1080-1000-24.yaml",
+            "mesh": "mountain_jump/mesh"
         },
         {
             "clip": "A008_C055_0504XB-2.mov",

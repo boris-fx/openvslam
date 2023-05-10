@@ -56,7 +56,7 @@ def fileDiff(file1, file2, printDiff):
     return filesMatch
 
 # Run a solve on a given video input a specified number of times and compare the output
-def runTest(clipFile, configFile, numReps, build, allFrames, logLevel, printDiff, keepLogs):
+def runTest(clipFile, configFile, extraArgs, numReps, build, allFrames, logLevel, printDiff, keepLogs):
     cmdDir = "../../../tmp/" + build + "/shared"
     vocabFile = "../../../../resources/orb_vocab.fbow"
 
@@ -68,6 +68,7 @@ def runTest(clipFile, configFile, numReps, build, allFrames, logLevel, printDiff
     baseCmd += " --log-level " + logLevel + " --log-times 0 --print-results 1"
     if allFrames:
         baseCmd += " --printFrames 1"
+    baseCmd += extraArgs
 
     # Make sure log file path doesn't exceed the character limit
     filename = os.path.basename(clipFile)
@@ -114,6 +115,8 @@ if __name__ == "__main__":
         help="directory under which clips in the clipFile can be found")
     parser.add_argument('--configPath',
         help="directory under which config files in the clipFile can be found")
+    parser.add_argument('--trackPath',
+        help="directory under which tracking files in the clipFile can be found")
     parser.add_argument('--numReps', type=int, default=3,
         help="number of times to repeat each solve (default = 3)")
     parser.add_argument('--logLevel', choices=['trace', 'debug', 'info', 'warning', 'error', 'critical', 'off'],
@@ -127,10 +130,19 @@ if __name__ == "__main__":
         help="keep matching generated log files after comparing instead of deleting")
     parser.add_argument('--build', choices=['debug', 'release'], default='debug',
         help="build config of executable to run (determines search path)")
+    parser.add_argument('--testAutoFeatures', action='store_true',
+        help="run tests using (only) auto-generated ORB features, as well as with tracked points")
+    parser.add_argument('--testPlanarTracks', action='store_true',
+        help="run tests using tracked planar points")
+    parser.add_argument('--testMeshTracks', action='store_true',
+        help="run tests using tracked mesh points")
     args = parser.parse_args()
 
     # Read the clip info from file
     clipData = []
+    clipPath = args.clipPath.strip() if args.clipPath else ""
+    configPath = args.configPath.strip() if args.configPath else ""
+    trackPath = args.trackPath.strip() if args.trackPath else ""
     with open(args.clipFile, 'r') as file:
         data = json.load(file)
         for clipInfo in data["active_clips"]:
@@ -138,23 +150,41 @@ if __name__ == "__main__":
                 print("Missing data for clip/config: ", end='')
                 print(json.dumps(clipInfo))
                 continue
-            clip = clipInfo["clip"].strip()
-            config = clipInfo["config"].strip()
-            if args.clipPath:
-                clip = os.path.join(args.clipPath.strip(), clip)
-            if args.configPath:
-                config = os.path.join(args.configPath.strip(), config)
+
+            clip = os.path.join(clipPath, clipInfo["clip"].strip())
+            config = os.path.join(configPath, clipInfo["config"].strip())
             if not os.path.isfile(clip):
                 print("Invalid clip: " + clip)
                 continue
             if not os.path.isfile(config):
                 print("Invalid config: " + config)
                 continue
-            clipData.append((clip, config))
+
+            extraArgs = []
+            if args.testAutoFeatures:
+                extraArgs.append("")
+            if args.testPlanarTracks and "planar" in clipInfo:
+                trackDir = os.path.join(trackPath, clipInfo["planar"].strip())
+                if os.path.isdir(trackDir):
+                    arg = " --planar \"" + trackDir + "\""
+                    if "grid_size" in clipInfo:
+                        arg += " --grid-size " + clipInfo["grid_size"].strip()
+                    extraArgs.append(arg)
+                else:
+                    print("Invalid planar tracks directory: " + trackDir)
+            if args.testMeshTracks and "mesh" in clipInfo:
+                trackDir = os.path.join(trackPath, clipInfo["mesh"].strip())
+                if os.path.isdir(trackDir):
+                    extraArgs.append(" --mesh \"" + trackDir + "\"")
+                else:
+                    print("Invalid mesh tracks directory: " + trackDir)
+
+            for extra in extraArgs:
+                clipData.append((clip, config, extra))
         file.close()
 
     for clip in clipData:
-        if not runTest(clip[0], clip[1], args.numReps, args.build,
+        if not runTest(clip[0], clip[1], clip[2], args.numReps, args.build,
             args.printAllFrames, args.logLevel, args.printDiff, args.keepLogs):
             exit(0)
     

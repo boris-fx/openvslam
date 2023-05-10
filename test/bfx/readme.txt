@@ -32,10 +32,12 @@ Each clip entry must have:
 "clip": name of the clip file (absolute path or file in --clipPath)
 "config": name of the YAML config file (absolute path or file in --configPath)
 
-Optional parameters (for passing to run_video_slam): TODO
+Optional parameters (for passing to run_video_slam):
+"planar": directory containing planar tracks for input prematched points (absolute or relative to --trackPath)
+"grid_size": size of grid to create from planar tracks
+"mesh": directory containing mesh tracks for input prematched points (absolute or relative to --trackPath)
 
-
-Video files can be downloaded from Google Drive:
+Video files etc. can be downloaded from Google Drive:
 https://drive.google.com/drive/folders/1VAmT6ZooxKPf00MguODrxnoXfV9el2oJ?usp=share_link - clips
 https://drive.google.com/drive/folders/1Q_UShi5dbyR-rCo64_e8yEJRdNhvAH31?usp=share_link - YAML configs
-
+https://drive.google.com/drive/folders/1EBC-Lfhv26r2M80sR7dlBNwUKoEH4EjV?usp=share_link - Mocha tracks

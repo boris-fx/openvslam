@@ -356,6 +356,9 @@ void solver::get_world_points(std::vector<Eigen::Vector3d>& world_points,
     prematched_id_to_idx.clear();
     for (unsigned i = 0; i < all_landmarks.size(); ++i) {
         world_points[i] = all_landmarks[i]->get_pos_in_world();
+        auto pmid = all_landmarks[i]->prematched_id_;
+        if (pmid >= 0)
+            prematched_id_to_idx[pmid] = i;
     }
 }
 

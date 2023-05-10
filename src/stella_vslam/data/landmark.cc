@@ -142,6 +142,9 @@ cv::Mat landmark::get_descriptor() const {
 }
 
 void landmark::compute_descriptor() {
+    if (prematched_id_ >= 0)
+        return;
+    
     observations_t observations;
     {
         std::lock_guard<std::mutex> lock1(mtx_observations_);
@@ -228,6 +231,9 @@ void landmark::compute_orb_scale_variance(const observations_t& observations,
 }
 
 void landmark::update_mean_normal_and_obs_scale_variance() {
+    if (prematched_id_ >= 0)
+        return;
+
     SPDLOG_TRACE("landmark::update_mean_normal_and_obs_scale_variance {}", id_);
     observations_t observations;
     std::shared_ptr<keyframe> ref_keyfrm = nullptr;
@@ -329,6 +335,8 @@ void landmark::replace(std::shared_ptr<landmark> lm, data::map_database* map_db)
     if (lm->id_ == id_) {
         return;
     }
+
+    assert(lm->prematched_id_ == prematched_id_);
 
     // 1. Erase this
     observations_t observations;
