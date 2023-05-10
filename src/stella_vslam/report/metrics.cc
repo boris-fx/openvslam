@@ -157,6 +157,27 @@ namespace stella_vslam_bfx {
         j.at("frame").get_to(e.frame);
     }
 
+    template<typename T>
+    void to_json(nlohmann::json& j, const metrics::frame_param<T>& e)
+    {
+        j = { {"by_timestamp", e.by_timestamp}, {"by_frame", e.by_frame} };
+    }
+
+    template<typename T>
+    void from_json(const nlohmann::json& j, metrics::frame_param<T>& e) {
+        j.at("by_timestamp").get_to(e.by_timestamp);
+        j.at("by_frame").get_to(e.by_frame);
+    }
+
+    template<typename T>
+    std::map<double, double> metrics::frame_param<T>::graph() const
+    {
+        std::map<double, double> g;
+        for (auto const& i : by_frame)
+            g[i.first] = i.second;
+        return g;
+    }
+
     //////////////////////////////////////////////////////////////
 
     const double metrics::par_percent_error_trigger = 20.0;
@@ -192,6 +213,8 @@ namespace stella_vslam_bfx {
             {"num_points", num_points},
             {"initialisation_frames", initialisation_frames},
             {"intermediate_focal_estimates", intermediate_focal_estimates},
+            {"map_size", map_size},
+            {"tracking_fail_count", tracking_fail_count},
             {"mapping_reset_timestamps", mapping_reset_timestamps},
             {"mapping_reset_frames", mapping_reset_frames}
 
@@ -209,6 +232,8 @@ namespace stella_vslam_bfx {
         num_points = json.at("num_points").get<int>();
         initialisation_frames = json.at("initialisation_frames").get<std::set<std::set<int>>>();
         intermediate_focal_estimates = json.at("intermediate_focal_estimates").get<std::list<focal_estimate>>();
+        map_size = json.at("map_size").get<frame_param<unsigned int>>();
+        tracking_fail_count = json.at("tracking_fail_count").get<frame_param<unsigned int>>();
         mapping_reset_timestamps = json.at("mapping_reset_timestamps").get<std::list<double>>();
         mapping_reset_frames = json.at("mapping_reset_frames").get<std::list<int>>();
 
@@ -218,6 +243,12 @@ namespace stella_vslam_bfx {
     void metrics::submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate)
     {
         intermediate_focal_estimates.push_back({ estimate, stage, current_frame_timestamp });
+    }
+
+    void metrics::submit_map_size_and_tracking_fails(double timestamp, unsigned int map_keyframe_count, unsigned int tracking_fails)
+    {
+        map_size.by_timestamp[timestamp] = map_keyframe_count;
+        tracking_fail_count.by_timestamp[timestamp] = tracking_fails;
     }
 
     void metrics::submit_mapping_reset(double timestamp)
@@ -231,6 +262,19 @@ namespace stella_vslam_bfx {
         if (f != timestamp_to_video_frame.end())
             return f->second;
         return std::nullopt;
+    }
+
+    template<typename T>
+    void transform_metrics_frame_data(metrics::frame_param<T> &data,
+                                      std::map<double, int> const& index_transform)
+    {
+        data.by_frame.clear();
+        for (auto const& i : data.by_timestamp)
+        {
+            auto f = index_transform.find(i.first);
+            if (f != index_transform.end())
+                data.by_frame[f->second] = i.second;
+        }
     }
 
     void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame) {
@@ -255,6 +299,9 @@ namespace stella_vslam_bfx {
         for (auto const& timestamp : mapping_reset_timestamps)
             if (auto frame = timestamp_to_frame(timestamp, timestamp_to_video_frame))
                 mapping_reset_frames.push_back(frame.value());
+
+        transform_metrics_frame_data(map_size, timestamp_to_video_frame);
+        transform_metrics_frame_data(tracking_fail_count, timestamp_to_video_frame);
     }
 
     int metrics::total_frames() const
@@ -575,6 +622,8 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "<p>Reset frames: ";
     for (auto const& reset_frame : mapping_reset_frames)
         html << reset_frame << ", ";
+    write_graph_as_svg(html, Graph("Frame", "Map keyframe count", std::set<Curve>({ {"Num keyframes", map_size.graph()} })));
+    write_graph_as_svg(html, Graph("Frame", "Fail count", std::set<Curve>({ {"Fail count", tracking_fail_count.graph()} })));
 
     html << "<h2> Map</h2>\n";
     // Solved/unsolved cameras

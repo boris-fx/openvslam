@@ -113,6 +113,7 @@ public:
 
     void submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate);
 
+    void submit_map_size_and_tracking_fails(double timestamp, unsigned int map_keyframe_count, unsigned int tracking_fails);
     void submit_mapping_reset(double timestamp);
 
     double current_frame_timestamp;
@@ -159,9 +160,21 @@ public:
         double timestamp;
         int frame; // set in create_frame_metrics
     };
+
+    template<typename T>
+    struct frame_param
+    {
+        std::map<double, T> by_timestamp; // Map from a pair of frame identified by timestamp, to some data
+        std::map<int, T> by_frame;     // Map from a pair of frame identified by frame number, to some data
+        std::map<double, double> graph() const;
+    };
+
 protected:
 
     std::list<focal_estimate> intermediate_focal_estimates;
+
+    frame_param<unsigned int> map_size;
+    frame_param<unsigned int> tracking_fail_count;
 
     std::list<double> mapping_reset_timestamps;
     std::list<int> mapping_reset_frames;

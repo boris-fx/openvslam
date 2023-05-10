@@ -52,6 +52,7 @@ bool map_reset_controller::should_reset_map_for_tracking_failure(data::map_datab
     ++track_fail_count;
     int keyframe_count = map_db->get_num_keyframes();
 
+#if 0 // Allow some fails (based on map size) before resetting
     if (keyframe_count < 5)
         return track_fail_count > 0; // Allow no fails for less than 5 keyframes
     if (keyframe_count < 10)
@@ -61,6 +62,9 @@ bool map_reset_controller::should_reset_map_for_tracking_failure(data::map_datab
     if (keyframe_count < 25)
         return track_fail_count > 2; // Allow 3 fails for 15-24 keyframes
     return false; // Allow unlimited fails for more than 25 keyframes
+#endif
+
+    return true; // Always reset on first failure, when resetting is enabled
 }
 
 void map_reset_controller::map_was_reset()
@@ -197,6 +201,8 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
     // state transition
     if (succeeded) {
         tracking_state_ = tracker_state_t::Tracking;
+        if (!mapper_->is_paused())
+            stella_vslam_bfx::metrics::get_instance()->submit_map_size_and_tracking_fails(curr_frm_.timestamp_, map_db_->get_num_keyframes(), map_reset_controller_.track_fail_count);
     }
     else if (tracking_state_ == tracker_state_t::Tracking) {
         tracking_state_ = tracker_state_t::Lost;
@@ -205,6 +211,8 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
         if (map_reset_controller_.enabled) {
             if (map_reset_controller_.allow_reset) {
                 bool reset_map(map_reset_controller_.should_reset_map_for_tracking_failure(map_db_));
+                if (!mapper_->is_paused())
+                    stella_vslam_bfx::metrics::get_instance()->submit_map_size_and_tracking_fails(curr_frm_.timestamp_, map_db_->get_num_keyframes(), map_reset_controller_.track_fail_count);
                 if (!mapper_->is_paused() && reset_map) { // reset the map
                     spdlog::info("re-running initialization");
                     reset();
