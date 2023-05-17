@@ -123,9 +123,15 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     if (!get_frame_)
         return false; // report error!
 
+    // ==Timestamps==
+    // Stella uses timestamps, rather than frame numbers internally
+    // Some of the tracking logic depends on the timestamp value of frames
+    //  e.g. Don't insert a keyframe within a second of a relocalisation (tracking_module::new_keyframe_is_needed())
+    //  e.g. If tracking fails within 60.0 sec of initialization, reset the system (initializer::try_initialize_for_monocular) (though we bypass this one)
+    // So when feeding frames to stella, we make sure the associated timestamp is always increasing, even if we are re-feeding frames which were previously sent with older timestamps, or tracking backwards
     std::map<double, int> timestampToVideoFrame;
-
-    double timestamp(0);
+    double const timestamp_increment(1.0); // Seconds
+    double next_timestamp(0);
 
     // To do, support the tracking direction
     if (direction == tracking_direction_backwards)
@@ -145,10 +151,10 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         if (!got_frame || frame_image.empty())
             continue;
 
-        timestamp = (double)frame;
-        metrics::get_instance()->current_frame_timestamp = timestamp;
-
+        double timestamp = next_timestamp;
+        next_timestamp += timestamp_increment;
         timestampToVideoFrame[timestamp] = frame;
+        metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
         send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
@@ -189,11 +195,6 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         return false;
     }
 
-    // Some bookkeeping
-    std::vector<double> videoFrameToTimestamp(end+1, -1.0);
-    for (auto const& tf : timestampToVideoFrame)
-        videoFrameToTimestamp[tf.second] = tf.first;
-
     if (set_stage_description_)
         set_stage_description_("Revisiting video");
 
@@ -205,7 +206,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         if (!got_frame || frame_image.empty())
             continue;
 
-        timestamp = videoFrameToTimestamp[frame];
+        double timestamp = next_timestamp;
+        next_timestamp += timestamp_increment;
+        timestampToVideoFrame[timestamp] = frame;
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
@@ -275,7 +278,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
             continue;
         }
 
-        timestamp = videoFrameToTimestamp[frame];
+        double timestamp = next_timestamp;
+        next_timestamp += timestamp_increment;
+        timestampToVideoFrame[timestamp] = frame;
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
