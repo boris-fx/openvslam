@@ -89,16 +89,16 @@ void initialisation_debugging::submit_feature_match_debugging(unsigned int num_m
 
 void initialisation_debugging::submit_parallax_debugging(double parallax)
 {
-    if (!is_active)
-        return;
+    //if (!is_active)
+    //    return;
 
     p_parallax.by_timestamp[current_init_frame_timestamps] = parallax;
 }
 
 void initialisation_debugging::submit_homography_fundamental_cost(double cost_H, double cost_F)
 {
-    if (!is_active)
-        return;
+    //if (!is_active)
+    //    return;
 
     p_cost_H.by_timestamp[current_init_frame_timestamps] = cost_H;
     p_cost_F.by_timestamp[current_init_frame_timestamps] = cost_F;
@@ -114,8 +114,8 @@ void initialisation_debugging::submit_fundamental_to_focal_length_debugging(doub
                                                                             std::map<double, double> focal_length_to_error,
                                                                             std::map<double, double> fov_to_error)
 {
-    if (!is_active)
-        return;
+    //if (!is_active)
+    //    return;
 
     p_error_for_max_focal_length.by_timestamp[current_init_frame_timestamps] = error_for_max_focal_length;
     p_min_error.by_timestamp[current_init_frame_timestamps] = min_error;
@@ -137,8 +137,8 @@ void initialisation_debugging::submit_fundamental_decomp_debugging(double error_
     double min_error_percent_max_focal_error,
     std::map<double, double> focal_length_to_error)
 {
-    if (!is_active)
-        return;
+    //if (!is_active)
+    //    return;
 
     p_dec_error_for_max_focal_length.by_timestamp[current_init_frame_timestamps] = error_for_max_focal_length;
     p_dec_min_error.by_timestamp[current_init_frame_timestamps] = min_error;
@@ -155,8 +155,8 @@ void initialisation_debugging::submit_epipolar_estimator_debugging(double min_er
     double dedf, double dedtu, double dedtv, double dedrx, double dedry, double dedrz,
     double sd_dedf, double sd_dedtu, double sd_dedtv, double sd_dedrx, double sd_dedry, double sd_dedrz)
 {
-    if (!is_active)
-        return;
+    //if (!is_active)
+    //    return;
 
     p_ep_min_error.by_timestamp[current_init_frame_timestamps] = min_error;
     p_ep_initial_focal_length.by_timestamp[current_init_frame_timestamps] = initial_focal_length;
@@ -179,8 +179,8 @@ void initialisation_debugging::submit_epipolar_estimator_debugging(double min_er
 
 void initialisation_debugging::submit_feature_motions(double quantile_25, double quantile_50, double quantile_75)
 {
-    if (!is_active)
-        return;
+    //if (!is_active)
+    //    return;
 
     feature_motion_quantile_25.by_timestamp[current_init_frame_timestamps] = quantile_25;
     feature_motion_quantile_50.by_timestamp[current_init_frame_timestamps] = quantile_50;
@@ -287,17 +287,6 @@ std::list<frame_param<std::map<double, double>>*> initialisation_debugging::fram
     return result;
 }
 
-// map entry {a, b}->c becomes b->c
-template<typename T>
-std::map<double, T> select_second_frame_data(std::map<std::array<int, 2>, T> const& input)
-{
-    std::map<double, T> output;
-    int first_frame = input.empty() ? 0 : input.begin()->first[0];
-    for (auto const& i : input)
-        if (i.first[0]==first_frame)
-            output[i.first[1]] = i.second;
-    return output;
-}
 
 // map entry {a, b}->c becomes b->c
 template<typename T>
@@ -312,7 +301,7 @@ std::map<double, T> select_scaled_second_frame_data(std::map<std::array<int, 2>,
     std::map<double, T> output;
     int first_frame = input.empty() ? 0 : input.begin()->first[0];
     for (auto const& i : input)
-        if (i.first[0] == first_frame)
+        //if (i.first[0] == first_frame)
             output[i.first[1]] = i.second * scale;
     return output;
 }
@@ -381,14 +370,11 @@ std::map<double, double> focal_length_x_to_FOV_graph(std::map<double, double> co
 }
 
 void initialisation_debugging::add_to_html(std::stringstream& html, std::optional<double> ground_truth_focal_length_x_pixels) const {
-    if (!active())
-        return;
 
-
-    std::map<double, double> graph_num_matches = select_second_frame_data(p_num_matches);
+//    std::map<double, double> graph_num_matches = select_second_frame_data(p_num_matches);
     std::map<double, double> graph_parallax = select_second_frame_data(p_parallax);
-    std::map<double, double> graph_cost_H = select_second_frame_data(p_cost_H);
-    std::map<double, double> graph_cost_F = select_second_frame_data(p_cost_F);
+//    std::map<double, double> graph_cost_H = select_second_frame_data(p_cost_H);
+  //  std::map<double, double> graph_cost_F = select_second_frame_data(p_cost_F);
     std::map<double, double> graph_error_for_max_focal_length = select_second_frame_data(p_error_for_max_focal_length);
     std::map<double, double> graph_min_error = select_second_frame_data(p_min_error);
     std::map<double, double> graph_de_df_plus = select_second_frame_data(p_de_df_plus);
@@ -459,14 +445,18 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
     write_graph_as_svg(html, Graph("Second init frame", "Feature motion (pixels)", std::set<Curve>({ {"First Quartile", graph_feature_motion_quantile_25},
                                                                                                                {"Second Quartile", graph_feature_motion_quantile_50},
                                                                                                                {"Third Quartile", graph_feature_motion_quantile_75} }), full_x, full_y, no_gt));
-    write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Match count", graph_num_matches} }), full_x, full_y, no_gt));
-    html << "<hr>" << std::endl;
+    
+    
+    //std::map<double, double> graph_feature_count;
+    //for (auto const& i : feature_count_by_frame)
+    //    graph_feature_count[i.first] = i.second;
+    //write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Feature count", graph_feature_count}, {"Matches to frame", graph_num_matches} }), full_x, full_y, settings ? settings->min_num_valid_pts_ : no_gt));
+    //html << "<hr>" << std::endl;
 
-    html << "<h2>Structure type</h2>" << std::endl;
-
-    write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"H cost", graph_cost_H}, {"F cost", graph_cost_F} }), full_x, full_y, no_gt));
-    html << "<p>Average feature match deviation from the geometric model (pixels - with max of a few pixels). H cost is deviation from a planar scene model, F-cost measures deviation from a non-planar scene model.</p>" << std::endl;
-    html << "<hr>" << std::endl;
+    //html << "<h2>Structure type</h2>" << std::endl;
+    //write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"H cost", graph_cost_H}, {"F cost", graph_cost_F} }), full_x, full_y, no_gt));
+    //html << "<p>Average feature match deviation from the geometric model (pixels - with max of a few pixels). H cost is deviation from a planar scene model, F-cost measures deviation from a non-planar scene model.</p>" << std::endl;
+    //html << "<hr>" << std::endl;
 
     html << "<h2>Focal length from F-matrix (non-planar scene model)</h2>" << std::endl;
 
@@ -508,7 +498,8 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
     write_graph_as_svg(html, Graph("Second init frame", "de/dr", std::set<Curve>({ {"de/drx", graph_ep_dedrx},  {"de/dry", graph_ep_dedry}, {"de/drz", graph_ep_dedrz},
                                                                                              {"sd de/drx", graph_ep_sd_dedrx},  {"sd de/dry", graph_ep_sd_dedry}, {"sd de/drz", graph_ep_sd_dedrz} }), full_x, median_y, no_gt));
 
-    if (ground_truth_focal_length_x_pixels) {
+    //if (ground_truth_focal_length_x_pixels) 
+    {
         std::map<double, double> graph_focal_deviation = percent_deviation_from_value(graph_best_focal_length_bisection, ground_truth_focal_length_x_pixels.value());
         std::set<Curve> curves({{"% Error in focal est.", graph_focal_deviation}, {"% Comp. error measure", graph_min_error_percent_max_focal_error}});
         if (!graph_percent_matches.empty())
@@ -579,7 +570,8 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
     }
 }
 
-void initialisation_debugging::save_html_report(std::string_view const& filename, std::optional<double> ground_truth_focal_length_x_pixels) const {
+void initialisation_debugging::save_html_report(std::string_view const& filename,
+    std::optional<double> ground_truth_focal_length_x_pixels) const {
     html_file html(filename);
     add_to_html(html.html, ground_truth_focal_length_x_pixels);
 }

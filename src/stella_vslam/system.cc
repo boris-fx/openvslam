@@ -25,6 +25,8 @@
 #include "stella_vslam/util/image_converter.h"
 #include "stella_vslam/report/initialisation_debugging.h"
 
+#include <opencv2/imgcodecs.hpp>
+
 #include <thread>
 
 #include <spdlog/spdlog.h>
@@ -166,6 +168,7 @@ void system::init(const config * cfg)
     auto mask_rectangles = cfg->settings_.mask_rectangles_;
 
     const auto min_size = cfg->settings_.min_feature_size_;
+    spdlog::info("system - min_size: {}", min_size);
     extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
         extractor_right_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
@@ -470,6 +473,18 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
     if (use_orb_features_) {
         // Extract ORB feature
         extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+        //spdlog::info("feature extract: {} colour order {} {} {} {}", keypts_.size(), 
+        //    static_cast<unsigned int>(camera_->color_order_), 
+        //    stella_vslam::camera::color_order_to_string[static_cast<unsigned int>(camera_->color_order_)],
+        //    mask.rows, mask.cols);
+
+        //static int c = 0;
+        //++c;
+        //std::string im_filename = "im_test_" + std::to_string(c) + ".bmp";
+        //
+        ////if (c==0)
+        //    cv::imwrite(im_filename, img_gray);
+        
     }
     // Add the prematched points to the input vector for undistorting
     if (undistort_prematches_)

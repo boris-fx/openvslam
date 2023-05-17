@@ -1070,12 +1070,22 @@ void mono_tracking_2(
 
         printSolveSummary(solve, print_results);
 
+        // Save sample frame
+        cv::Mat first_frame_image;
+        images.get_frame(first_frame, first_frame_image, cv::Mat(), stella_vslam_bfx::prematched_points());
+        std::filesystem::path fsVideo(video_file_path);
+        std::string thumbnail_filename_absolute = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_thumbnail.bmp";
+        std::string thumbnail_filename_relative_html = std::filesystem::relative(thumbnail_filename_absolute, fsVideo.parent_path()).generic_string();
+        bool wroteImage = cv::imwrite(thumbnail_filename_absolute, first_frame_image);
+        if (!wroteImage)
+            thumbnail_filename_relative_html.clear();
+
         std::string output_video_name;
         bool save_video_ok = stella_vslam_bfx::create_evaluation_video(video_file_path, "solve", solve, &output_video_name);
 
-        std::filesystem::path fsVideo(video_file_path);
+        
         std::string metrics_html_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.html";
-        stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, "", output_video_name, cfg->settings_.optimise_focal_length_ ? std::nullopt : std::optional<double>(initialFocalLength));
+        stella_vslam_bfx::metrics::get_instance()->save_html_report(metrics_html_filename, thumbnail_filename_relative_html, output_video_name, cfg->settings_.optimise_focal_length_ ? std::nullopt : std::optional<double>(initialFocalLength));
         std::string metrics_json_filename = fsVideo.parent_path().generic_string() + "/" + fsVideo.stem().generic_string() + "_metrics.json";
         stella_vslam_bfx::metrics::get_instance()->save_json_report(metrics_json_filename);
         if (debug_initialisation) {

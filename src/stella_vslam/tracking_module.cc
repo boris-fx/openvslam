@@ -308,6 +308,7 @@ bool tracking_module::track(bool relocalization_is_needed) {
     }
 
     // check to insert the new keyframe derived from the current frame
+    SPDLOG_INFO("tracking_module: insert_new_keyframe check (curr_frm_={}) {} {} {}", curr_frm_.id_, succeeded, !is_stopped_keyframe_insertion_, new_keyframe_is_needed(num_tracked_lms, num_reliable_lms, min_num_obs_thr));
     if (succeeded && !is_stopped_keyframe_insertion_ && new_keyframe_is_needed(num_tracked_lms, num_reliable_lms, min_num_obs_thr)) {
         SPDLOG_TRACE("tracking_module: insert_new_keyframe (curr_frm_={})", curr_frm_.id_);
         insert_new_keyframe();

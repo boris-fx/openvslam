@@ -164,6 +164,21 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
    int labelSize(200); // size of text dataValues[i].label - todo calculate based on string length - maybe use 'textLength' attriubute to force size
    int legendWidth(400);
 
+   bool no_data_points(true);
+   for (auto const& curve : curves)
+       for (auto const& data_value_set : curve.dataValues)
+           if (!data_value_set.empty() && !curve.ghost) {
+               no_data_points = false;
+               break;
+           }
+   if (no_data_points) {
+       svg << "<svg height=\"30\" width=\"" << graphWidth << "\">" << std::endl;
+       svg << "<text x = \"0\" y = \"15\">" << "Graph '" << xLabel << "' vs '" << yLabel << "' has no data points." << "</text>" << std::endl;
+       svg << "Sorry, your browser does not support inline SVG." << std::endl;
+       svg << "</svg>" << std::endl;
+       return;
+   }
+
    int width(graphWidth), height(graphHeight);
 
    svg << "<svg height=\"" << height << "\" width=\"" << width + legendWidth << "\">" << std::endl;
@@ -226,8 +241,10 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
    {
       int approxTickCountX(20);
 
+      
+
       // Get the min/max x value
-      float minXValue(9999999), maxXValue(0);
+      float minXValue(std::numeric_limits<float>::max()), maxXValue(0);
       for (auto const& curve : curves) {
           for (auto const& data_value_set : curve.dataValues) {
               for (auto const& data_value : data_value_set) {
@@ -240,6 +257,14 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
       }
       if (hard_max_x && maxXValue > hard_max_x.value())
           maxXValue = hard_max_x.value();
+      if (minXValue == std::numeric_limits<float>::max()) { // No data points
+          minXValue = 0;
+          maxXValue = 1;
+      }
+      if (minXValue == maxXValue) { // One data point
+          minXValue -= 0.5f;
+          maxXValue += 0.5f;
+      }
       std::list<std::pair<float, std::string>> ticks = tickMarksForValueRange(minXValue, maxXValue, approxTickCountX);
 
       //std::set<int> allTimeValues;
@@ -312,6 +337,8 @@ void write_graph_as_svg(std::stringstream& svg, std::string_view yLabel, std::st
       if (hard_max_y && maxYValue > hard_max_y.value())
           maxYValue = hard_max_y.value();
       float minYValue(0);
+      if (no_data_points)
+          maxYValue = 1.0f;
 
       std::list<std::pair<float, std::string>> ticks = tickMarksForValueRange(minYValue, maxYValue, approxTickCountY);
 
@@ -405,6 +432,7 @@ void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
     //auto [xLabel, yLabel, curves, y_axis_scaling, ground_truth_y] = graph;
     std::list<LabelledCurve> labelled_curves;
 
+    unsigned int vertex_count(0);
     for (auto const& curve : graph.curves) {
         LabelledCurve labelled_curve;
         labelled_curve.name = curve.first;
@@ -429,6 +457,7 @@ void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
             }
             labelled_curve.dataValues.push_back(point_set);
         }
+        vertex_count += labelled_curve.dataValues.size();
 
         labelled_curves.push_back(labelled_curve);
     }

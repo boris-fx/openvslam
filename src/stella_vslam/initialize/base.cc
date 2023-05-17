@@ -78,7 +78,7 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
                  num_similars, acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI, init_parallax.at(max_num_valid_index), std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI), parallax_deg_thr_multiplier * parallax_deg_thr_,
        num_triangulated_pts.at(max_num_valid_index));
 
-    if (stella_vslam_bfx::metrics::initialisation_debug().active()) {
+    {
         double parallax(acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI);
         stella_vslam_bfx::metrics::initialisation_debug().submit_parallax_debugging(parallax);
     }

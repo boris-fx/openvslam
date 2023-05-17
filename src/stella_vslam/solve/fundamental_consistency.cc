@@ -1132,10 +1132,10 @@ template<typename T>
 std::vector<T> quantile(const std::vector<T>& data, const std::vector<T>& probs)
 {
     if (data.empty())
-        return std::vector<T>();
+        return std::vector<T>(probs.size(), (T)0);
 
     if (data.size()==1)
-        return { data[0] };
+        return std::vector<T>(probs.size(), data[0]);
 
     std::vector<T> sorted_data = data;
     std::sort(sorted_data.begin(), sorted_data.end());

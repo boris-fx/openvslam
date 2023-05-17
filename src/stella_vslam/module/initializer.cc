@@ -267,28 +267,26 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
     }
     num_matches += stella_vslam_bfx::get_frames_prematches(init_frm_, curr_frm, prev_matched_coords_, init_matches_);
 
+    // store the timestamps of the two frames - perhaps combine these
+    stella_vslam_bfx::metrics::initialisation_debug().current_init_frame_timestamps = { init_frm_.timestamp_, curr_frm.timestamp_ };
+    stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
+    stella_vslam_bfx::metrics::initialisation_debug().submit_feature_match_debugging(num_matches);
+    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[init_frm_.timestamp_] = init_frm_.frm_obs_.num_keypts_;
+    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[curr_frm.timestamp_] = curr_frm.frm_obs_.num_keypts_;
+    spdlog::info("Features {} (@{}), {} (@{}), unguided matches {}", init_frm_.frm_obs_.num_keypts_, init_frm_.timestamp_, curr_frm.frm_obs_.num_keypts_, curr_frm.timestamp_, num_matches);
+
     if (num_matches < min_num_valid_pts_) {
         // rebuild the initializer with the next frame
         reset();
-        spdlog::debug("try_initialize_for_monocular, fail impl {:p}", (void*)initializer_.get());
+        spdlog::debug("try_initialize_for_monocular, fail ({} matches) impl {:p}", num_matches, (void*)initializer_.get());
         return false;
     }
-
-    spdlog::debug("try_initialize_for_monocular, mid impl {:p}", (void*)initializer_.get());
 
     // try to initialize with the initial frame and the current frame
     if (!initializer_)
        spdlog::debug("error!! initialiser impl is empty");
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
-
-    // store the timestamps of the two frames - perhaps combine these
-    stella_vslam_bfx::metrics::initialisation_debug().current_init_frame_timestamps = {init_frm_.timestamp_, curr_frm.timestamp_};
-    stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
-    
-    stella_vslam_bfx::metrics::initialisation_debug().submit_feature_match_debugging(num_matches);
-    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[init_frm_.timestamp_] = init_frm_.frm_obs_.num_keypts_;
-    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[curr_frm.timestamp_] = curr_frm.frm_obs_.num_keypts_;
 
     return initializer_->initialize(curr_frm, init_matches_, parallax_deg_thr_multiplier, initialize_focal_length, focal_length_was_modified);
 }

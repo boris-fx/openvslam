@@ -377,6 +377,17 @@ namespace stella_vslam_bfx {
         return str;
     }
 
+    std::string print_initialisation(std::set<int> const& frames, std::list<metrics::focal_estimate> const& intermediate_focal_estimates)
+    {
+        if (frames.empty())
+            return "";
+        auto f = std::find_if(intermediate_focal_estimates.begin(), intermediate_focal_estimates.end(),
+            [&](const metrics::focal_estimate& e) { return e.stage == focal_estimation_stage::initialisation_before_ba && e.frame==*(frames.rbegin()); });
+        if (f != intermediate_focal_estimates.end())
+            return "{" + to_string(frames) + "} Focal length: " + std::to_string(f->estimate);
+        return "{" + to_string(frames) + "}";
+    }
+
     std::vector<std::string> splitString(const std::string& str)
     {
         std::vector<std::string> tokens;
@@ -495,7 +506,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
 
     html << "<h1>" << input_video_metadata.name << "</h1>\n";
 
-    if (!thumbnail_path_relative.empty() && video_path_relative.empty())
+    if (!thumbnail_path_relative.empty())// && video_path_relative.empty())
         html << "<img src=\"" << thumbnail_path_relative << "\" alt=\"Preview\" width=\"800\">\n ";
 
     if (!video_path_relative.empty()) {
@@ -505,12 +516,29 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
         html << "</video>\n";
     }
 
+    html << "<p>Video file: " << input_video_metadata.filename << "</p>\n";
     html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " pixels.</p>\n";
 
     if (debugging.debug_initialisation) {
         html << "<h2>Initialisation debug</h2>\n";
         initialisation_debug_object.add_to_html(html, input_video_metadata.ground_truth_focal_length_x_pixels());
     }
+
+    // Number of features and matches by frame
+    std::map<double, double> graph_num_matches = select_second_frame_data(initialisation_debug_object.p_num_matches.by_frame);
+    std::map<double, double> graph_feature_count;
+    for (auto const& i : initialisation_debug_object.feature_count_by_frame)
+        graph_feature_count[i.first] = i.second;
+    write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Feature count", graph_feature_count}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
+    html << "<hr>" << std::endl;
+
+    // Structure type (planar or non-planar) costs during two-view matching 
+    std::map<double, double> graph_cost_H = select_second_frame_data(initialisation_debug_object.p_cost_H.by_frame);
+    std::map<double, double> graph_cost_F = select_second_frame_data(initialisation_debug_object.p_cost_F.by_frame);
+    html << "<h2>Structure type</h2>" << std::endl;
+    write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"Planar error", graph_cost_H}, {"Non-planar error", graph_cost_F} }), range_behaviour::no_max, range_behaviour::no_max, std::nullopt));
+    html << "<p>Average feature match deviation from a planar or non-planar geometric model (pixels - with max of a few pixels).</p>" << std::endl;
+    html << "<hr>" << std::endl;
 
     html << "<h2>Parameters</h2>\n";
     if (known_focal_length_x_pixels)
@@ -622,8 +650,8 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "<p>Reset frames: ";
     for (auto const& reset_frame : mapping_reset_frames)
         html << reset_frame << ", ";
-    write_graph_as_svg(html, Graph("Frame", "Map keyframe count", std::set<Curve>({ {"Num keyframes", map_size.graph()} })));
-    write_graph_as_svg(html, Graph("Frame", "Fail count", std::set<Curve>({ {"Fail count", tracking_fail_count.graph()} })));
+    write_graph_as_svg(html, Graph("Frame", "Map keyframe count", std::set<Curve>({ {"Num keyframes", map_size.graph()} }), axis_scaling(input_video_metadata.end_frame)));
+    write_graph_as_svg(html, Graph("Frame", "Fail count", std::set<Curve>({ {"Fail count", tracking_fail_count.graph()} }), axis_scaling(input_video_metadata.end_frame)));
 
     html << "<h2> Map</h2>\n";
     // Solved/unsolved cameras
@@ -634,7 +662,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     if (initialisation_frames.empty())
         html << "<p> No successful initialisations</p>\n";
     for (auto const& initialisation_attempt_frames : initialisation_frames)
-        html << "<p> Initialisation Frames: {" << to_string(initialisation_attempt_frames) << "}</p>\n";
+        html << "<p> Initialisation Frames: " << print_initialisation(initialisation_attempt_frames, intermediate_focal_estimates) << "</p>\n";
     if (initialisation_debug_object.average_init_frame_feature_count())
         html << "<p> Initialisation average feature count: " << initialisation_debug_object.average_init_frame_feature_count().value() << "</p>\n";
     if (initialisation_debug_object.average_init_frame_unguided_match_count())
@@ -710,7 +738,7 @@ void metrics::save_html_overview(std::string_view const& filename,
     html << "}	\n";
     html << "#testruns pass { \n";
     html << "    font-style:normal; \n";
-    html << "    background:#cfcfcf; \n";
+    html << "    background:#00cf00; \n";
     html << "    margin-right:10px; \n";
     html << "    display:inline-block; \n";
     html << "    width:32px; \n";
@@ -796,7 +824,7 @@ void metrics::save_html_overview(std::string_view const& filename,
         metrics const* m(test_info.m);
         bool fail(m->solved_frame_count == 0);
         std::optional<double> fps(m->total_frames() == 0 ? std::nullopt : std::optional<double>((double(m->total_frames()) / m->track_timings.total_time_sec())));
-        std::string style = fail ? "style=\"background-color: #dc8c8c; .hover:background-color: #dc8c8c;\"" : "";
+        std::string style = fail ? "style=\"background-color: #ffcccc; .hover:background-color: #dc8c8c;\"" : "";
 
         html << "  <a role=\"row\" class=\"row\" href=\"" << test_info.html_filename << "\"" << style << ">\n";
         html << "    <div role=\"gridcell\" class=\"cell\">\n";

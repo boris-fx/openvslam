@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "stella_vslam/exports.h"
+#include "stella_vslam/config_settings.h"
 
 namespace stella_vslam_bfx {
 
@@ -156,5 +157,17 @@ struct scalar_measurement {
 };
 
 scalar_measurement combine_measurements(std::vector<scalar_measurement> const& measurements);
+
+// map entry {a, b}->c becomes b->c
+template<typename T>
+std::map<double, T> select_second_frame_data(std::map<std::array<int, 2>, T> const& input)
+{
+    std::map<double, T> output;
+    int first_frame = input.empty() ? 0 : input.begin()->first[0];
+    for (auto const& i : input)
+        //if (i.first[0]==first_frame)
+        output[i.first[1]] = i.second;
+    return output;
+}
 
 } // namespace stella_vslam_bfx
