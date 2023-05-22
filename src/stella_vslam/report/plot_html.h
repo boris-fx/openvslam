@@ -7,12 +7,15 @@
 
 #include <string>
 #include <map>
+#include <list>
 #include <set>
 #include <sstream>
 #include <fstream>
 #include <optional>
 
-enum class range_behaviour { no_max, hard_max, max_from_median };
+#include "stella_vslam/exports.h"
+
+enum class range_behaviour { no_max, hard_max, max_from_median, split_by_stage };
 struct axis_scaling
 {
     axis_scaling(range_behaviour behaviour) : behaviour(behaviour), max(0) {}
@@ -22,7 +25,16 @@ struct axis_scaling
 };
 
 using Curve = std::pair<std::string, std::map<double, double>>; /// Data name, map from x value to y
-using SplitCurve = std::pair<std::string, std::set<std::map<double, double>>>; /// Data name, set of map from x value to y - curve is split into non-connected parts 
+
+
+struct curve_section : public std::map<double, double>
+{
+    curve_section() = default;
+    curve_section(std::map<double, double> const& points, int stage = 0) : std::map<double, double>(points), stage(stage) {}
+    int stage;
+};
+
+using SplitCurve = std::pair<std::string, std::list<curve_section>>; /// Data name, set of map from x value to y - curve is split into non-connected parts 
 //using Graph = std::tuple<std::string, std::string, std::set<Curve>, axis_scaling, std::optional<double>>; /// x label, y label, set of curves, Y-axis scaling, ground truth y-value
 
 struct Graph
@@ -63,3 +75,5 @@ public:
 protected:
     std::ofstream myfile;
 };
+
+STELLA_VSLAM_API void save_test_svg(std::string_view const& filename);

@@ -190,40 +190,40 @@ void initialisation_debugging::submit_feature_motions(double quantile_25, double
 template<typename T>
 void transform_frame_data(std::map<std::array<double, 2>, T> const& input,
                           std::map<std::array<int, 2>, T>& output,
-                          std::map<double, int> const& index_transform)
+                          std::map<double, stage_and_frame> const& index_transform)
 {
     output.clear();
     for (auto const& i : input) {
         auto f0 = index_transform.find(i.first[0]);
         auto f1 = index_transform.find(i.first[1]);
         if (f0 != index_transform.end() && f1 != index_transform.end())
-            output[{f0->second, f1->second}] = i.second;
+            output[{f0->second.frame, f1->second.frame}] = i.second;
     }
 }
 
 template<typename T>
 void transform_frame_data(std::map<double, T> const& input,
                           std::map<int, T>& output,
-                          std::map<double, int> const& index_transform) {
+                          std::map<double, stage_and_frame> const& index_transform) {
     output.clear();
     for (auto const& i : input) {
         auto f = index_transform.find(i.first);
         if (f != index_transform.end())
-            output[f->second] = i.second;
+            output[f->second.frame] = i.second;
     }
 }
 
-void initialisation_debugging::create_frame_data(std::map<double, int> const& timestamp_to_video_frame)
+void initialisation_debugging::create_frame_data(std::map<double, stage_and_frame> const& timestamp_to_stage_and_frame)
 {
     std::list<frame_param<double>*> p_double = frame_params_double();
     for (auto &param : p_double)
-        transform_frame_data(param->by_timestamp, param->by_frame, timestamp_to_video_frame);
+        transform_frame_data(param->by_timestamp, param->by_frame, timestamp_to_stage_and_frame);
 
     std::list<frame_param<std::map<double, double>>*> p_map_double_double = frame_params_map_double_double();
     for (auto& param : p_map_double_double)
-        transform_frame_data(param->by_timestamp, param->by_frame, timestamp_to_video_frame);
+        transform_frame_data(param->by_timestamp, param->by_frame, timestamp_to_stage_and_frame);
 
-    transform_frame_data(feature_count_by_timestamp, feature_count_by_frame, timestamp_to_video_frame);
+    transform_frame_data(feature_count_by_timestamp, feature_count_by_frame, timestamp_to_stage_and_frame);
 }
 
 std::list<frame_param<double>*> initialisation_debugging::frame_params_double()
@@ -299,7 +299,7 @@ std::map<double, T> select_second_frame_data(frame_param<T> const& input)
 template<typename T>
 std::map<double, T> select_scaled_second_frame_data(std::map<std::array<int, 2>, T> const& input, double scale) {
     std::map<double, T> output;
-    int first_frame = input.empty() ? 0 : input.begin()->first[0];
+    //int first_frame = input.empty() ? 0 : input.begin()->first[0];
     for (auto const& i : input)
         //if (i.first[0] == first_frame)
             output[i.first[1]] = i.second * scale;

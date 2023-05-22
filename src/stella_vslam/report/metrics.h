@@ -19,6 +19,8 @@
 
 #include "initialisation_debugging.h"
 
+struct curve_section;
+
 namespace stella_vslam_bfx {
 
 struct STELLA_VSLAM_API video_metadata {
@@ -79,13 +81,13 @@ enum tracking_problem_level {
     tracking_problem_fatal
 };
 
-enum class focal_estimation_stage {
+enum class focal_estimation_type {
     initialisation_before_ba=0,
     initialisation_after_ba=1,
     local_optimisation=2,
     global_optimisation=3
 };
-const std::array<std::string, 4> focal_estimation_stage_to_string = { {"Unoptimised initialisation", "Optimised initialisation", "Local optimisation", "Global optimisation"} };
+const std::array<std::string, 4> focal_estimation_type_to_string = { {"Unoptimised initialisation", "Optimised initialisation", "Local optimisation", "Global optimisation"} };
 
 /**
  * \brief Metrics for the tracking of one video section
@@ -109,9 +111,11 @@ public:
 
     std::set<std::set<int>> initialisation_frames; // Multiple sets if multiple initialisations happened
 
+    std::map<double, stage_and_frame> *timestamp_to_stage_and_frame;
+
     stella_vslam_bfx::config_settings settings;
 
-    void submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate);
+    void submit_intermediate_focal_estimate(focal_estimation_type stage, double estimate);
 
     void submit_map_size_and_tracking_fails(double timestamp, unsigned int map_keyframe_count, unsigned int tracking_fails);
     void submit_mapping_reset(double timestamp);
@@ -119,7 +123,7 @@ public:
     double current_frame_timestamp;
 
     // Convert the timestamped metrics to frame numbers
-    void create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame);
+    void create_frame_metrics();
 
     int total_frames() const;
     std::set<std::pair<std::string, tracking_problem_level>> problems() const;
@@ -156,25 +160,31 @@ public:
     struct focal_estimate
     {
         double estimate;
-        focal_estimation_stage stage;
-        double timestamp;
-        int frame; // set in create_frame_metrics
+        focal_estimation_type type;
+        //double timestamp;
+        //int frame; // set in create_frame_metrics
+        stage_and_frame stage_with_frame; // tracking stage and frame
     };
+
+    //template<typename T>
+    //struct frame_param
+    //{
+    //    std::map<double, T> by_timestamp; // Map from a pair of frame identified by timestamp, to some data
+    //    std::map<int, T> by_frame;     // Map from a pair of frame identified by frame number, to some data
+    //    std::map<double, double> graph() const;
+    //};
 
     template<typename T>
-    struct frame_param
-    {
-        std::map<double, T> by_timestamp; // Map from a pair of frame identified by timestamp, to some data
-        std::map<int, T> by_frame;     // Map from a pair of frame identified by frame number, to some data
-        std::map<double, double> graph() const;
+    struct stage_and_frame_param {
+        std::array<std::map<int, T>, max_stage> by_stage_and_frame;
+        std::list<curve_section> graph() const;
     };
-
 protected:
 
     std::list<focal_estimate> intermediate_focal_estimates;
 
-    frame_param<unsigned int> map_size;
-    frame_param<unsigned int> tracking_fail_count;
+    stage_and_frame_param<unsigned int> map_size;
+    stage_and_frame_param<unsigned int> tracking_fail_count;
 
     std::list<double> mapping_reset_timestamps;
     std::list<int> mapping_reset_frames;

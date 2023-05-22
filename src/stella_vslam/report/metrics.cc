@@ -145,37 +145,50 @@ namespace stella_vslam_bfx {
 
     //////////////////////////////////////////////////////////////
 
+    void to_json(nlohmann::json& j, const stage_and_frame& e)
+    {
+        j = { {"stage", e.stage}, {"frame", e.frame} };
+    }
+
+    void from_json(const nlohmann::json& j, stage_and_frame& e) {
+        j.at("stage").get_to(e.stage);
+        j.at("frame").get_to(e.frame);
+    }
+
     void to_json(nlohmann::json& j, const metrics::focal_estimate& e)
     {
-        j = { {"estimate", e.estimate}, {"stage", e.stage}, {"timestamp", e.timestamp}, {"frame", e.frame} };
+        j = { {"estimate", e.estimate}, {"type", e.type}, {"stage_with_frame", e.stage_with_frame} };
     }
 
     void from_json(const nlohmann::json& j, metrics::focal_estimate& e) {
         j.at("estimate").get_to(e.estimate);
-        j.at("stage").get_to(e.stage);
-        j.at("timestamp").get_to(e.timestamp);
-        j.at("frame").get_to(e.frame);
+        j.at("type").get_to(e.type);
+        j.at("stage_with_frame").get_to(e.stage_with_frame);
     }
 
     template<typename T>
-    void to_json(nlohmann::json& j, const metrics::frame_param<T>& e)
+    void to_json(nlohmann::json& j, const metrics::stage_and_frame_param<T>& e)
     {
-        j = { {"by_timestamp", e.by_timestamp}, {"by_frame", e.by_frame} };
+        j = { {"by_stage_and_frame", e.by_stage_and_frame} };
     }
 
     template<typename T>
-    void from_json(const nlohmann::json& j, metrics::frame_param<T>& e) {
-        j.at("by_timestamp").get_to(e.by_timestamp);
-        j.at("by_frame").get_to(e.by_frame);
+    void from_json(const nlohmann::json& j, metrics::stage_and_frame_param<T>& e) {
+        j.at("by_stage_and_frame").get_to(e.by_stage_and_frame);
     }
 
     template<typename T>
-    std::map<double, double> metrics::frame_param<T>::graph() const
+    std::list<curve_section> metrics::stage_and_frame_param<T>::graph() const
     {
-        std::map<double, double> g;
-        for (auto const& i : by_frame)
-            g[i.first] = i.second;
-        return g;
+        std::list<curve_section> gg;
+        for (int stage = 0; stage < max_stage; ++stage) {
+            std::map<double, double> g;
+            for (auto const& i : by_stage_and_frame[stage])
+                g[i.first] = i.second;
+            if (!g.empty())
+                gg.push_back({ g, stage });
+        }
+        return gg;
     }
 
     //////////////////////////////////////////////////////////////
@@ -232,23 +245,46 @@ namespace stella_vslam_bfx {
         num_points = json.at("num_points").get<int>();
         initialisation_frames = json.at("initialisation_frames").get<std::set<std::set<int>>>();
         intermediate_focal_estimates = json.at("intermediate_focal_estimates").get<std::list<focal_estimate>>();
-        map_size = json.at("map_size").get<frame_param<unsigned int>>();
-        tracking_fail_count = json.at("tracking_fail_count").get<frame_param<unsigned int>>();
+        map_size = json.at("map_size").get<stage_and_frame_param<unsigned int>>();
+        tracking_fail_count = json.at("tracking_fail_count").get<stage_and_frame_param<unsigned int>>();
         mapping_reset_timestamps = json.at("mapping_reset_timestamps").get<std::list<double>>();
         mapping_reset_frames = json.at("mapping_reset_frames").get<std::list<int>>();
 
         return true;
     }
 
-    void metrics::submit_intermediate_focal_estimate(focal_estimation_stage stage, double estimate)
+    std::optional<stage_and_frame> timestamp_to_frame(double timestamp, std::map<double, stage_and_frame> const& timestamp_to_stage_and_frame)
     {
-        intermediate_focal_estimates.push_back({ estimate, stage, current_frame_timestamp });
+        auto f = timestamp_to_stage_and_frame.find(timestamp);
+        if (f != timestamp_to_stage_and_frame.end())
+            return f->second;
+        return std::nullopt;
+    }
+
+    void metrics::submit_intermediate_focal_estimate(focal_estimation_type type, double estimate)
+    {
+        if (!timestamp_to_stage_and_frame)
+            return;
+        std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(current_frame_timestamp, *timestamp_to_stage_and_frame);
+        if (!stage_with_frame)
+            return;
+
+        intermediate_focal_estimates.push_back({ estimate, type, stage_with_frame.value() });
     }
 
     void metrics::submit_map_size_and_tracking_fails(double timestamp, unsigned int map_keyframe_count, unsigned int tracking_fails)
     {
-        map_size.by_timestamp[timestamp] = map_keyframe_count;
-        tracking_fail_count.by_timestamp[timestamp] = tracking_fails;
+        if (!timestamp_to_stage_and_frame)
+            return;
+        std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(timestamp, *timestamp_to_stage_and_frame);
+        if (!stage_with_frame)
+            return;
+        
+        map_size.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = map_keyframe_count;
+        tracking_fail_count.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = tracking_fails;
+
+        //map_size.by_timestamp[timestamp] = map_keyframe_count;
+        //tracking_fail_count.by_timestamp[timestamp] = tracking_fails;
     }
 
     void metrics::submit_mapping_reset(double timestamp)
@@ -256,52 +292,44 @@ namespace stella_vslam_bfx {
         mapping_reset_timestamps.push_back(timestamp);
     }
 
-    std::optional<int> timestamp_to_frame(double timestamp, std::map<double, int> const& timestamp_to_video_frame)
-    {
-        auto f = timestamp_to_video_frame.find(timestamp);
-        if (f != timestamp_to_video_frame.end())
-            return f->second;
-        return std::nullopt;
-    }
-
-    template<typename T>
-    void transform_metrics_frame_data(metrics::frame_param<T> &data,
-                                      std::map<double, int> const& index_transform)
+    /*template<typename T>
+    void transform_metrics_frame_data(metrics::stage_and_frame_param<T> &data,
+                                      std::map<double, stage_and_frame> const& index_transform)
     {
         data.by_frame.clear();
         for (auto const& i : data.by_timestamp)
         {
             auto f = index_transform.find(i.first);
             if (f != index_transform.end())
-                data.by_frame[f->second] = i.second;
+                data.by_frame[f->second.frame] = i.second;
         }
-    }
+    }*/
 
-    void metrics::create_frame_metrics(std::map<double, int> const& timestamp_to_video_frame) {
+    void metrics::create_frame_metrics() {
         initialisation_frames.clear();
         for (auto const& initialisation_attempt_timestamps : initialisation_frame_timestamps) {
             std::set<int> initialisation_attempt_frames;
             for (auto const& timestamp : initialisation_attempt_timestamps) {
-                auto f = timestamp_to_video_frame.find(timestamp);
-                if (f != timestamp_to_video_frame.end())
-                    initialisation_attempt_frames.insert(f->second);
+                auto f = timestamp_to_stage_and_frame->find(timestamp);
+                if (f != timestamp_to_stage_and_frame->end())
+                    initialisation_attempt_frames.insert(f->second.frame);
             }
             initialisation_frames.insert(initialisation_attempt_frames);
         }
 
-        initialisation_debug_object.create_frame_data(timestamp_to_video_frame);
+        initialisation_debug_object.create_frame_data(*timestamp_to_stage_and_frame);
 
-        for (auto& estimate : intermediate_focal_estimates)
-            if (auto frame = timestamp_to_frame(estimate.timestamp, timestamp_to_video_frame))
-                estimate.frame = frame.value();
+        //for (auto& estimate : intermediate_focal_estimates)
+        //    if (auto frame = timestamp_to_frame(estimate.timestamp, *timestamp_to_stage_and_frame))
+        //        estimate.frame = frame.value().frame;
 
         mapping_reset_frames.clear();
         for (auto const& timestamp : mapping_reset_timestamps)
-            if (auto frame = timestamp_to_frame(timestamp, timestamp_to_video_frame))
-                mapping_reset_frames.push_back(frame.value());
+            if (auto frame = timestamp_to_frame(timestamp, *timestamp_to_stage_and_frame))
+                mapping_reset_frames.push_back(frame.value().frame);
 
-        transform_metrics_frame_data(map_size, timestamp_to_video_frame);
-        transform_metrics_frame_data(tracking_fail_count, timestamp_to_video_frame);
+        //transform_metrics_frame_data(map_size, *timestamp_to_stage_and_frame);
+        //transform_metrics_frame_data(tracking_fail_count, *timestamp_to_stage_and_frame);
     }
 
     int metrics::total_frames() const
@@ -382,7 +410,7 @@ namespace stella_vslam_bfx {
         if (frames.empty())
             return "";
         auto f = std::find_if(intermediate_focal_estimates.begin(), intermediate_focal_estimates.end(),
-            [&](const metrics::focal_estimate& e) { return e.stage == focal_estimation_stage::initialisation_before_ba && e.frame==*(frames.rbegin()); });
+            [&](const metrics::focal_estimate& e) { return e.type == focal_estimation_type::initialisation_before_ba && e.stage_with_frame.frame==*(frames.rbegin()); });
         if (f != intermediate_focal_estimates.end())
             return "{" + to_string(frames) + "} Focal length: " + std::to_string(f->estimate);
         return "{" + to_string(frames) + "}";
@@ -445,28 +473,31 @@ namespace stella_vslam_bfx {
         spdlog::info("{}", ss.str());
     }
 
-    // Split a graph at the largest frame in a set
-    std::set<std::map<double, double>> split_graph_by_frames(std::string const& name, std::map<double, double> const& graph, std::list<int> const& frames)
+    std::list<curve_section> split_graph_by_frames(std::string const& name, std::map<int, curve_section> const& graphs, std::list<int> const& frames)
     {
         std::set<double> split_points;
         for (auto const& frame : frames)
             split_points.insert(0.5 + frame);
 
-        if (split_points.empty())
-            return { graph };
+        if (split_points.empty()) { // convert the map to a list
+            std::list<curve_section> result;
+            std::transform(graphs.begin(), graphs.end(), back_inserter(result), [](const auto& val) {return val.second; });
+            return result;
+        }
 
         //for (auto const& split_point : split_points)
         //    spdlog::info("split_graph_by_frames: {} split point: {}", name, split_point);
-
-        std::set<std::map<double, double>> split_graph;
-        std::map<double, double> remaining_graph = graph;
-        for (auto const& split_point : split_points) {
-            std::array<std::map<double, double>, 2> graph_pair = split_graph_by_frame(remaining_graph, split_point);
-            remaining_graph = graph_pair[1];
-            split_graph.insert(graph_pair[0]);
+        std::list<curve_section> split_graph;
+        for (auto const& graph : graphs) {
+            
+            std::map<double, double> remaining_graph = graph.second;
+            for (auto const& split_point : split_points) {
+                std::array<std::map<double, double>, 2> graph_pair = split_graph_by_frame(remaining_graph, split_point);
+                remaining_graph = graph_pair[1];
+                split_graph.push_back({ graph_pair[0], graph.second.stage });
+            }
+            split_graph.push_back({ remaining_graph, graph.second.stage });
         }
-        split_graph.insert(remaining_graph);
-
         //spdlog_frame_map("Unsplit graph", graph);
         //for (auto const& s : split_graph)
         //    spdlog_frame_map("Split graph", s);
@@ -474,13 +505,14 @@ namespace stella_vslam_bfx {
         return split_graph;
     }
 
-    double percentile_y_value(std::array<std::map<double, double>, 4> graphs, double percentile) 
+    double percentile_y_value(std::array<std::map<int, curve_section>, 4> const& graphs, double percentile)
     {
 
         std::vector<double> ys;
         for (int i = 0; i < 4; ++i)
-            for (auto const& xy : graphs[i])
-                ys.push_back(xy.second);
+            for (auto const& section : graphs[i])
+                for (auto const& xy : section.second)
+                    ys.push_back(xy.second);
         return stella_vslam_bfx::quantile(ys, {percentile})[0];
     }
 
@@ -603,15 +635,19 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     // Intermediate focal length estimates
     if (!known_focal_length_x_pixels) {
 
-        std::array<std::map<double, double>, 4> graph_intermediate_focal_length_estimate;
-        for (auto const& estimate : intermediate_focal_estimates)
-            graph_intermediate_focal_length_estimate[static_cast<unsigned int>(estimate.stage)][estimate.frame] = estimate.estimate;
+        std::array<std::map<int,curve_section>, 4> graph_intermediate_focal_length_estimate;
+        for (auto const& estimate : intermediate_focal_estimates) {
+            int stage = estimate.stage_with_frame.stage; // First pass, second, etc
+            focal_estimation_type type = estimate.type; // Calculation type unoptimised init, local optimisation etc - same curve
+            graph_intermediate_focal_length_estimate[static_cast<unsigned int>(type)][stage].stage = stage;
+            graph_intermediate_focal_length_estimate[static_cast<unsigned int>(type)][stage][estimate.stage_with_frame.frame] = estimate.estimate;
+        }
 
         //{
         //    // Convert to a map<double,double> for presentation as a graph
         //    std::set<SplitCurve> curves;
         //    for (unsigned int i = 0; i < 4; ++i)
-        //        curves.insert({ focal_estimation_stage_to_string.at(i), split_graph_by_frame_set(graph_intermediate_focal_length_estimate[i], initialisation_frames) });
+        //        curves.insert({ focal_estimation_type_to_string.at(i), split_graph_by_frame_set(graph_intermediate_focal_length_estimate[i], initialisation_frames) });
 
 
         //    std::optional<double> focal_gt(input_video_metadata.ground_truth_focal_length_x_pixels());
@@ -623,35 +659,58 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
             // Convert to a map<double,double> for presentation as a graph
             std::set<SplitCurve> curves;
             for (unsigned int i = 0; i < 4; ++i)
-                curves.insert({ focal_estimation_stage_to_string.at(i), split_graph_by_frames(focal_estimation_stage_to_string.at(i), graph_intermediate_focal_length_estimate[i], mapping_reset_frames) });
+                curves.insert({ focal_estimation_type_to_string.at(i), split_graph_by_frames(focal_estimation_type_to_string.at(i), graph_intermediate_focal_length_estimate[i], mapping_reset_frames) });
 
             std::optional<double> focal_gt(input_video_metadata.ground_truth_focal_length_x_pixels());
             axis_scaling y_axis_scaling = focal_gt ? axis_scaling(2.0 * focal_gt.value()) : range_behaviour::no_max;
-            write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::no_max, y_axis_scaling, focal_gt));
+            write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::split_by_stage, y_axis_scaling, focal_gt));
         
             double percentile90 = percentile_y_value(graph_intermediate_focal_length_estimate, 0.9);
-            write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::no_max, percentile90, focal_gt));
+            write_graph_as_svg(html, Graph("Frame", "Focal length estimate", curves, range_behaviour::split_by_stage, percentile90, focal_gt));
+        
+            //for (auto const& curve : curves) {
+            //    html << " curve  " << curve.first << "\n";
+            //    for (auto const& g : curve.second) {
+            //        html << " struct  {\n";
+            //        html << " stage =  " << g.stage << "\n";
+            //        for (auto const& i : g)
+            //            html << "   {" << i.first << ", " << i.second << "},\n";
+            //        html << "}\n";
+            //    }
+            //}
+        
+        
         }
 
         //for (unsigned int i = 0; i < 4; ++i) {
-        //    std::set<std::map<double, double>> s = split_graph_by_frames(focal_estimation_stage_to_string.at(i), graph_intermediate_focal_length_estimate[i], mapping_reset_frames);
+        //    std::set<std::map<double, double>> s = split_graph_by_frames(focal_estimation_type_to_string.at(i), graph_intermediate_focal_length_estimate[i], mapping_reset_frames);
         //    for (auto const& m : s) {
-        //        html << "<p>Split " << focal_estimation_stage_to_string.at(i) << " ";
+        //        html << "<p>Split " << focal_estimation_type_to_string.at(i) << " ";
         //        for (auto const& i : m)
         //            html << i.first << ", ";
         //    }
         //}
 
         //for (auto const& estimate : intermediate_focal_estimates)
-        //    html << "<p>Intermediate focal estimate [" << focal_estimation_stage_to_string.at(static_cast<unsigned int>(estimate.stage)) << "] at " << estimate.frame << " is " << estimate.estimate;
+        //    html << "<p>Intermediate focal estimate [" << focal_estimation_type_to_string.at(static_cast<unsigned int>(estimate.stage)) << "] at " << estimate.frame << " is " << estimate.estimate;
     }
 
     // Mapping reset frames
     html << "<p>Reset frames: ";
     for (auto const& reset_frame : mapping_reset_frames)
         html << reset_frame << ", ";
-    write_graph_as_svg(html, Graph("Frame", "Map keyframe count", std::set<Curve>({ {"Num keyframes", map_size.graph()} }), axis_scaling(input_video_metadata.end_frame)));
-    write_graph_as_svg(html, Graph("Frame", "Fail count", std::set<Curve>({ {"Fail count", tracking_fail_count.graph()} }), axis_scaling(input_video_metadata.end_frame)));
+    write_graph_as_svg(html,  Graph("Frame", "Map keyframe count", std::set<SplitCurve>({ {"Num keyframes", map_size.graph()} }), range_behaviour::split_by_stage));
+    
+    //auto map_size_graph = map_size.graph();
+    //for (auto const& g : map_size_graph) {
+    //    html << " struct  {\n";
+    //    for (auto const& i : g)
+    //        html << "   {" << i.first << ", " << i.second << "},\n";
+    //    html << "}\n";
+    //}
+
+    write_graph_as_svg(html, Graph("Frame", "Fail count", std::set<SplitCurve>({ {"Fail count", tracking_fail_count.graph()} }), range_behaviour::split_by_stage));
+    //axis_scaling(input_video_metadata.end_frame)
 
     html << "<h2> Map</h2>\n";
     // Solved/unsolved cameras
@@ -950,8 +1009,10 @@ void metrics_html_test(std::string const& directory, std::array<std::string, 3> 
     metrics::save_html_overview(directory + "/overview.html", track_test_info_list, false, false);
 }
 
-
-
-
+//lookup timestamp->frame & stage
+//submit()
+//single frame: store map<stage, map<frame, value>>
+//frame pair: 
+//focal length estimate, map size
 
 } // namespace stella_vslam_bfx

@@ -494,7 +494,7 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
         if (camera_intrinsics_vtx) {
             double focal_length_x_pixels = camera_intrinsics_vtx->focal_length_x_pixels();
             stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_x_pixels);
-            auto stage = stella_vslam_bfx::focal_estimation_stage::local_optimisation;
+            auto stage = stella_vslam_bfx::focal_estimation_type::local_optimisation;
             stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, focal_length_x_pixels);
             spdlog::warn("local bundle focal length -> {:03.2f}", focal_length_x_pixels);
         }
@@ -918,7 +918,7 @@ void local_bundle_adjuster_g2o::optimize2(data::map_database* map_db,
         if (camera_intrinsics_vtx) {
             double focal_length_x_pixels = camera_intrinsics_vtx->focal_length_x_pixels();
             stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_x_pixels);
-            auto stage = stella_vslam_bfx::focal_estimation_stage::local_optimisation;
+            auto stage = stella_vslam_bfx::focal_estimation_type::local_optimisation;
             stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, focal_length_x_pixels);
             spdlog::warn("local bundle focal length -> {:03.2f}", focal_length_x_pixels);
         }

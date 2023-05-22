@@ -18,6 +18,13 @@
 
 namespace stella_vslam_bfx {
 
+struct stage_and_frame {
+    int stage;
+    int frame;
+};
+
+inline int const max_stage = 3; // Max number of stages
+
 template<typename T>
 struct frame_param
 {
@@ -65,7 +72,7 @@ public:
 
     std::map<double, int> feature_count_by_timestamp;
 
-    void create_frame_data(std::map<double, int> const& timestamp_to_video_frame);
+    void create_frame_data(std::map<double, stage_and_frame> const& timestamp_to_stage_and_frame);
 
     void add_to_html(std::stringstream& html, std::optional<double> ground_truth_focal_length_x_pixels) const;
     void save_html_report(std::string_view const& filename, std::optional<double> ground_truth_focal_length_x_pixels) const;
@@ -163,7 +170,7 @@ template<typename T>
 std::map<double, T> select_second_frame_data(std::map<std::array<int, 2>, T> const& input)
 {
     std::map<double, T> output;
-    int first_frame = input.empty() ? 0 : input.begin()->first[0];
+    //int first_frame = input.empty() ? 0 : input.begin()->first[0];
     for (auto const& i : input)
         //if (i.first[0]==first_frame)
         output[i.first[1]] = i.second;

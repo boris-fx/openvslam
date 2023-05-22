@@ -89,7 +89,7 @@ void solver::set_cancel_callback(std::function<bool()> cancel) {
 }
 
 static std::tuple<std::shared_ptr<data::keyframe>, std::optional<int>> earliest_valid_keyframe(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms,
-                                                                                std::map<double, int> const& timestampToVideoFrame) {
+                                                                                std::map<double, stage_and_frame> const& timestamp_to_stage_and_frame) {
     if (!keyfrms.empty()) {
         std::shared_ptr<data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
                                                                                 [](const auto& a, const auto& b) { // earliest above landmark threshold
@@ -102,9 +102,9 @@ static std::tuple<std::shared_ptr<data::keyframe>, std::optional<int>> earliest_
                                                                                         return true;
                                                                                     return a->timestamp_ < b->timestamp_;
                                                                                 });
-        auto f = timestampToVideoFrame.find(first_keyframe_data->timestamp_);
-        if (f != timestampToVideoFrame.end())
-            return {first_keyframe_data, f->second};
+        auto f = timestamp_to_stage_and_frame.find(first_keyframe_data->timestamp_);
+        if (f != timestamp_to_stage_and_frame.end())
+            return {first_keyframe_data, f->second.frame};
     }
     return {nullptr, {}};
 }
@@ -129,7 +129,9 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     //  e.g. Don't insert a keyframe within a second of a relocalisation (tracking_module::new_keyframe_is_needed())
     //  e.g. If tracking fails within 60.0 sec of initialization, reset the system (initializer::try_initialize_for_monocular) (though we bypass this one)
     // So when feeding frames to stella, we make sure the associated timestamp is always increasing, even if we are re-feeding frames which were previously sent with older timestamps, or tracking backwards
-    std::map<double, int> timestampToVideoFrame;
+    std::map<double, stage_and_frame> timestamp_to_stage_and_frame;
+    metrics::get_instance()->timestamp_to_stage_and_frame = &timestamp_to_stage_and_frame;
+   // std::map<double, int> timestampToVideoFrame;
     double const timestamp_increment(1.0); // Seconds
     double next_timestamp(0);
 
@@ -153,7 +155,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         double timestamp = next_timestamp;
         next_timestamp += timestamp_increment;
-        timestampToVideoFrame[timestamp] = frame;
+        //timestampToVideoFrame[timestamp] = frame;
+        timestamp_to_stage_and_frame[timestamp] = { 0, frame };
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
@@ -170,12 +173,12 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Find the initialisation point (the first keyframe in the map)
     // Relocalise the tracker to the initialisation point's pose
-    auto [first_keyframe_data, first_keyframe] = earliest_valid_keyframe(slam_->map_db_->get_all_keyframes(), timestampToVideoFrame);
+    auto [first_keyframe_data, first_keyframe] = earliest_valid_keyframe(slam_->map_db_->get_all_keyframes(), timestamp_to_stage_and_frame);
     if (!first_keyframe_data) {
         spdlog::error("Failed to create any valid keyframes during initialialisation");
         
         metrics& track_metrics = *metrics::get_instance();
-        track_metrics.create_frame_metrics(timestampToVideoFrame);
+        track_metrics.create_frame_metrics();
         
         track_metrics.calculated_focal_length_x_pixels = -1;
         track_metrics.solved_frame_count = 0;
@@ -208,7 +211,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         double timestamp = next_timestamp;
         next_timestamp += timestamp_increment;
-        timestampToVideoFrame[timestamp] = frame;
+        //timestampToVideoFrame[timestamp] = frame;
+        timestamp_to_stage_and_frame[timestamp] = { 1, frame };
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
@@ -280,7 +284,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         double timestamp = next_timestamp;
         next_timestamp += timestamp_increment;
-        timestampToVideoFrame[timestamp] = frame;
+        //timestampToVideoFrame[timestamp] = frame;
+        timestamp_to_stage_and_frame[timestamp] = { 2, frame };
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
         auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
@@ -321,7 +326,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         metrics& track_metrics = *metrics::get_instance();
 
         // Convert the timestamped metrics to frame numbers
-        track_metrics.create_frame_metrics(timestampToVideoFrame);
+        track_metrics.create_frame_metrics();
 
         track_metrics.calculated_focal_length_x_pixels = final_solve->camera_lens->fx_;
         track_metrics.solved_frame_count = solved_frame_count;

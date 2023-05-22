@@ -15,6 +15,7 @@
 #include "util/tinyxml2.h"
 #include "stella_vslam/solver.h"
 #include "stella_vslam/report/metrics.h"
+#include "stella_vslam/report/plot_html.h"
 #include "stella_vslam/solve/fundamental_to_focal_length.h"
 #include "stella_vslam/solve/fundamental_consistency.h"
 
@@ -1004,6 +1005,13 @@ void mono_tracking_2(
                    const std::string& planar_path, const std::string& mesh_path,
                    unsigned gridSize, YAML::Node yaml_node,
                    bool print_frames, bool print_results) {
+
+    //{
+    //    std::filesystem::path video_path(video_file_path);
+    //    std::string test_svg_filename = video_path.parent_path().generic_string() + "/" + video_path.stem().generic_string() + "_test.html";
+    //    save_test_svg(test_svg_filename);
+    //    return;
+    //}
 
     bool const debug_initialisation(false);
 
