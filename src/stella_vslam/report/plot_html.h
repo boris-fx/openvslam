@@ -15,7 +15,7 @@
 
 #include "stella_vslam/exports.h"
 
-enum class range_behaviour { no_max, hard_max, max_from_median, split_by_stage };
+enum class range_behaviour { no_min_0, no_max, hard_max, max_from_median, split_by_stage };
 struct axis_scaling
 {
     axis_scaling(range_behaviour behaviour) : behaviour(behaviour), max(0) {}

@@ -44,7 +44,7 @@ public:
     bool active() const;
 
     void submit_feature_match_debugging(unsigned int num_matches);
-    void submit_parallax_debugging(double parallax);
+    //void submit_parallax_debugging(double parallax);
     void submit_homography_fundamental_cost(double cost_H, double cost_F);
     void submit_fundamental_to_focal_length_debugging(double error_for_max_focal_length,
                                                       double min_error,
@@ -86,7 +86,8 @@ protected:
 
     frame_param<double> p_num_matches;
 
-    frame_param<double> p_parallax;
+    //frame_param<double> p_parallax;
+
     frame_param<double> p_cost_H;
     frame_param<double> p_cost_F;
 

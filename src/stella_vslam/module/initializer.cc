@@ -260,16 +260,20 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
 
     spdlog::debug("try_initialize_for_monocular, start impl {:p}", (void*)initializer_.get());
 
+    // store the timestamps of the two frames - perhaps combine these
+    stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
+    stella_vslam_bfx::metrics::initialisation_debug().current_init_frame_timestamps = { init_frm_.timestamp_, curr_frm.timestamp_ };
+
     unsigned int num_matches = 0;
     if (use_orb_features_) {
         match::area matcher(0.9, true);
+        stella_vslam_bfx::metrics::get_instance()->capture_area_matching = true;
         num_matches = matcher.match_in_consistent_area(init_frm_, curr_frm, prev_matched_coords_, init_matches_, 100);
+        stella_vslam_bfx::metrics::get_instance()->capture_area_matching = false;
     }
     num_matches += stella_vslam_bfx::get_frames_prematches(init_frm_, curr_frm, prev_matched_coords_, init_matches_);
 
-    // store the timestamps of the two frames - perhaps combine these
-    stella_vslam_bfx::metrics::initialisation_debug().current_init_frame_timestamps = { init_frm_.timestamp_, curr_frm.timestamp_ };
-    stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
+
     stella_vslam_bfx::metrics::initialisation_debug().submit_feature_match_debugging(num_matches);
     stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[init_frm_.timestamp_] = init_frm_.frm_obs_.num_keypts_;
     stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[curr_frm.timestamp_] = curr_frm.frm_obs_.num_keypts_;

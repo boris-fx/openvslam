@@ -191,6 +191,31 @@ namespace stella_vslam_bfx {
         return gg;
     }
 
+
+    template<typename T>
+    void to_json(nlohmann::json& j, const metrics::stage_and_frame_pair_param<T>& e)
+    {
+        j = { {"by_stage_and_frame", e.by_stage_and_frame} };
+    }
+
+    template<typename T>
+    void from_json(const nlohmann::json& j, metrics::stage_and_frame_pair_param<T>& e) {
+        j.at("by_stage_and_frame").get_to(e.by_stage_and_frame);
+    }
+
+    template<typename T>
+    std::list<curve_section> metrics::stage_and_frame_pair_param<T>::graph() const
+    {
+        std::list<curve_section> gg;
+        for (int stage = 0; stage < max_stage; ++stage) {
+            std::map<double, double> g;
+            for (auto const& i : by_stage_and_frame[stage])
+                g[i.first.first] = i.second;
+            if (!g.empty())
+                gg.push_back({ g, stage });
+        }
+        return gg;
+    }
     //////////////////////////////////////////////////////////////
 
     const double metrics::par_percent_error_trigger = 20.0;
@@ -285,6 +310,72 @@ namespace stella_vslam_bfx {
 
         //map_size.by_timestamp[timestamp] = map_keyframe_count;
         //tracking_fail_count.by_timestamp[timestamp] = tracking_fails;
+    }
+
+    void metrics::submit_area_matching(int frame_1_points, int fail_prematched, int fail_scale, int fail_cell, int fail_hamming, int fail_ratio,
+                                       int count_indices_exist, int count_num_indices, int num_matches)
+    {
+        if (!capture_area_matching)
+            return;
+
+        if (!timestamp_to_stage_and_frame)
+            return;
+        std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0], *timestamp_to_stage_and_frame);
+        if (!stage_with_frame_0)
+            return;
+        std::optional<stage_and_frame> stage_with_frame_1 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[1], *timestamp_to_stage_and_frame);
+        if (!stage_with_frame_1)
+            return;
+        int stage = stage_with_frame_0.value().stage;
+        std::pair<int, int> frames = { stage_with_frame_0.value().frame, stage_with_frame_1.value().frame };
+
+        this->area_match_frame_1_points.by_stage_and_frame[stage][frames] = frame_1_points;
+        this->area_match_fail_prematched.by_stage_and_frame[stage][frames] = fail_prematched;
+        this->area_match_fail_scale.by_stage_and_frame[stage][frames] = fail_scale;
+        this->area_match_fail_cell.by_stage_and_frame[stage][frames] = fail_cell;
+        this->area_match_fail_hamming.by_stage_and_frame[stage][frames] = fail_hamming;
+        this->area_match_fail_ratio.by_stage_and_frame[stage][frames] = fail_ratio;
+        this->area_match_num_matches.by_stage_and_frame[stage][frames] = num_matches;
+        this->area_match_ave_candidates.by_stage_and_frame[stage][frames] = count_indices_exist>0 ? double(count_num_indices)/double(count_indices_exist) : 0.0;
+        this->area_match_num_attempted.by_stage_and_frame[stage][frames] = frame_1_points - fail_prematched - fail_scale;
+    }
+
+    void metrics::submit_triangulation_debugging( std::optional<std::pair<double, double>> num_triangulated_points,
+                                                  std::optional<std::pair<double, double>> num_valid_triangulated_points,
+                                                  std::optional<std::pair<double, double>> triangulation_parallax,
+                                                  std::optional<std::pair<double, double>> triangulation_ambiguity )
+    {
+        if (!timestamp_to_stage_and_frame)
+            return;
+        std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0], *timestamp_to_stage_and_frame);
+        if (!stage_with_frame_0)
+            return;
+        std::optional<stage_and_frame> stage_with_frame_1 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[1], *timestamp_to_stage_and_frame);
+        if (!stage_with_frame_1)
+            return;
+
+        int stage = stage_with_frame_0.value().stage;
+        std::pair<int, int> frames = { stage_with_frame_0.value().frame, stage_with_frame_1.value().frame };
+        if (num_triangulated_points) {
+            this->num_triangulated_points.by_stage_and_frame[stage][frames] = num_triangulated_points.value().first;
+            if (!min_num_triangulated_points)
+                min_num_triangulated_points = num_triangulated_points.value().second;
+        }
+        if (num_valid_triangulated_points) {
+            this->num_valid_triangulated_points.by_stage_and_frame[stage][frames] = num_valid_triangulated_points.value().first;
+            if (!min_num_valid_triangulated_points)
+                min_num_valid_triangulated_points = num_valid_triangulated_points.value().second;
+        }
+        if (triangulation_parallax) {
+            this->triangulation_parallax.by_stage_and_frame[stage][frames] = triangulation_parallax.value().first;
+            if (!max_triangulation_parallax)
+                max_triangulation_parallax = triangulation_parallax.value().second;
+        }
+        if (triangulation_ambiguity) {
+            this->triangulation_ambiguity.by_stage_and_frame[stage][frames] = triangulation_ambiguity.value().first;
+            if (!max_triangulation_ambiguity)
+                max_triangulation_ambiguity = triangulation_ambiguity.value().second;
+        }
     }
 
     void metrics::submit_mapping_reset(double timestamp)
@@ -557,10 +648,11 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     }
 
     // Number of features and matches by frame
-    std::map<double, double> graph_num_matches = select_second_frame_data(initialisation_debug_object.p_num_matches.by_frame);
-    std::map<double, double> graph_feature_count;
+    curve_section graph_num_matches = select_second_frame_data(initialisation_debug_object.p_num_matches.by_frame);
+    curve_section graph_feature_count;
     for (auto const& i : initialisation_debug_object.feature_count_by_frame)
         graph_feature_count[i.first] = i.second;
+    graph_num_matches.stage = graph_feature_count.stage = 0;
     write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Feature count", graph_feature_count}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
     html << "<hr>" << std::endl;
 
@@ -711,6 +803,26 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
 
     write_graph_as_svg(html, Graph("Frame", "Fail count", std::set<SplitCurve>({ {"Fail count", tracking_fail_count.graph()} }), range_behaviour::split_by_stage));
     //axis_scaling(input_video_metadata.end_frame)
+
+    write_graph_as_svg(html, Graph("Frame #2", "Count", std::set<SplitCurve>({ {"Frame 1 points", area_match_frame_1_points.graph()},
+                                                                               {"Fail prematched", area_match_fail_prematched.graph()},
+                                                                               {"Num attempted", area_match_num_attempted.graph()},
+                                                                                {"Feature count", { graph_feature_count } },
+                                                                                {"Matches to frame", { graph_num_matches } },
+                                                                               {"Fail scale", area_match_fail_scale.graph()},
+                                                                               {"Fail cell", area_match_fail_cell.graph()},
+                                                                               {"Fail hamming", area_match_fail_hamming.graph()},
+                                                                               {"Fail ratio", area_match_fail_ratio.graph()},
+                                                                               {"Valid point matches", area_match_num_matches.graph()} }),
+        range_behaviour::split_by_stage, range_behaviour::no_max));
+    write_graph_as_svg(html, Graph("Frame #2", "Ave candidates", std::set<SplitCurve>({ {"Ave candidates", area_match_ave_candidates.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max));
+
+
+    write_graph_as_svg(html, Graph("Frame #2", "Valid Points", std::set<SplitCurve>({ {"Valid Points", num_valid_triangulated_points.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, min_num_valid_triangulated_points));
+    write_graph_as_svg(html, Graph("Frame #2", "Ambiguity", std::set<SplitCurve>({ {"Ambiguity", triangulation_ambiguity.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, max_triangulation_ambiguity));
+    write_graph_as_svg(html, Graph("Frame #2", "Parallax", std::set<SplitCurve>({ {"Parallax", triangulation_parallax.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_min_0, max_triangulation_parallax));
+    write_graph_as_svg(html, Graph("Frame #2", "Triangulated Points", std::set<SplitCurve>({ {"Points", num_triangulated_points.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, min_num_triangulated_points));
+
 
     html << "<h2> Map</h2>\n";
     // Solved/unsolved cameras

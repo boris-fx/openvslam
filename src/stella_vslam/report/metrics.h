@@ -118,6 +118,16 @@ public:
     void submit_intermediate_focal_estimate(focal_estimation_type stage, double estimate);
 
     void submit_map_size_and_tracking_fails(double timestamp, unsigned int map_keyframe_count, unsigned int tracking_fails);
+
+    bool capture_area_matching = false;
+    void submit_area_matching(int frame_1_points, int fail_prematched, int fail_scale, int fail_cell, int fail_hamming, int fail_ratio,
+                              int count_indices_exist, int count_num_indices, int num_matches);
+
+    // First element in each pair is the value, second is the threshold
+    void submit_triangulation_debugging(std::optional<std::pair<double, double>> num_triangulated_points, // threshold is a minimum
+                                        std::optional<std::pair<double, double>> num_valid_triangulated_points, // threshold is a minimum
+                                        std::optional<std::pair<double, double>> triangulation_parallax, // threshold is a maximum
+                                        std::optional<std::pair<double, double>> triangulation_ambiguity); // threshold is a maximum
     void submit_mapping_reset(double timestamp);
 
     double current_frame_timestamp;
@@ -179,12 +189,40 @@ public:
         std::array<std::map<int, T>, max_stage> by_stage_and_frame;
         std::list<curve_section> graph() const;
     };
+
+    template<typename T>
+    struct stage_and_frame_pair_param {
+        std::array<std::map<std::pair<int, int>, T>, max_stage> by_stage_and_frame;
+        std::list<curve_section> graph() const;
+    };
 protected:
 
     std::list<focal_estimate> intermediate_focal_estimates;
 
     stage_and_frame_param<unsigned int> map_size;
     stage_and_frame_param<unsigned int> tracking_fail_count;
+
+    
+    stage_and_frame_pair_param<double> area_match_frame_1_points;
+    stage_and_frame_pair_param<double> area_match_fail_prematched;
+    stage_and_frame_pair_param<double> area_match_fail_scale;
+    stage_and_frame_pair_param<double> area_match_fail_cell;
+    stage_and_frame_pair_param<double> area_match_fail_hamming;
+    stage_and_frame_pair_param<double> area_match_fail_ratio;
+    stage_and_frame_pair_param<double> area_match_num_matches;
+    stage_and_frame_pair_param<double> area_match_num_attempted;
+    stage_and_frame_pair_param<double> area_match_ave_candidates;
+
+
+    stage_and_frame_pair_param<double>  num_triangulated_points;
+    stage_and_frame_pair_param<double>  num_valid_triangulated_points;
+    stage_and_frame_pair_param<double>  triangulation_parallax;
+    stage_and_frame_pair_param<double>  triangulation_ambiguity;
+
+    std::optional<double> min_num_triangulated_points;
+    std::optional<double> min_num_valid_triangulated_points;
+    std::optional<double> max_triangulation_parallax;
+    std::optional<double> max_triangulation_ambiguity;
 
     std::list<double> mapping_reset_timestamps;
     std::list<int> mapping_reset_frames;

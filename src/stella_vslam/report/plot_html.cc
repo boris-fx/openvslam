@@ -294,7 +294,7 @@ std::pair<float, float> get_range_fraction(std::vector<std::pair<float, float>>&
 
 void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, std::string_view xLabel, std::list<LabelledCurve> const& curves,
                              bool linearXLabels, int graphWidth, int graphHeight, bool drawVertexCircles,
-                             bool split_x_axis, std::optional<double> hard_max_x, std::optional<double> hard_max_y) {
+                             bool split_x_axis, std::optional<double> hard_max_x, std::optional<double> hard_max_y, bool no_min_0_y) {
    int x_axis_label_size(200); // Size of text xLabel
    int labelSize(200); // size of text labelled_curve_sections[i].label - todo calculate based on string length - maybe use 'textLength' attribute to force size
    int legendWidth(400);
@@ -324,6 +324,7 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
    float xCanvasInc(0);
    float yCanvasInc(0);
    float xStartValue(0);
+   float yStartValue(0);
    std::map<std::optional<int>, float> x_value_start_for_stage;
    std::map<std::optional<int>, float> x_canvas_start_for_stage;
    std::map<std::optional<int>, float> x_canvas_end_for_stage;
@@ -410,9 +411,9 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
           xStartValue = minXValue - 0.01f * (maxXValue - minXValue);
 
           if (i % 2 == 1) {
-              float temp(section0);
+              float old_section0(section0);
               section0 = section1;
-              section1 = section0;
+              section1 = old_section0;
               xCanvasInc = -xCanvasInc;
           }
 
@@ -443,23 +444,34 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
       svg << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvas0 << "\" y2=\"" << yCanvasEnd << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
 
       // Get the max y value
-      float maxYValue(0);
+      float minYValue(std::numeric_limits<float>::max()), maxYValue(0);
       for (auto const& curve : curves)
           for (auto const& data_value_set : curve.labelled_curve_sections) {
               for (auto const& data_value : data_value_set) {
                   if (maxYValue < data_value.value)
                       maxYValue = data_value.value;
+                  if (minYValue > data_value.value)
+                      minYValue = data_value.value;
               }
           }
+      if (!no_min_0_y)
+          minYValue = 0;
+
       if (hard_max_y && maxYValue > hard_max_y.value())
           maxYValue = hard_max_y.value();
-      float minYValue(0);
-      if (no_data_points)
+      if (no_data_points) {
+          minYValue = 0.0f;
           maxYValue = 1.0f;
+      }
+      if (minYValue == maxYValue) { // One data point
+          minYValue -= 0.5f;
+          maxYValue += 0.5f;
+      }
 
       std::list<std::pair<float, std::string>> ticks = tickMarksForValueRange(minYValue, maxYValue, approxTickCountY);
 
       yCanvasInc = (float(yCanvasEnd - yCanvas0) / (float(maxYValue - minYValue)*1.02f));
+      yStartValue = minYValue - 0.01f * (maxYValue - minYValue);
 
       for (auto const& tick : ticks) {
 
@@ -468,7 +480,8 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
          if (tick.second.size() >= 3) textOffset = -26;
          if (tick.second.size() >= 4) textOffset = -30;
 
-         float tickFirst(yCanvas0 + tick.first*yCanvasInc);
+         float tickFirst(yCanvas0 + (tick.first - yStartValue)*yCanvasInc);
+         //float xPos(section0 + (tick.first - xStartValue) * xCanvasInc);
 
          svg << "<line x1=\"" << xCanvas0 - 5 << "\" y1=\"" << tickFirst << "\" x2=\"" << xCanvas0 << "\" y2=\"" << tickFirst << "\" style=\"stroke:rgb(0,0,0);stroke-width:1\" />" << std::endl;
          svg << "<text x=\"" << xCanvas0 + textOffset - 2 << "\" y=\"" << tickFirst + 5 << "\" fill=\"black\" >" << tick.second << "</text>" << std::endl;
@@ -494,7 +507,7 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
            auto stage = data_value_set.stage;
            float x_value_start = x_value_start_for_stage[stage];
            float x_canvas_start = x_canvas_start_for_stage[stage];
-           float x_canvas_end = x_canvas_end_for_stage[stage];
+           //float x_canvas_end = x_canvas_end_for_stage[stage];
            float x_canvas_inc = x_canvas_inc_for_stage[stage];
 
            if (curve.ghost) {
@@ -505,15 +518,15 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
            std::list<std::pair<float, float>> xyList;
            if (curve.ghost) {
                if (!data_value_set.empty()) {
-                   xyList.push_back({ xCanvas0, yCanvas0 + data_value_set.begin()->value * yCanvasInc });
-                   xyList.push_back({ width - x_axis_label_size, yCanvas0 + data_value_set.begin()->value * yCanvasInc });
+                   xyList.push_back({ xCanvas0,                  yCanvas0 + (data_value_set.begin()->value - yStartValue) * yCanvasInc });
+                   xyList.push_back({ width - x_axis_label_size, yCanvas0 + (data_value_set.begin()->value - yStartValue) * yCanvasInc });
                }
            }
            else {
                for (auto const& data_value : data_value_set) {
                    //xyList.push_back({ xCanvas0 + (data_value.index - xStartValue) * xCanvasInc,
                    xyList.push_back({ x_canvas_start + (data_value.index - x_value_start) * x_canvas_inc,
-                                        yCanvas0 + data_value.value * yCanvasInc });
+                                             yCanvas0 + (data_value.value - yStartValue ) * yCanvasInc });
                }
            }
 
@@ -627,7 +640,7 @@ void write_graph_as_svg(std::stringstream& svg, Graph const& graph)
     if (graph.y_axis_scaling.behaviour == range_behaviour::max_from_median)
         hard_max_y = 1.5 * graph_median(graph.curves);
 
-    write_graph_as_svg_impl(svg, graph.y_label, graph.x_label, labelled_curves, linearXLabels, 1000, 500, true, split_x_axis, hard_max_x, hard_max_y);
+    write_graph_as_svg_impl(svg, graph.y_label, graph.x_label, labelled_curves, linearXLabels, 1000, 500, true, split_x_axis, hard_max_x, hard_max_y, graph.y_axis_scaling.behaviour == range_behaviour::no_min_0);
 }
 
 
@@ -941,171 +954,18 @@ std::list<curve_section> get_sample_graphs() {
     return { a, b };
 }
 
-#if 0
-curve  Global optimisation
-struct {
-    stage = 1
-    {0, 2572.22},
-}
-curve  Local optimisation
-struct {
-    stage = 1
-    {0, 2572.22},
-    { 1, 2572.27 },
-    { 4, 2572.28 },
-    { 6, 2572.23 },
-    { 8, 2572.21 },
-    { 10, 2572.22 },
-    { 13, 2572.2 },
-    { 17, 2572.21 },
-    { 21, 2572.21 },
-    { 23, 2572.21 },
-    { 27, 2572.21 },
-    { 30, 2572.22 },
-    { 31, 2572.11 },
-    { 36, 2572.11 },
-    { 41, 2572.03 },
-    { 46, 2572.02 },
-    { 55, 2149.8 },
-    { 56, 2149.8 },
-    { 57, 2149.8 },
-    { 58, 2149.8 },
-    { 59, 2149.8 },
-    { 60, 2149.8 },
-    { 62, 2149.8 },
-    { 63, 2149.8 },
-    { 64, 2149.8 },
-    { 65, 2149.8 },
-    { 67, 2149.8 },
-    { 68, 2149.8 },
-    { 70, 2149.8 },
-    { 72, 2149.8 },
-    { 74, 2149.8 },
-    { 77, 2149.8 },
-    { 79, 2149.8 },
-    { 81, 2149.8 },
-    { 84, 2149.81 },
-    { 85, 2149.82 },
-    { 86, 2149.83 },
-    { 87, 2149.84 },
-    { 89, 2149.84 },
-    { 91, 2149.84 },
-    { 96, 2149.86 },
-    { 100, 2149.86 },
-    { 102, 2149.86 },
-    { 106, 2149.87 },
-    { 109, 2149.87 },
-    { 112, 2149.88 },
-    { 114, 2149.88 },
-    { 116, 2149.88 },
-    { 119, 2149.89 },
-    { 121, 2149.9 },
-    { 125, 2149.92 },
-    { 126, 2149.92 },
-    { 130, 2149.98 },
-    { 135, 2149.99 },
-    { 140, 2149.99 },
-    { 143, 2149.99 },
-    { 147, 2150.02 },
-    { 151, 2150.03 },
-    { 154, 2150.03 },
-    { 158, 2150.04 },
-    { 161, 2150.04 },
-    { 163, 2150.05 },
-    { 164, 2150.07 },
-    { 167, 2150.07 },
-    { 170, 2150.1 },
-    { 174, 2150.1 },
-    { 177, 2150.1 },
-    { 179, 2150.11 },
-    { 181, 2150.12 },
-    { 183, 2150.14 },
-    { 185, 2150.15 },
-    { 187, 2150.18 },
-    { 189, 2150.19 },
-    { 192, 2150.21 },
-    { 195, 2150.24 },
-    { 196, 2150.24 },
-    { 199, 2567.38 },
-    { 200, 2567.4 },
-    { 203, 2567.4 },
-    { 206, 2567.42 },
-    { 208, 2567.42 },
-    { 210, 2567.42 },
-    { 214, 2567.43 },
-    { 215, 2567.43 },
-    { 218, 2567.46 },
-    { 222, 2567.46 },
-    { 223, 2567.48 },
-    { 225, 2567.49 },
-    { 227, 2567.5 },
-    { 228, 2567.51 },
-    { 232, 2567.52 },
-    { 233, 2567.54 },
-    { 234, 2567.56 },
-    { 237, 2567.56 },
-    { 240, 2567.56 },
-    { 242, 2567.56 },
-    { 244, 2567.57 },
-    { 246, 2567.57 },
-    { 248, 2567.58 },
-    { 249, 2567.58 },
-    { 251, 2572.67 },
-    { 252, 2572.67 },
-    { 254, 2572.67 },
-    { 256, 2572.67 },
-    { 257, 2572.67 },
-    { 258, 2572.65 },
-    { 260, 2572.65 },
-    { 261, 2572.65 },
-    { 263, 2572.65 },
-    { 265, 2572.65 },
-    { 268, 2572.66 },
-    { 270, 2572.66 },
-    { 272, 2572.68 },
-    { 273, 2572.71 },
-    { 275, 2572.71 },
-    { 276, 2572.74 },
-    { 277, 2572.76 },
-            }, 1);
+void increment_curve_values(std::list<curve_section>& graph, double increment) {
 
-curve  Optimised initialisation
-struct {
-    stage = 0
-    { 54, 2149.8 },
+    for (auto& curve : graph)
+        for (auto& point : curve)
+            point.second += increment;
 }
-curve  Unoptimised initialisation
-struct {
-    stage = 0
-    { 1, 800 },
-    { 2, 963 },
-    { 5, 1987 },
-    { 8, 4402 },
-    { 12, 1357 },
-    { 13, 2022 },
-    { 16, 771 },
-    { 19, 1795 },
-    { 20, 2320 },
-    { 23, 4300 },
-    { 26, 1758 },
-    { 27, 578 },
-    { 32, 1891 },
-    { 33, 21715 },
-    { 36, 686 },
-    { 37, 1432 },
-    { 40, 1952 },
-    { 43, 1184 },
-    { 44, 2780 },
-    { 47, 1559 },
-    { 51, 860 },
-    { 52, 1320 },
-    { 53, 1423 },
-    { 54, 2150 },
-}
-#endif
+
 void save_test_svg(std::string_view const& filename)
 {
     std::list<curve_section> graphs = get_sample_graphs();
+
+    increment_curve_values(graphs, 50);
 
     std::stringstream svg;
 
@@ -1113,9 +973,11 @@ void save_test_svg(std::string_view const& filename)
     svg << "<html>\n";
     svg << "<body>\n";
 
-    write_graph_as_svg(svg, Graph("Frame", "Map keyframe count", std::set<SplitCurve>({ {"Num keyframes", graphs} }), range_behaviour::split_by_stage, range_behaviour::no_max, 30.0));
+    //write_graph_as_svg(svg, Graph("Frame", "Map keyframe count", std::set<SplitCurve>({ {"Num keyframes", graphs} }), range_behaviour::split_by_stage, range_behaviour::no_max, 30.0));
 
-    write_graph_as_svg(svg, Graph("Frame", "Map keyframe count", std::set<SplitCurve>({ {"Num keyframes", graphs} }), range_behaviour::no_max, range_behaviour::no_max, 30.0));
+    write_graph_as_svg(svg, Graph("Frame", "Map keyframe count", std::set<SplitCurve>({ {"Num keyframes", graphs} }), range_behaviour::no_max, range_behaviour::no_max, 70.0));
+
+    write_graph_as_svg(svg, Graph("Frame", "Map keyframe count", std::set<SplitCurve>({ {"Num keyframes", graphs} }), range_behaviour::no_max, range_behaviour::no_min_0, 70.0));
 
     svg << "</body>\n";
     svg << "</html>\n";

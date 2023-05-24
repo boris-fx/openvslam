@@ -87,13 +87,7 @@ void initialisation_debugging::submit_feature_match_debugging(unsigned int num_m
     p_num_matches.by_timestamp[current_init_frame_timestamps] = double(num_matches);
 }
 
-void initialisation_debugging::submit_parallax_debugging(double parallax)
-{
-    //if (!is_active)
-    //    return;
 
-    p_parallax.by_timestamp[current_init_frame_timestamps] = parallax;
-}
 
 void initialisation_debugging::submit_homography_fundamental_cost(double cost_H, double cost_F)
 {
@@ -232,7 +226,7 @@ std::list<frame_param<double>*> initialisation_debugging::frame_params_double()
 
     result.push_back(&p_num_matches);
 
-    result.push_back(&p_parallax);
+    //result.push_back(&p_parallax);
     result.push_back(&p_cost_H);
     result.push_back(&p_cost_F);
 
@@ -372,7 +366,7 @@ std::map<double, double> focal_length_x_to_FOV_graph(std::map<double, double> co
 void initialisation_debugging::add_to_html(std::stringstream& html, std::optional<double> ground_truth_focal_length_x_pixels) const {
 
 //    std::map<double, double> graph_num_matches = select_second_frame_data(p_num_matches);
-    std::map<double, double> graph_parallax = select_second_frame_data(p_parallax);
+//    std::map<double, double> graph_parallax = select_second_frame_data(p_parallax);
 //    std::map<double, double> graph_cost_H = select_second_frame_data(p_cost_H);
   //  std::map<double, double> graph_cost_F = select_second_frame_data(p_cost_F);
     std::map<double, double> graph_error_for_max_focal_length = select_second_frame_data(p_error_for_max_focal_length);
@@ -511,7 +505,7 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
         write_graph_as_svg(html, Graph("Second init frame", "Error Percent", curves, full_x, percent_y, no_gt));
     }
     write_graph_as_svg(html, Graph("Second init frame", "Focal Confidence", std::set<Curve>({{"dE/dF(+)", graph_de_df_plus}, {"-dE/dF(-)", graph_de_df_minus}}), full_x, full_y, no_gt));
-    write_graph_as_svg(html, Graph("Second init frame", "Parallax", std::set<Curve>({{"Parallax", graph_parallax}}), full_x, full_y, no_gt));
+//    write_graph_as_svg(html, Graph("Second init frame", "Parallax", std::set<Curve>({{"Parallax", graph_parallax}}), full_x, full_y, no_gt));
     write_graph_as_svg(html, Graph("Second init frame", "Error at tiny focal length", std::set<Curve>({{"Error", graph_error_for_max_focal_length}}), full_x, full_y, no_gt));
     if (!graph_error_at_ground_truth_focal_length.empty()) {
         write_graph_as_svg(html, Graph("Second init frame", "Geometric Error Percent", std::set<Curve>({{"% error", graph_min_error_percent_max_focal_error}, {"% gt error", graph_gt_error_percent_max_focal_error}, {"min % gt error",  graph_min_error_percent_gt_error}}), full_x, full_y, no_gt));

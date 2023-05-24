@@ -35,6 +35,19 @@ std::vector<bool> base::get_triangulated_flags() const {
     return is_triangulated_;
 }
 
+// ratio of the second biggest element to the biggest element 
+double ambiguity(std::vector<unsigned int> const& nums_valid_pts)
+{
+    if (nums_valid_pts.empty())
+        return 0.0;
+    const auto biggest_iter = std::max_element(nums_valid_pts.begin(), nums_valid_pts.end());
+    double second_biggest(0.0);
+    for (auto  iter = nums_valid_pts.begin(); iter!= nums_valid_pts.end(); ++iter)
+        if (iter != biggest_iter && second_biggest < *iter)
+            second_biggest = *iter;
+    return second_biggest / *biggest_iter;
+}
+
 bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots, const eigen_alloc_vector<Vec3_t>& init_transes,
                                     const std::vector<bool>& is_inlier_match, const bool depth_is_positive, double parallax_deg_thr_multiplier) {
     assert(init_rots.size() == init_transes.size());
@@ -65,7 +78,9 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
     const unsigned int max_num_valid_index = std::distance(nums_valid_pts.begin(), max_num_valid_pts_iter);
 
     // reject if the number of valid points does not fulfill the threshold
+    std::pair<double, double> metric_valid_points(*max_num_valid_pts_iter, min_num_valid_pts_);
     if (*max_num_valid_pts_iter < min_num_valid_pts_) {
+        stella_vslam_bfx::metrics::get_instance()->submit_triangulation_debugging({}, metric_valid_points, {}, {});
         return false;
     }
 
@@ -78,20 +93,22 @@ bool base::find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots
                  num_similars, acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI, init_parallax.at(max_num_valid_index), std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI), parallax_deg_thr_multiplier * parallax_deg_thr_,
        num_triangulated_pts.at(max_num_valid_index));
 
-    {
-        double parallax(acos(init_parallax.at(max_num_valid_index)) * 180.0 / M_PI);
-        stella_vslam_bfx::metrics::initialisation_debug().submit_parallax_debugging(parallax);
-    }
-
+    std::pair<double, double> metric_ambiguity(ambiguity(nums_valid_pts), 0.8);
     if (1 < num_similars) {
+        stella_vslam_bfx::metrics::get_instance()->submit_triangulation_debugging({}, metric_valid_points, {}, metric_ambiguity);
         return false;
     }
 
     // reject if the parallax is too small
+    std::pair<double, double> metric_parallax(init_parallax.at(max_num_valid_index), std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI));
     if (init_parallax.at(max_num_valid_index) > std::cos(parallax_deg_thr_multiplier * parallax_deg_thr_ / 180.0 * M_PI)) {
+        stella_vslam_bfx::metrics::get_instance()->submit_triangulation_debugging({}, metric_valid_points, metric_parallax, metric_ambiguity);
         return false;
     }
 
+    std::pair<double, double> metric_triangulated_points(num_triangulated_pts.at(max_num_valid_index), min_num_triangulated_);
+    stella_vslam_bfx::metrics::get_instance()->submit_triangulation_debugging(metric_triangulated_points, metric_valid_points, metric_parallax, metric_ambiguity);
+    
     // reject if the number of 3D points does not fulfill the threshold
     if (num_triangulated_pts.at(max_num_valid_index) < min_num_triangulated_) {
         return false;
