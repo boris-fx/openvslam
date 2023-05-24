@@ -238,6 +238,72 @@ template<> void spdlogPrintScalar<ceres::Jet<double, 9>>(std::string const& text
     spdlog::info("{} {}", text, scalar);
 }
 
+template <typename T>
+g2o::MatrixN<3, T> camera_intrinsics_matrix(T focal_length_x_pixels, T par, T cx, T cy)
+{
+    T fx = focal_length_x_pixels;
+    T fy = focal_length_x_pixels * par;
+    g2o::MatrixN<3, T> cam_matrix;
+    //cam_matrix << fx, 0, 0, 0, fy, 0, cx, cy, 1.0;
+    cam_matrix << fx, T(0), cx, T(0), fy, cy, T(0), T(0), T(1.0);
+
+    return cam_matrix;
+}
+
+// Copy of fundamental_solver::check_inliers
+template<typename T>
+unsigned int compute_epipolar_sampson_error(std::vector<Eigen::Matrix<T, 3, 1>> const& pts_1,
+                                            std::vector<Eigen::Matrix<T, 3, 1>> const& pts_2,
+                                            Eigen::Matrix<T, 3, 3> const& F_21,
+                                            std::vector<bool>& is_inlier_match,
+                                            T& cost)
+{
+    //const T sigma = T(1.0f);
+    const T sigma = T(1000000.0f);
+
+    unsigned int num_inliers = 0;
+    const auto num_points = pts_1.size();
+
+    // chi-squared value (p=0.05, n=2)
+    const T chi_sq = T(5.991);
+
+    is_inlier_match.resize(num_points);
+
+    const T sigma_sq = sigma * sigma;
+
+    cost = T(0.0);
+
+    for (unsigned int i = 0; i < num_points; ++i) {
+
+        Eigen::Matrix<T, 3, 1> const& pt_1(pts_1[i]);
+        Eigen::Matrix<T, 3, 1> const& pt_2(pts_2[i]);
+
+        // 2. Compute sampson error
+
+        const Eigen::Matrix<T, 3, 1> F_21_pt_1 = F_21 * pt_1;
+        const Eigen::Matrix<T, 1, 3> pt_2_F_21 = pt_2.transpose() * F_21;
+        const T pt_2_F_21_pt_1 = pt_2_F_21 * pt_1;
+        // NB Linux compiler doesn't seem to like the templated form of block() when the matrix type is also templated(??)
+        const T dist_sq = pt_2_F_21_pt_1 * pt_2_F_21_pt_1 / (F_21_pt_1.block(0, 0, 2, 1).squaredNorm() + pt_2_F_21.block(0, 0, 1, 2).squaredNorm());
+
+        const T thr = chi_sq * sigma_sq;
+        if (thr > dist_sq) {
+            is_inlier_match.at(i) = true;
+            cost += dist_sq;
+            num_inliers++;
+        }
+        else {
+            is_inlier_match.at(i) = false;
+            cost += thr;
+        }
+    }
+
+    // Convert cost to average pixel error as the cost should be an absolute error (not error squared)
+    cost = sqrt(cost / T(num_points));
+
+    return num_inliers;
+}
+
 // First template parameter is error dimension, second is the measurement type
 class epipolar_sampson_error_edge
     : public g2o::BaseBinaryEdge<1, double, camera_intrinsics_vertex, euclidean_transform_vertex> {
@@ -517,59 +583,6 @@ Eigen::Matrix3d fundamental_create_F_21(const Eigen::Matrix3d& rot_21,
 }
 
 // Copy of fundamental_solver::check_inliers
-template<typename T>
-unsigned int compute_epipolar_sampson_error(std::vector<Eigen::Matrix<T, 3, 1>> const& pts_1,
-                                            std::vector<Eigen::Matrix<T, 3, 1>> const& pts_2,
-                                            Eigen::Matrix<T, 3, 3> const& F_21,
-                                            std::vector<bool>& is_inlier_match,
-                                            T& cost)
-{
-    //const T sigma = T(1.0f);
-    const T sigma = T(1000000.0f);
-
-    unsigned int num_inliers = 0;
-    const auto num_points = pts_1.size();
-
-    // chi-squared value (p=0.05, n=2)
-    const T chi_sq = T(5.991);
-
-    is_inlier_match.resize(num_points);
-
-    const T sigma_sq = sigma * sigma;
-
-    cost = T(0.0);
-
-    for (unsigned int i = 0; i < num_points; ++i) {
-
-        Eigen::Matrix<T, 3, 1> const& pt_1(pts_1[i]);
-        Eigen::Matrix<T, 3, 1> const& pt_2(pts_2[i]);
-
-        // 2. Compute sampson error
-
-        const Eigen::Matrix<T, 3, 1> F_21_pt_1 = F_21 * pt_1;
-        const Eigen::Matrix<T, 1, 3> pt_2_F_21 = pt_2.transpose() * F_21;
-        const T pt_2_F_21_pt_1 = pt_2_F_21 * pt_1;
-        const T dist_sq = pt_2_F_21_pt_1 * pt_2_F_21_pt_1 / (F_21_pt_1.block<2, 1>(0, 0).squaredNorm() + pt_2_F_21.block<1, 2>(0, 0).squaredNorm());
-
-        const T thr = chi_sq * sigma_sq;
-        if (thr > dist_sq) {
-            is_inlier_match.at(i) = true;
-            cost += dist_sq;
-            num_inliers++;
-        }
-        else {
-            is_inlier_match.at(i) = false;
-            cost += thr;
-        }
-    }
-
-    // Convert cost to average pixel error as the cost should be an absolute error (not error squared)
-    cost = sqrt(cost / T(num_points));
-
-    return num_inliers;
-}
-
-// Copy of fundamental_solver::check_inliers
 unsigned int fundamental_check_inliers_2(const std::vector<cv::KeyPoint>& undist_keypts_1, const std::vector<cv::KeyPoint>& undist_keypts_2,
     const std::vector<std::pair<int, int>>& matches_12,
     const Eigen::Matrix3d& F_21, std::vector<bool>& is_inlier_match, float& cost)
@@ -643,18 +656,6 @@ unsigned int fundamental_check_inliers(const std::vector<cv::KeyPoint>& undist_k
     }
 
     return num_inliers;
-}
-
-template <typename T>
-g2o::MatrixN<3, T> camera_intrinsics_matrix(T focal_length_x_pixels, T par, T cx, T cy)
-{
-    T fx = focal_length_x_pixels;
-    T fy = focal_length_x_pixels * par;
-    g2o::MatrixN<3, T> cam_matrix;
-    //cam_matrix << fx, 0, 0, 0, fy, 0, cx, cy, 1.0;
-    cam_matrix << fx, T(0), cx, T(0), fy, cy, T(0), T(0), T(1.0);
-
-    return cam_matrix;
 }
 
 Eigen::Matrix3d f_decomp_recomp_test(double candidate_focal_length, double par, double cx, double cy, const Eigen::Matrix3d F_21)

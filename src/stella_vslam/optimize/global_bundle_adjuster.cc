@@ -70,7 +70,7 @@ bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> co
 
     stella_vslam::camera::base *camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
     if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
-        return nullptr;
+        return false;
 
     //stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
     //if (!autocalibration_wrapper())

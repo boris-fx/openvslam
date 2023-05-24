@@ -18,7 +18,9 @@
 #include <Eigen/Geometry>
 #include <iostream>
 
+#ifdef _WIN32
 #define CERES_MSVC_USE_UNDERSCORE_PREFIXED_BESSEL_FUNCTIONS // Avoids a compilation warning 
+#endif
 
 #include "g2o/core/auto_differentiation.h"
 #include "g2o/core/base_unary_edge.h"
@@ -76,18 +78,21 @@ std::shared_ptr<stella_vslam::camera::base> modified_focal_length_camera_copy(st
             auto camera_copy = std::make_shared<camera::perspective>(*c);
             if (set_camera_focal_length_x_pixels(camera_copy.get(), focal_length_x_pixels))
                return camera_copy;
+            break;
         }
         case camera::model_type_t::Fisheye: {
             auto c = static_cast<camera::fisheye const*>(camera);
             auto camera_copy = std::make_shared<camera::fisheye>(*c);
             if (set_camera_focal_length_x_pixels(camera_copy.get(), focal_length_x_pixels))
                return camera_copy;
+            break;
         }
         case camera::model_type_t::RadialDivision: {
             auto c = static_cast<camera::radial_division const*>(camera);
             auto camera_copy = std::make_shared<camera::radial_division>(*c);
             if (set_camera_focal_length_x_pixels(camera_copy.get(), focal_length_x_pixels))
                return camera_copy;
+            break;
         }
     }
     return nullptr;

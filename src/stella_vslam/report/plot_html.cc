@@ -143,7 +143,7 @@ std::vector<float> getRGBFromHSL(const float HSL[3]) {
 
 inline float Sobol2(unsigned int n, unsigned int scramble) {
     const float OneMinusEpsilon = 0.9999999403953552f;
-    for (unsigned int v = unsigned int(1 << 31); n != 0; n >>= 1, v ^= v >> 1)
+    for (unsigned int v = (unsigned int)(1 << 31); n != 0; n >>= 1, v ^= v >> 1)
         if (n & 0x1)
             scramble ^= v;
     return (std::min)(((scramble >> 8) & 0xffffff) / float(1 << 24), OneMinusEpsilon);

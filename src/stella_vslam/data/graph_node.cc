@@ -2,6 +2,8 @@
 #include "stella_vslam/data/graph_node.h"
 #include "stella_vslam/data/landmark.h"
 
+#include <list>
+
 namespace {
 struct {
     bool operator()(const std::pair<unsigned int, std::shared_ptr<stella_vslam::data::keyframe>>& a, const std::pair<unsigned int, std::shared_ptr<stella_vslam::data::keyframe>>& b) {
