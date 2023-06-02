@@ -16,7 +16,7 @@ Graph::Graph(std::string x_label, std::string y_label, std::set<Curve> curves,
 , x_axis_scaling(x_axis_scaling), y_axis_scaling(y_axis_scaling)
 {
     for (auto const& curve : curves)
-        this->curves.insert({ curve.first, { curve.second } });
+        this->curves.insert({ curve.first, { curve_section(curve.second, 0) } });
 }
 
 struct LabelToValue {
@@ -325,6 +325,7 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
    float yCanvasInc(0);
    float xStartValue(0);
    float yStartValue(0);
+   int yCanvasEnd(0);
    std::map<std::optional<int>, float> x_value_start_for_stage;
    std::map<std::optional<int>, float> x_canvas_start_for_stage;
    std::map<std::optional<int>, float> x_canvas_end_for_stage;
@@ -439,7 +440,7 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
    {
       int approxTickCountY(10);
 
-      int yCanvasEnd(yLabel.empty() ? 0 : 25); // top
+      yCanvasEnd = yLabel.empty() ? 0 : 25; // top
       svg << "<text x=\"" << xCanvas0 - 25 << "\" y=\"" << yCanvasEnd - 10 << "\" fill=\"black\" >" << yLabel << "</text>" << std::endl;
       svg << "<line x1=\"" << xCanvas0 << "\" y1=\"" << yCanvas0 << "\" x2=\"" << xCanvas0 << "\" y2=\"" << yCanvasEnd << "\" style=\"stroke:rgb(0,0,0);stroke-width:2\" />" << std::endl;
 
@@ -507,7 +508,7 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
            auto stage = data_value_set.stage;
            float x_value_start = x_value_start_for_stage[stage];
            float x_canvas_start = x_canvas_start_for_stage[stage];
-           //float x_canvas_end = x_canvas_end_for_stage[stage];
+           float x_canvas_end = x_canvas_end_for_stage[stage];
            float x_canvas_inc = x_canvas_inc_for_stage[stage];
 
            if (curve.ghost) {
@@ -525,8 +526,13 @@ void write_graph_as_svg_impl(std::stringstream& svg, std::string_view yLabel, st
            else {
                for (auto const& data_value : data_value_set) {
                    //xyList.push_back({ xCanvas0 + (data_value.index - xStartValue) * xCanvasInc,
-                   xyList.push_back({ x_canvas_start + (data_value.index - x_value_start) * x_canvas_inc,
-                                             yCanvas0 + (data_value.value - yStartValue ) * yCanvasInc });
+                   float x = x_canvas_start + (data_value.index - x_value_start) * x_canvas_inc;
+                   if (!std::isfinite(x))
+                       x = x_canvas_end + 1000.0f;// 100000.0f;//  std::numeric_limits<float>::max();
+                   float y = yCanvas0 + (data_value.value - yStartValue) * yCanvasInc;
+                   if (!std::isfinite(y))
+                       y = yCanvasEnd - 1000.0f; // 100000.0f;//std::numeric_limits<float>::max();
+                   xyList.push_back({ x, y });
                }
            }
 
@@ -954,6 +960,135 @@ std::list<curve_section> get_sample_graphs() {
     return { a, b };
 }
 
+std::list<curve_section> get_sample_graphs_2() {
+
+    // non-planar
+    curve_section a = curve_section({
+    { 1, 0.331036 },
+    { 2, 0.548319 },
+    { 3, 0.635865 },
+    { 4, 0.805998 },
+    { 5, 0.638672 },
+    { 9, 0.670777 },
+    { 10, 0.863175 },
+    { 11, 0.819828 },
+    { 12, 0.935065 },
+    { 13, 1.11409 },
+    { 17, 0.46498 },
+    { 18, 0.816095 },
+    { 19, 0.872364 },
+    { 20, 0.870318 },
+    { 21, 1.25207 },
+    { 22, 1.53 },
+    { 23, 1.84257 },
+    { 24, 1.84257 },
+    { 25, 1.36839 },
+    { 26, 1.68063 },
+    { 27, 2.30398 },
+    { 28, 1.83599 },
+    { 29, 1.90419 },
+    { 30, 2.06807 },
+    { 31, 1.85088 },
+    { 32, 2.53948 },
+    { 33, 2.33758 },
+    { 34, 2.49924 },
+    { 35, 2.7111 },
+    { 36, 2.95774 },
+    { 37, 2.70158 },
+    { 38, 2.22049 },
+    { 39, 2.30927},
+ { 40, 2.20199},
+ { 41, 2.51324},
+ { 42, 2.39785},
+ { 43, 1.99402},
+ { 44, 2.66471},
+ { 45, 1.87621},
+ { 46, 2.26679},
+ { 49, 2.25402e-27},
+ { 50, 0.436422},
+ { 51, 0.347377},
+ { 52, 0.930834},
+ { 61, 0.57199},
+ { 62, 0.711216},
+ { 63, 0.78896},
+ { 64, 0.780272},
+ { 65, 0.857267},
+ { 66, 0.861486},
+ { 67, 1.33839},
+ { 68, 1.0317},
+ { 72, 0.557121},
+ { 73, 0.557121},
+ { 74, 0.653617},
+ { 75, 0.830654},
+ { 76, 0.665527}
+}, 0);
+
+    // planar
+    curve_section b = curve_section({
+//{ 1, 1.19417 },
+//    { 2, 1.6759 },
+//    { 3, 2.51467 },
+//    { 4, 3.09769 },
+//    { 5, 3.5692 },
+//    { 9, 2.2175 },
+//    { 10, 2.90137 },
+//    { 11, 3.22125 },
+//    { 12, 2.96254 },
+//    { 13, 3.94092 },
+//    { 17, 1.66036 },
+//    { 18, 2.36509 },
+//    { 19, 2.8563 },
+//    { 20, 3.09211 },
+//    { 21, 3.87213 },
+//    { 22, 4.27582 },
+//    { 23, 4.63555 },
+//    { 24, 4.63555 },
+//    { 25, 4.08617 },
+//    { 26, 4.89313 },
+//    { 27, 4.90371 },
+//    { 28, 4.83851 },
+//    { 29, 5.19495 },
+//    { 30, 4.97734 },
+//    { 31, 4.90597 },
+//    { 32, 5.16705 },
+//    { 33, 5.21779 },
+//    { 34, 5.11933 },
+//    { 35, 5.55157 },
+    { 36, 6.30152e+36 },
+    { 37, 5.12546 },
+    { 38, 5.21992 },
+    { 39, 4.8298 },
+    { 40, 5.13875 },
+    { 41, 5.35094 },
+    { 42, 6.6722e+36 },
+    { 43, 5.39129 },
+    { 44, 5.21249 },
+    { 45, 5.18866 },
+    { 46, 5.42148 },
+    { 49, 5.74787e-26 },
+    { 50, 1.40446 },
+    { 51, 1.98131 },
+    { 52, 2.61235 },
+    { 61, 1.50783 },
+    { 62, 2.08656 },
+    { 63, 2.26064 },
+    { 64, 2.88338 },
+    { 65, 3.14045 },
+    { 66, 3.63071 },
+    { 67, 3.67102 },
+    { 68, 3.96318 },
+    { 72, 1.70575 },
+    { 73, 1.70575 },
+    { 74, 2.32593 },
+    { 75, 2.83022 },
+    { 76, 3.02498 }
+}, 0);
+
+    return { a, b };
+
+}
+
+
 void increment_curve_values(std::list<curve_section>& graph, double increment) {
 
     for (auto& curve : graph)
@@ -964,14 +1099,21 @@ void increment_curve_values(std::list<curve_section>& graph, double increment) {
 void save_test_svg(std::string_view const& filename)
 {
     std::list<curve_section> graphs = get_sample_graphs();
-
     increment_curve_values(graphs, 50);
+
+    std::list<curve_section> graphs_2 = get_sample_graphs_2();
+    std::list<curve_section> graphs_2_a = { *graphs_2.begin() };
+    auto s = graphs_2.begin();
+    std::list<curve_section> graphs_2_b = { *(++s) };
 
     std::stringstream svg;
 
     svg << "<!DOCTYPE html>\n";
     svg << "<html>\n";
     svg << "<body>\n";
+
+    //write_graph_as_svg(svg, Graph("Frame", "Cost", std::set<SplitCurve>({ {"Non-planar", graphs_2_a}, {"Planar", graphs_2_b} }), range_behaviour::no_max, 7, 70.0));
+    write_graph_as_svg(svg, Graph("Frame", "Cost", std::set<SplitCurve>({  {"Planar", graphs_2_b} }), range_behaviour::no_max, 7, 70.0));
 
     //write_graph_as_svg(svg, Graph("Frame", "Map keyframe count", std::set<SplitCurve>({ {"Num keyframes", graphs} }), range_behaviour::split_by_stage, range_behaviour::no_max, 30.0));
 

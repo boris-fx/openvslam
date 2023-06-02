@@ -44,6 +44,9 @@ public:
      */
     ~map_database();
 
+    map_database(const map_database&);// = default;
+    map_database& operator=(const map_database&);// = default;
+
     /**
      * Add keyframe to the database
      * @param keyfrm

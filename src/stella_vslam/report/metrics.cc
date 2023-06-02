@@ -278,19 +278,19 @@ namespace stella_vslam_bfx {
         return true;
     }
 
-    std::optional<stage_and_frame> timestamp_to_frame(double timestamp, std::map<double, stage_and_frame> const& timestamp_to_stage_and_frame)
+    std::optional<stage_and_frame> metrics::timestamp_to_frame(double timestamp)
     {
-        auto f = timestamp_to_stage_and_frame.find(timestamp);
-        if (f != timestamp_to_stage_and_frame.end())
+        if (!timestamp_to_stage_and_frame)
+            return std::nullopt;
+        auto f = timestamp_to_stage_and_frame->find(timestamp);
+        if (f != timestamp_to_stage_and_frame->end())
             return f->second;
         return std::nullopt;
     }
 
     void metrics::submit_intermediate_focal_estimate(focal_estimation_type type, double estimate)
     {
-        if (!timestamp_to_stage_and_frame)
-            return;
-        std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(current_frame_timestamp, *timestamp_to_stage_and_frame);
+        std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(current_frame_timestamp);
         if (!stage_with_frame)
             return;
 
@@ -299,9 +299,7 @@ namespace stella_vslam_bfx {
 
     void metrics::submit_map_size_and_tracking_fails(double timestamp, unsigned int map_keyframe_count, unsigned int tracking_fails)
     {
-        if (!timestamp_to_stage_and_frame)
-            return;
-        std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(timestamp, *timestamp_to_stage_and_frame);
+        std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(timestamp);
         if (!stage_with_frame)
             return;
         
@@ -318,12 +316,10 @@ namespace stella_vslam_bfx {
         if (!capture_area_matching)
             return;
 
-        if (!timestamp_to_stage_and_frame)
-            return;
-        std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0], *timestamp_to_stage_and_frame);
+        std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0]);
         if (!stage_with_frame_0)
             return;
-        std::optional<stage_and_frame> stage_with_frame_1 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[1], *timestamp_to_stage_and_frame);
+        std::optional<stage_and_frame> stage_with_frame_1 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[1]);
         if (!stage_with_frame_1)
             return;
         int stage = stage_with_frame_0.value().stage;
@@ -345,12 +341,10 @@ namespace stella_vslam_bfx {
                                                   std::optional<std::pair<double, double>> triangulation_parallax,
                                                   std::optional<std::pair<double, double>> triangulation_ambiguity )
     {
-        if (!timestamp_to_stage_and_frame)
-            return;
-        std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0], *timestamp_to_stage_and_frame);
+        std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0]);
         if (!stage_with_frame_0)
             return;
-        std::optional<stage_and_frame> stage_with_frame_1 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[1], *timestamp_to_stage_and_frame);
+        std::optional<stage_and_frame> stage_with_frame_1 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[1]);
         if (!stage_with_frame_1)
             return;
 
@@ -401,9 +395,9 @@ namespace stella_vslam_bfx {
         for (auto const& initialisation_attempt_timestamps : initialisation_frame_timestamps) {
             std::set<int> initialisation_attempt_frames;
             for (auto const& timestamp : initialisation_attempt_timestamps) {
-                auto f = timestamp_to_stage_and_frame->find(timestamp);
-                if (f != timestamp_to_stage_and_frame->end())
-                    initialisation_attempt_frames.insert(f->second.frame);
+                std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(timestamp);
+                if (stage_with_frame)
+                    initialisation_attempt_frames.insert(stage_with_frame.value().frame);
             }
             initialisation_frames.insert(initialisation_attempt_frames);
         }
@@ -411,15 +405,15 @@ namespace stella_vslam_bfx {
         initialisation_debug_object.create_frame_data(*timestamp_to_stage_and_frame);
 
         //for (auto& estimate : intermediate_focal_estimates)
-        //    if (auto frame = timestamp_to_frame(estimate.timestamp, *timestamp_to_stage_and_frame))
+        //    if (auto frame = timestamp_to_frame(estimate.timestamp))
         //        estimate.frame = frame.value().frame;
 
         mapping_reset_frames.clear();
         for (auto const& timestamp : mapping_reset_timestamps)
-            if (auto frame = timestamp_to_frame(timestamp, *timestamp_to_stage_and_frame))
+            if (auto frame = timestamp_to_frame(timestamp))
                 mapping_reset_frames.push_back(frame.value().frame);
 
-        //transform_metrics_frame_data(map_size, *timestamp_to_stage_and_frame);
+        //transform_metrics_frame_data(map_size);
         //transform_metrics_frame_data(tracking_fail_count, *timestamp_to_stage_and_frame);
     }
 
@@ -607,6 +601,13 @@ namespace stella_vslam_bfx {
         return stella_vslam_bfx::quantile(ys, {percentile})[0];
     }
 
+    double percentile_y_value(curve_section const& graph, double percentile)
+    {
+        std::array<std::map<int, curve_section>, 4>  graphs;
+        graphs[0][0] = graph;
+        return percentile_y_value(graphs, percentile);
+    }
+
 void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative,
     std::optional<double> known_focal_length_x_pixels) const {
     std::ofstream myfile;
@@ -641,7 +642,8 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
 
     html << "<p>Video file: " << input_video_metadata.filename << "</p>\n";
     html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " pixels.</p>\n";
-
+    html << "<p>Feature detector adaptive min size scale: " << feature_min_size_scale << ".</p>\n";
+    
     if (debugging.debug_initialisation) {
         html << "<h2>Initialisation debug</h2>\n";
         initialisation_debug_object.add_to_html(html, input_video_metadata.ground_truth_focal_length_x_pixels());
@@ -660,7 +662,26 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     std::map<double, double> graph_cost_H = select_second_frame_data(initialisation_debug_object.p_cost_H.by_frame);
     std::map<double, double> graph_cost_F = select_second_frame_data(initialisation_debug_object.p_cost_F.by_frame);
     html << "<h2>Structure type</h2>" << std::endl;
-    write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"Planar error", graph_cost_H}, {"Non-planar error", graph_cost_F} }), range_behaviour::no_max, range_behaviour::no_max, std::nullopt));
+    double cost_percentile90 = 1.1 * std::max(percentile_y_value(graph_cost_H, 0.9), percentile_y_value(graph_cost_F, 0.9));
+    
+    std::set<SplitCurve> cost_curves = { { "Planar error", { curve_section(graph_cost_H, 0) } },
+                                         { "Non-planar error", { curve_section(graph_cost_F, 0) } } };
+
+
+    //for (auto const& curve : cost_curves) {
+    //    html << " curve  " << curve.first << "\n";
+    //    for (auto const& g : curve.second) {
+    //        html << " struct  {\n";
+    //        html << " stage =  " << g.stage << "\n";
+    //        for (auto const& i : g)
+    //            html << "   {" << i.first << ", " << i.second << "},\n";
+    //        html << "}\n";
+    //    }
+    //}
+
+    //write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"Planar error", graph_cost_H}, {"Non-planar error", graph_cost_F} }), range_behaviour::no_max, cost_percentile90, std::nullopt));
+    write_graph_as_svg(html, Graph("Second init frame", "Cost", cost_curves, range_behaviour::no_max, cost_percentile90, std::nullopt));
+
     html << "<p>Average feature match deviation from a planar or non-planar geometric model (pixels - with max of a few pixels).</p>" << std::endl;
     html << "<hr>" << std::endl;
 
@@ -838,6 +859,8 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
         html << "<p> Initialisation average feature count: " << initialisation_debug_object.average_init_frame_feature_count().value() << "</p>\n";
     if (initialisation_debug_object.average_init_frame_unguided_match_count())
         html << "<p> Initialisation average match count: " << initialisation_debug_object.average_init_frame_unguided_match_count().value() << "</p>\n";
+    for (auto const& candidate_map : candidate_map_list)
+        html << "<p> Candidate map frames: " << candidate_map.frame_range.first << "-" << candidate_map.frame_range.second << " keyframes: " << candidate_map.key_count << "</p>\n";
 
     // Timing
     html << "<h2> Timing</h2>\n";

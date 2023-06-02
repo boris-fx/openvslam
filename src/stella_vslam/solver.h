@@ -25,7 +25,7 @@ namespace stella_vslam {
 namespace stella_vslam_bfx {
 
 /**
- * \brief A camera solve (a set of 3D points, and a set of per=frame camera positions)
+ * \brief A camera solve (a set of 3D points, and a set of per-frame camera positions)
  */
 class solve {
 public:

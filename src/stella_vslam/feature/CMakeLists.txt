@@ -6,6 +6,8 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/orb_extractor_node.h
                ${CMAKE_CURRENT_SOURCE_DIR}/orb_impl.h
                ${CMAKE_CURRENT_SOURCE_DIR}/orb_params.cc
+			   ${CMAKE_CURRENT_SOURCE_DIR}/orb_preanalysis.h
+			   ${CMAKE_CURRENT_SOURCE_DIR}/orb_preanalysis.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/orb_extractor.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/orb_extractor_node.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/orb_impl.cc)

@@ -214,6 +214,9 @@ public:
     //! depthmap factor (pixel_value / depthmap_factor = true_depth)
     double depthmap_factor_ = 1.0;
 
+    //! Default is 1. Use this to generate more features.
+    void boost_extractors(float boost);
+
 private:
     //! Common constructor code
     void init(const config *);
@@ -230,6 +233,8 @@ private:
     //! Store the supplied prematched points in the given vector of keypoints
     void store_prematched_points(const stella_vslam_bfx::prematched_points* extra_keypoints,
                         std::vector<cv::KeyPoint>& keypts, data::frame_observation& frm_obs) const;
+
+    bool extractor_boost_check(std::vector<cv::KeyPoint> const& keypts);
 
     //! config
     const std::shared_ptr<config> cfg_;
@@ -252,6 +257,9 @@ public:
     //! map database
     data::map_database* map_db_ = nullptr;
 
+    //! tracker
+    tracking_module* tracker_ = nullptr;
+
 private:
     //! BoW vocabulary
     data::bow_vocabulary* bow_vocab_ = nullptr;
@@ -259,8 +267,7 @@ private:
     //! BoW database
     data::bow_database* bow_db_ = nullptr;
 
-    //! tracker
-    tracking_module* tracker_ = nullptr;
+
 
     //! mapping module
     mapping_module* mapper_ = nullptr;
@@ -282,8 +289,7 @@ private:
     feature::orb_extractor* extractor_left_ = nullptr;
     //! ORB extractor for right image
     feature::orb_extractor* extractor_right_ = nullptr;
-    //! ORB extractor only when used in initializing
-    feature::orb_extractor* ini_extractor_left_ = nullptr;
+    bool extractor_boost_checked_ = false;
 
     //! marker detector
     marker_detector::base* marker_detector_ = nullptr;

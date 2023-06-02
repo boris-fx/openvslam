@@ -4,6 +4,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <opencv2/imgcodecs.hpp> // temp for cv::imwrite
+
 #include <stella_vslam/data/keyframe.h>
 #include <stella_vslam/data/frame.h>
 #include <stella_vslam/data/map_camera_helpers.h>
@@ -12,9 +14,11 @@
 #include <stella_vslam/report/plot_html.h>
 #include <stella_vslam/report/metrics.h>
 #include <stella_vslam/config.h>
+#include <stella_vslam/feature/orb_preanalysis.h>
 
 #include "type.h"
 #include "system.h"
+#include "tracking_module.h"
 
 using namespace stella_vslam;
 
@@ -139,6 +143,27 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     if (direction == tracking_direction_backwards)
         return false;
 
+    // Pre-analyse the video
+    {
+        cv::Mat frame_image_1, frame_image_2;
+        cv::Mat mask_1, mask_2;
+        prematched_points extra_keypoints_1, extra_keypoints_2;
+        int frame_1(begin), frame_2(begin+1);
+        bool got_frame_1 = get_frame_(frame_1, frame_image_1, mask_1, extra_keypoints_1);
+        bool got_frame_2 = get_frame_(frame_2, frame_image_2, mask_2, extra_keypoints_2);
+        if (got_frame_1 && !frame_image_1.empty() && got_frame_2 && !frame_image_2.empty()) {
+
+            stella_vslam_bfx::preanalysis(frame_image_1, mask_1, frame_image_2, mask_2, slam_.get());
+
+            spdlog::info("solver - boost check frames {} and {}", frame_1, frame_2);
+            //spdlog::info("solver - boost check pixels {} and {}", frame_image_1, frame_2);
+
+            //cv::imwrite("frame_image_1.bmp", frame_image_1);
+            //cv::imwrite("frame_image_2.bmp", frame_image_2);
+        }
+    }
+    spdlog::info("solver - post boost check");
+
     if (set_stage_description_)
         set_stage_description_("Analysing video");
     if (set_progress_)
@@ -170,6 +195,8 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     }
 
     const auto tp_after_forward_mapping = std::chrono::steady_clock::now();
+
+    slam_->tracker_->map_selector_.restore_best_map(*slam_->map_db_, slam_->tracker_->tracking_state_);
 
     // Find the initialisation point (the first keyframe in the map)
     // Relocalise the tracker to the initialisation point's pose

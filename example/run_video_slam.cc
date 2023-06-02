@@ -959,6 +959,7 @@ struct image_source {
 
     bool get_frame(int frame, cv::Mat& frame_data, cv::Mat& mask, 
                    stella_vslam_bfx::prematched_points& extra_points) {
+        spdlog::info("get_frame(): {}", frame);
         bool ok = video.set(cv::CAP_PROP_POS_FRAMES, frame);
         if (!ok) {
             spdlog::warn("Failed to seek to video frame {}", frame);
@@ -1290,6 +1291,7 @@ int main(int argc, char* argv[]) {
                         planar_file_path->value(), mesh_file_path->value(),
                         grid_size->value(), yaml_node,
                         print_frames->value(), print_results->value());
+
     }
     else {
         // build a slam system

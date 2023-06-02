@@ -138,6 +138,14 @@ public:
     int total_frames() const;
     std::set<std::pair<std::string, tracking_problem_level>> problems() const;
     std::optional<tracking_problem_level> max_problem_level() const;
+
+    std::optional<stage_and_frame> timestamp_to_frame(double timestamp);
+
+    float feature_min_size_scale;
+
+    struct candidate_map_stats { std::pair<int, int > frame_range; int key_count; };
+    std::list<candidate_map_stats> candidate_map_list;
+
 public:
     std::set<std::set<double>> initialisation_frame_timestamps; /// For tracker internal use
 
@@ -171,18 +179,8 @@ public:
     {
         double estimate;
         focal_estimation_type type;
-        //double timestamp;
-        //int frame; // set in create_frame_metrics
         stage_and_frame stage_with_frame; // tracking stage and frame
     };
-
-    //template<typename T>
-    //struct frame_param
-    //{
-    //    std::map<double, T> by_timestamp; // Map from a pair of frame identified by timestamp, to some data
-    //    std::map<int, T> by_frame;     // Map from a pair of frame identified by frame number, to some data
-    //    std::map<double, double> graph() const;
-    //};
 
     template<typename T>
     struct stage_and_frame_param {
@@ -202,7 +200,6 @@ protected:
     stage_and_frame_param<unsigned int> map_size;
     stage_and_frame_param<unsigned int> tracking_fail_count;
 
-    
     stage_and_frame_pair_param<double> area_match_frame_1_points;
     stage_and_frame_pair_param<double> area_match_fail_prematched;
     stage_and_frame_pair_param<double> area_match_fail_scale;
@@ -212,7 +209,6 @@ protected:
     stage_and_frame_pair_param<double> area_match_num_matches;
     stage_and_frame_pair_param<double> area_match_num_attempted;
     stage_and_frame_pair_param<double> area_match_ave_candidates;
-
 
     stage_and_frame_pair_param<double>  num_triangulated_points;
     stage_and_frame_pair_param<double>  num_valid_triangulated_points;

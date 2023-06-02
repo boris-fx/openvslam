@@ -3,10 +3,12 @@
 
 #include "stella_vslam/type.h"
 #include "stella_vslam/data/frame.h"
+#include "stella_vslam/data/map_database.h"
 #include "stella_vslam/module/initializer.h"
 #include "stella_vslam/module/relocalizer.h"
 #include "stella_vslam/module/keyframe_inserter.h"
 #include "stella_vslam/module/frame_tracker.h"
+#include "stella_vslam/module/map_selector.h"
 
 #include <mutex>
 #include <memory>
@@ -40,15 +42,6 @@ struct pose_request {
     bool mode_2d_;
     Mat44_t pose_cw_;
     Vec3_t normal_vector_;
-};
-
-struct map_reset_controller {
-    bool enabled = false; // In use or not
-    bool allow_reset = true;
-    int track_fail_count = 0;
-    //! Call when tracking fails to register the failure. Returns true if the map should be reset.
-    bool should_reset_map_for_tracking_failure(data::map_database const* map_db);
-    void map_was_reset();
 };
 
 class tracking_module {
@@ -144,7 +137,7 @@ public:
     data::frame curr_frm_;
 
     //! optional hard on/off control for running re-initialisation when tracking fails
-    map_reset_controller map_reset_controller_;
+    stella_vslam_bfx::map_selector map_selector_;
 
 protected:
     //-----------------------------------------

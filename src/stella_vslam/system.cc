@@ -24,6 +24,7 @@
 #include "stella_vslam/util/converter.h"
 #include "stella_vslam/util/image_converter.h"
 #include "stella_vslam/report/initialisation_debugging.h"
+#include "stella_vslam/report/metrics.h"
 
 #include <opencv2/imgcodecs.hpp>
 
@@ -144,29 +145,8 @@ void system::init(const config * cfg)
     global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->settings_, camera_->setup_type_ != camera::setup_type_t::Monocular);
 
     // preprocessing modules
-//<<<<<<< HEAD
     depthmap_factor_ = get_depthmap_factor(camera_, cfg_->settings_);
-    // auto mask_rectangles = cfg->settings_.mask_rectangles_;
-    // for (const auto& v : mask_rectangles) {
-        // if (v.size() != 4) {
-            // throw std::runtime_error("mask rectangle must contain four parameters");
-        // }
-        // if (v.at(0) >= v.at(1)) {
-            // throw std::runtime_error("x_max must be greater than x_min");
-        // }
-        // if (v.at(2) >= v.at(3)) {
-            // throw std::runtime_error("y_max must be greater than x_min");
-// =======
-    // const auto preprocessing_params = util::yaml_optional_ref(cfg->yaml_node_, "Preprocessing");
-    // if (camera_->setup_type_ == camera::setup_type_t::RGBD) {
-        // depthmap_factor_ = preprocessing_params["depthmap_factor"].as<double>(depthmap_factor_);
-        // if (depthmap_factor_ < 0.) {
-            // throw std::runtime_error("depthmap_factor must be greater than 0");
-// >>>>>>> upstream/main
-    //    }
-    //}
     auto mask_rectangles = cfg->settings_.mask_rectangles_;
-
     const auto min_size = cfg->settings_.min_feature_size_;
     spdlog::info("system - min_size: {}", min_size);
     extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
@@ -383,11 +363,11 @@ bool system::mapping_module_is_enabled() const {
 void system::enable_map_reinitialisation(std::optional<bool> always_enabled)
 {
     if (always_enabled.has_value()) {
-        tracker_->map_reset_controller_.enabled = true;
-        tracker_->map_reset_controller_.allow_reset = always_enabled.value();
+        tracker_->map_selector_.enabled = true;
+        tracker_->map_selector_.allow_reset = always_enabled.value();
     }
     else
-        tracker_->map_reset_controller_.enabled = false;
+        tracker_->map_selector_.enabled = false;
 }
 
 void system::enable_loop_detector() {
@@ -473,6 +453,12 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
     if (use_orb_features_) {
         // Extract ORB feature
         extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+
+        //bool boost_applied = extractor_boost_check(keypts_);
+        //if (boost_applied) // re-extract with the boosting
+         //   extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+
+
         //spdlog::info("feature extract: {} colour order {} {} {} {}", keypts_.size(), 
         //    static_cast<unsigned int>(camera_->color_order_), 
         //    stella_vslam::camera::color_order_to_string[static_cast<unsigned int>(camera_->color_order_)],
@@ -809,5 +795,43 @@ void system::resume_other_threads() const {
         mapper_->resume();
     }
 }
+
+bool system::extractor_boost_check(std::vector<cv::KeyPoint> const& keypts) {
+    if (extractor_boost_checked_)
+        return false;
+    extractor_boost_checked_ = true;
+
+    // Count keypoints for which matching will be attempted in match::area::match_in_consistent_area(), i.e. those at the 0-th scale
+    int matchable_count = std::count_if(keypts.begin(), keypts.end(), [](cv::KeyPoint const& keypt) { return keypt.octave == 0; });
+    bool boost(matchable_count < 500);
+
+    float min_size_boost(1);
+    if (boost) {
+        min_size_boost = 0.5f;
+        spdlog::info("system - applying min size boost of {}", min_size_boost);
+        if (extractor_left_)
+            extractor_left_->min_size_boost_ = min_size_boost;
+        if (extractor_right_)
+            extractor_right_->min_size_boost_ = min_size_boost;
+    }
+
+    stella_vslam_bfx::metrics::get_instance()->feature_min_size_scale = min_size_boost;
+
+    return boost;
+}
+
+void system::boost_extractors(float boost) {
+
+    spdlog::info("system - applying min size boost of {}", boost);
+    stella_vslam_bfx::metrics::get_instance()->feature_min_size_scale = boost;
+
+    if (extractor_left_)
+        extractor_left_->min_size_boost_ = boost;
+    if (extractor_right_)
+        extractor_right_->min_size_boost_ = boost;
+}
+
+
+
 
 } // namespace stella_vslam

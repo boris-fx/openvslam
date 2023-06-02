@@ -27,9 +27,42 @@ map_database::map_database(unsigned int min_num_shared_lms)
     spdlog::debug("CONSTRUCT: data::map_database");
 }
 
+map_database::map_database(const map_database& that)
+{
+    operator=(that);
+}
+
 map_database::~map_database() {
     clear();
     spdlog::debug("DESTRUCT: data::map_database");
+}
+
+map_database& map_database::operator=(const map_database &that) {
+
+    //! next ID
+    next_keyframe_id_.store(that.next_keyframe_id_.load());
+    next_landmark_id_.store(that.next_landmark_id_.load());
+
+    //! IDs and keyframes
+    keyframes_ = that.keyframes_;
+    //! IDs and landmarks
+    landmarks_ = that.landmarks_;
+    //! IDs and markers
+    markers_ = that.markers_;
+
+    //! spanning roots
+    spanning_roots_ = that.spanning_roots_;
+
+    //! The last keyframe added to the database
+    last_inserted_keyfrm_ = that.last_inserted_keyfrm_;
+
+    //! local landmarks
+    local_landmarks_ = that.local_landmarks_;
+
+    //! frame statistics
+    frm_stats_ = that.frm_stats_;
+
+    return *this;
 }
 
 void map_database::add_keyframe(const std::shared_ptr<keyframe>& keyfrm) {
