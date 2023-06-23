@@ -62,6 +62,9 @@ std::optional<metrics::candidate_map_stats> map_info(data::map_database const* m
 
 void map_selector::store_abandoned_map(data::map_database* map_db)
 {
+    const std::string test_file;
+    //const std::string test_file = "map_selector"; // Store the map to a file - should be commented
+
 #if STORE_BINARY_MAPS
     if (!test_file.empty()) {
         static int hit_count = 0;

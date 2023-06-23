@@ -23,8 +23,6 @@ namespace stella_vslam_bfx {
  */
 class map_selector {
 public:
-    //inline static const std::string test_file = "map_selector";
-    inline static const std::string test_file = "";
 
     bool enabled = false; // In use or not
     bool allow_reset = true;

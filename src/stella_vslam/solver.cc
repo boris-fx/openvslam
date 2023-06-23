@@ -145,7 +145,6 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     // So when feeding frames to stella, we make sure the associated timestamp is always increasing, even if we are re-feeding frames which were previously sent with older timestamps, or tracking backwards
     std::map<double, stage_and_frame> timestamp_to_stage_and_frame;
     metrics::get_instance()->timestamp_to_stage_and_frame = &timestamp_to_stage_and_frame;
-   // std::map<double, int> timestampToVideoFrame;
     double const timestamp_increment(1.0); // Seconds
     double next_timestamp(0);
 
@@ -153,7 +152,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     if (direction == tracking_direction_backwards)
         return false;
 
-    // Pre-analyse the video
+    // Pre-analyse the video to adjust min_feature_size if it doesn't result in enough matches
     {
         cv::Mat frame_image_1, frame_image_2;
         cv::Mat mask_1, mask_2;
@@ -162,54 +161,17 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         bool got_frame_1 = get_frame_(frame_1, frame_image_1, mask_1, extra_keypoints_1);
         bool got_frame_2 = get_frame_(frame_2, frame_image_2, mask_2, extra_keypoints_2);
         if (got_frame_1 && !frame_image_1.empty() && got_frame_2 && !frame_image_2.empty()) {
-
             stella_vslam_bfx::preanalysis(frame_image_1, mask_1, frame_image_2, mask_2, slam_.get());
-
-            spdlog::info("solver - boost check frames {} and {}", frame_1, frame_2);
-            //spdlog::info("solver - boost check pixels {} and {}", frame_image_1, frame_2);
-
-            //cv::imwrite("frame_image_1.bmp", frame_image_1);
-            //cv::imwrite("frame_image_2.bmp", frame_image_2);
         }
     }
-    spdlog::info("solver - post boost check");
 
+    // Track forwards to create the map
     if (set_stage_description_)
         set_stage_description_("Analysing video");
     if (set_progress_)
         set_progress_(0);
-
     const auto tp_start = std::chrono::steady_clock::now();
-
     slam_->tracker_->map_selector_.set_system(slam_);
-
-    bool map_was_restored(false);
-
-    if (!slam_->tracker_->map_selector_.test_file.empty()) {
-
-        for (int frame = begin; frame <= end; ++frame) {
-            double timestamp = next_timestamp;
-            next_timestamp += timestamp_increment;
-            timestamp_to_stage_and_frame[timestamp] = { 0, frame };
-        }
-
-        std::string filename("map_selector1.msg");
-        bool load_was_ok = slam_->load_map_database(filename);
-        if (load_was_ok) {
-            spdlog::info("Map loaded from file: {} ({} keyframes)", filename, slam_->map_db_->get_num_keyframes());
-
-            auto keys = slam_->map_db_->get_all_keyframes();
-            for (auto const& key : keys)
-                spdlog::info("    Key id: {}, frame {}, valid landmarks: {}", key->id_, timestamp_to_stage_and_frame[key->timestamp_].frame, key->get_valid_landmarks().size());
-         }
-        else
-            spdlog::info("Failed to load map from file: {}", filename);
-        map_was_restored = true;
-        slam_->tracker_->tracking_state_ = tracker_state_t::Tracking;
-    }
-    else {
-
-    // Track forwards to create the map
     slam_->enable_map_reinitialisation(true);
     for (int frame = begin; frame <= end; ++frame) {
         bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
@@ -218,7 +180,6 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         double timestamp = next_timestamp;
         next_timestamp += timestamp_increment;
-        //timestampToVideoFrame[timestamp] = frame;
         timestamp_to_stage_and_frame[timestamp] = { 0, frame };
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
@@ -233,7 +194,6 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
     }
 
     // Restore a better map if there is one
-    spdlog::info("solver::track_frame_range() before call to get_best_map()");
     if (auto better_map = slam_->tracker_->map_selector_.get_best_map(*slam_->map_db_)) {
         // recreate the slam system
         if (!vocab_file_path_.empty())
@@ -242,16 +202,10 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
             slam_ = std::make_shared<stella_vslam::system>(cfg_, *vocab_data_);
 
         slam_->startup(false); // false sets the tracking state to Lost, rather than to Initializing
-
         bool load_was_ok = slam_->load_map_database_from_memory(*better_map);
-        if (load_was_ok) {
-            map_was_restored = true;
-            //slam_->tracker_->tracking_state_ = tracker_state_t::Tracking;
-        }
+        if (load_was_ok)
+            spdlog::info("An abandoned map was restored");
     }
-    spdlog::info("Map creation succeeded after tracking backwards from the initialisation frame");
-    }
-
     const auto tp_after_forward_mapping = std::chrono::steady_clock::now();
     track_metrics.track_timings.forward_mapping = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_forward_mapping - tp_start).count();
 
@@ -264,54 +218,44 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         return false;
     }
 
+    // Track backwards from the initialization point to finish the map
     if (set_stage_description_)
         set_stage_description_("Revisiting video");
-
-    // Track backwards from the initialization point to finish the map
     slam_->enable_map_reinitialisation(false); // Prevent the map from being abandoned
-    if (!slam_->tracker_->map_selector_.test_file.empty()) {
-    //if (true) { // !!!!!!!!!!!!!!!!!!!!!!!!!!
+    int pass_2_start_frame(reposition_frame); // or -1
+    metrics::get_instance()->pass_2_frames = 1 + pass_2_start_frame - begin;
+    for (int frame = pass_2_start_frame; frame >= begin; --frame) {
+
+        bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
+        if (!got_frame || frame_image.empty())
+            continue;
+
+        double timestamp = next_timestamp;
+        next_timestamp += timestamp_increment;
+        timestamp_to_stage_and_frame[timestamp] = { 1, frame };
+        metrics::get_instance()->current_frame_timestamp = timestamp;
+
+        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
+        send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
+
+        double stage_progress = double(reposition_frame - frame) / double(reposition_frame - begin);
+        if (set_progress_)
+            set_progress_(overall_progress_percent(stage_progress, 0.4, 0.5));
+        if (cancel_ && cancel_())
+            return false;
+
+        spdlog::info("Tracking backwards at {} of {} done", frame, begin);
     }
-    else {
-        int pass_2_start_frame(reposition_frame); // or -1
-        metrics::get_instance()->pass_2_frames = 1 + pass_2_start_frame - begin;
-        for (int frame = pass_2_start_frame; frame >= begin; --frame) {
-
-            bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
-            if (!got_frame || frame_image.empty())
-                continue;
-
-            double timestamp = next_timestamp;
-            next_timestamp += timestamp_increment;
-            //timestampToVideoFrame[timestamp] = frame;
-            timestamp_to_stage_and_frame[timestamp] = { 1, frame };
-            metrics::get_instance()->current_frame_timestamp = timestamp;
-
-            auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
-            send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
-
-            double stage_progress = double(reposition_frame - frame) / double(reposition_frame - begin);
-            if (set_progress_)
-                set_progress_(overall_progress_percent(stage_progress, 0.4, 0.5));
-            if (cancel_ && cancel_())
-                return false;
-
-            spdlog::info("Tracking backwards at {} of {} done", frame, begin);
-        }
-    }
-
     metrics::get_instance()->pass_2_end_keyframes = slam_->map_db_->get_num_keyframes();
     const auto tp_after_backward_mapping = std::chrono::steady_clock::now();
 
-    print_map_summary("Before bundle", *slam_->map_db_, timestamp_to_stage_and_frame, true);
-
     // Fail if there are no keyframes after tracking backwards (tracking got lost, tried to reinitialise, and failed)
+    print_map_summary("Before bundle", *slam_->map_db_, timestamp_to_stage_and_frame, true);
     std::vector<std::shared_ptr<stella_vslam::data::keyframe>> all_keyframes;
     if (slam_->map_db_)
         all_keyframes = slam_->map_db_->get_all_keyframes();
     bool have_keyframes = !all_keyframes.empty();
     //bool have_keyframes = (slam_->map_db_->get_num_keyframes() > 0); // seems less reliable
-    //bool have_keyframes = false;
     if (!have_keyframes) {
         spdlog::error("Map creation failed while tracking backwards from the initialisation frame");
         return false;
@@ -352,7 +296,6 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         set_stage_description_("Tracking");
 
     // Track forwards (without mapping) to calculate the non-keyframe camera positions
-    //slam_->tracker_->tracking_state_ = tracker_state_t::Lost;
     slam_->disable_mapping_module();
     int solved_frame_count(0), unsolved_frame_count(0);
     for (int frame = begin; frame <= end; ++frame) {
@@ -364,7 +307,6 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
         double timestamp = next_timestamp;
         next_timestamp += timestamp_increment;
-        //timestampToVideoFrame[timestamp] = frame;
         timestamp_to_stage_and_frame[timestamp] = { 2, frame };
         metrics::get_instance()->current_frame_timestamp = timestamp;
 
