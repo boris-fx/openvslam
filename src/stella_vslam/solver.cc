@@ -15,6 +15,7 @@
 #include <stella_vslam/report/metrics.h>
 #include <stella_vslam/config.h>
 #include <stella_vslam/feature/orb_preanalysis.h>
+#include <stella_vslam/module/frame_track_repositioning.h>
 
 #include "type.h"
 #include "system.h"
@@ -44,7 +45,7 @@ void frame_display_data::clear() {
 solver::solver(const std::shared_ptr<config>& cfg,
                const std::string& vocab_file_path,
                std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
-: get_frame_(get_frame)
+: get_frame_(get_frame), cfg_(cfg), vocab_data_(nullptr), vocab_file_path_(vocab_file_path)
 {
     // Set the min_pixel_size based on video size
     unsigned& min_feature_size = const_cast<unsigned&>(cfg->settings_.min_feature_size_);
@@ -64,7 +65,7 @@ solver::solver(const std::shared_ptr<config>& cfg,
 solver::solver(const std::shared_ptr<config>& cfg,
                std::ifstream & vocab_data,
                std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
-: get_frame_(get_frame) {
+: get_frame_(get_frame), cfg_(cfg), vocab_data_(&vocab_data), vocab_file_path_() {
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_data);
     slam_->startup();
 }
@@ -92,32 +93,34 @@ void solver::set_cancel_callback(std::function<bool()> cancel) {
     cancel_ = cancel;
 }
 
-static std::tuple<std::shared_ptr<data::keyframe>, std::optional<int>> earliest_valid_keyframe(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms,
-                                                                                std::map<double, stage_and_frame> const& timestamp_to_stage_and_frame) {
-    if (!keyfrms.empty()) {
-        std::shared_ptr<data::keyframe> first_keyframe_data = *std::min_element(keyfrms.begin(), keyfrms.end(),
-                                                                                [](const auto& a, const auto& b) { // earliest above landmark threshold
-                                                                                    int landmarkThreshold(10);
-                                                                                    bool validLandmarksA(a->get_valid_landmarks().size() >= landmarkThreshold);
-                                                                                    bool validLandmarksB(b->get_valid_landmarks().size() >= landmarkThreshold);
-                                                                                    if (!validLandmarksA && validLandmarksB)
-                                                                                        return false;
-                                                                                    if (validLandmarksA && !validLandmarksB)
-                                                                                        return true;
-                                                                                    return a->timestamp_ < b->timestamp_;
-                                                                                });
-        auto f = timestamp_to_stage_and_frame.find(first_keyframe_data->timestamp_);
-        if (f != timestamp_to_stage_and_frame.end())
-            return {first_keyframe_data, f->second.frame};
-    }
-    return {nullptr, {}};
-}
-
 double overall_progress_percent(double stage_progress, double stage_start_progress, double stage_end_progress) {
     return 100.0 * (stage_start_progress + stage_progress * (stage_end_progress - stage_start_progress));
 }
 
+void print_map_summary(std::string const& name,
+                       data::map_database const& map_db,
+                       std::map<double, stage_and_frame> & timestamp_to_stage_and_frame, 
+                       bool verbose)
+{
+    std::vector<std::shared_ptr<data::keyframe>> keys = map_db.get_all_keyframes();
+    std::vector<std::shared_ptr<data::landmark>> local_landmarks = map_db.get_local_landmarks();
+    std::vector<std::shared_ptr<data::landmark>> all_landmarks = map_db.get_all_landmarks();
+
+    spdlog::info("==========================");
+    spdlog::info("Map: {}", name);
+    spdlog::info("  Keyframes: {}", keys.size());
+    spdlog::info("  Landmarks: {}", all_landmarks.size());
+    spdlog::info("  Local landmarks: {}", local_landmarks.size());
+    if (verbose) {
+        spdlog::info("");
+        for (auto const& key : keys)
+            spdlog::info("    Key id: {}, frame {}, valid landmarks: {}", key->id_, timestamp_to_stage_and_frame[key->timestamp_].frame, key->get_valid_landmarks().size());
+    }
+    spdlog::info("==========================");
+}
+
 bool solver::track_frame_range(int begin, int end, tracking_direction direction, solve* final_solve) {
+
     cv::Mat frame_image;
     cv::Mat mask;
     prematched_points extra_keypoints;
@@ -126,6 +129,13 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     if (!get_frame_)
         return false; // report error!
+
+    // Initialise metrics to an unsolved state
+    metrics& track_metrics = *metrics::get_instance();
+    track_metrics.calculated_focal_length_x_pixels = -1;
+    track_metrics.solved_frame_count = 0;
+    track_metrics.unsolved_frame_count = end - begin + 1;
+    track_metrics.num_points = 0;
 
     // ==Timestamps==
     // Stella uses timestamps, rather than frame numbers internally
@@ -171,6 +181,34 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     const auto tp_start = std::chrono::steady_clock::now();
 
+    slam_->tracker_->map_selector_.set_system(slam_);
+
+    bool map_was_restored(false);
+
+    if (!slam_->tracker_->map_selector_.test_file.empty()) {
+
+        for (int frame = begin; frame <= end; ++frame) {
+            double timestamp = next_timestamp;
+            next_timestamp += timestamp_increment;
+            timestamp_to_stage_and_frame[timestamp] = { 0, frame };
+        }
+
+        std::string filename("map_selector1.msg");
+        bool load_was_ok = slam_->load_map_database(filename);
+        if (load_was_ok) {
+            spdlog::info("Map loaded from file: {} ({} keyframes)", filename, slam_->map_db_->get_num_keyframes());
+
+            auto keys = slam_->map_db_->get_all_keyframes();
+            for (auto const& key : keys)
+                spdlog::info("    Key id: {}, frame {}, valid landmarks: {}", key->id_, timestamp_to_stage_and_frame[key->timestamp_].frame, key->get_valid_landmarks().size());
+         }
+        else
+            spdlog::info("Failed to load map from file: {}", filename);
+        map_was_restored = true;
+        slam_->tracker_->tracking_state_ = tracker_state_t::Tracking;
+    }
+    else {
+
     // Track forwards to create the map
     slam_->enable_map_reinitialisation(true);
     for (int frame = begin; frame <= end; ++frame) {
@@ -194,34 +232,35 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
             return false;
     }
 
-    const auto tp_after_forward_mapping = std::chrono::steady_clock::now();
+    // Restore a better map if there is one
+    spdlog::info("solver::track_frame_range() before call to get_best_map()");
+    if (auto better_map = slam_->tracker_->map_selector_.get_best_map(*slam_->map_db_)) {
+        // recreate the slam system
+        if (!vocab_file_path_.empty())
+            slam_ = std::make_shared<stella_vslam::system>(cfg_, vocab_file_path_);
+        else if (vocab_data_)
+            slam_ = std::make_shared<stella_vslam::system>(cfg_, *vocab_data_);
 
-    slam_->tracker_->map_selector_.restore_best_map(*slam_->map_db_, slam_->tracker_->tracking_state_);
+        slam_->startup(false); // false sets the tracking state to Lost, rather than to Initializing
 
-    // Find the initialisation point (the first keyframe in the map)
-    // Relocalise the tracker to the initialisation point's pose
-    auto [first_keyframe_data, first_keyframe] = earliest_valid_keyframe(slam_->map_db_->get_all_keyframes(), timestamp_to_stage_and_frame);
-    if (!first_keyframe_data) {
-        spdlog::error("Failed to create any valid keyframes during initialialisation");
-        
-        metrics& track_metrics = *metrics::get_instance();
-        track_metrics.create_frame_metrics();
-        
-        track_metrics.calculated_focal_length_x_pixels = -1;
-        track_metrics.solved_frame_count = 0;
-        track_metrics.unsolved_frame_count = end - begin + 1;
-        track_metrics.num_points = 0;
-
-        timings& track_timings = track_metrics.track_timings;
-        track_timings.forward_mapping = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_forward_mapping - tp_start).count();
-
-        return false;
+        bool load_was_ok = slam_->load_map_database_from_memory(*better_map);
+        if (load_was_ok) {
+            map_was_restored = true;
+            //slam_->tracker_->tracking_state_ = tracker_state_t::Tracking;
+        }
     }
-    bool resultRelocalise = slam_->relocalize_by_pose(first_keyframe_data->get_pose_wc());
-    if (resultRelocalise == true)
-        spdlog::info("Relocalised to first keyframe pose (video frame {})", first_keyframe.value());
-    else {
-        spdlog::error("Failed to relocalise to first keyframe pose (video frame {})", first_keyframe.value());
+    spdlog::info("Map creation succeeded after tracking backwards from the initialisation frame");
+    }
+
+    const auto tp_after_forward_mapping = std::chrono::steady_clock::now();
+    track_metrics.track_timings.forward_mapping = std::chrono::duration_cast<std::chrono::duration<double>>(tp_after_forward_mapping - tp_start).count();
+
+    // Reposition tracking to the start of the map before tracking backwards
+    int reposition_frame;
+    bool track_repositioning_ok = reposition_tracking_to_first_map_keyframe(slam_, timestamp_to_stage_and_frame, reposition_frame);
+    if (!track_repositioning_ok) {
+        spdlog::error("No map to continue tracking from after first pass");
+        track_metrics.create_frame_metrics();
         return false;
     }
 
@@ -229,32 +268,42 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         set_stage_description_("Revisiting video");
 
     // Track backwards from the initialization point to finish the map
-    slam_->enable_map_reinitialisation(false);
-    for (int frame = first_keyframe.value() - 1; frame >= begin; --frame) {
+    slam_->enable_map_reinitialisation(false); // Prevent the map from being abandoned
+    if (!slam_->tracker_->map_selector_.test_file.empty()) {
+    //if (true) { // !!!!!!!!!!!!!!!!!!!!!!!!!!
+    }
+    else {
+        int pass_2_start_frame(reposition_frame); // or -1
+        metrics::get_instance()->pass_2_frames = 1 + pass_2_start_frame - begin;
+        for (int frame = pass_2_start_frame; frame >= begin; --frame) {
 
-        bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
-        if (!got_frame || frame_image.empty())
-            continue;
+            bool got_frame = get_frame_(frame, frame_image, mask, extra_keypoints);
+            if (!got_frame || frame_image.empty())
+                continue;
 
-        double timestamp = next_timestamp;
-        next_timestamp += timestamp_increment;
-        //timestampToVideoFrame[timestamp] = frame;
-        timestamp_to_stage_and_frame[timestamp] = { 1, frame };
-        metrics::get_instance()->current_frame_timestamp = timestamp;
+            double timestamp = next_timestamp;
+            next_timestamp += timestamp_increment;
+            //timestampToVideoFrame[timestamp] = frame;
+            timestamp_to_stage_and_frame[timestamp] = { 1, frame };
+            metrics::get_instance()->current_frame_timestamp = timestamp;
 
-        auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
-        send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
+            auto camera_pose = slam_->feed_monocular_frame(frame_image, timestamp, mask, &extra_keypoints);
+            send_frame_data(frame, slam_->get_current_frame().camera_, camera_pose, false, true);
 
-        double stage_progress = double(first_keyframe.value() - frame) / double(first_keyframe.value() - begin);
-        if (set_progress_)
-            set_progress_(overall_progress_percent(stage_progress, 0.4, 0.5));
-        if (cancel_ && cancel_())
-            return false;
+            double stage_progress = double(reposition_frame - frame) / double(reposition_frame - begin);
+            if (set_progress_)
+                set_progress_(overall_progress_percent(stage_progress, 0.4, 0.5));
+            if (cancel_ && cancel_())
+                return false;
 
-        spdlog::info("Tracking backwards at {} of {} done", frame, begin);
+            spdlog::info("Tracking backwards at {} of {} done", frame, begin);
+        }
     }
 
+    metrics::get_instance()->pass_2_end_keyframes = slam_->map_db_->get_num_keyframes();
     const auto tp_after_backward_mapping = std::chrono::steady_clock::now();
+
+    print_map_summary("Before bundle", *slam_->map_db_, timestamp_to_stage_and_frame, true);
 
     // Fail if there are no keyframes after tracking backwards (tracking got lost, tried to reinitialise, and failed)
     std::vector<std::shared_ptr<stella_vslam::data::keyframe>> all_keyframes;
@@ -282,16 +331,19 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Optimise the map
     if (true) {
-        spdlog::info("### solver[{}] 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        if (!slam_->loop_detector_is_enabled())
+            slam_->enable_loop_detector();
+
+        spdlog::info("### [{}] solver 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         slam_->run_loop_BA();
-        spdlog::info("### solver[{}] 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] solver 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         // Wait for map optimisation to finish
         while (slam_->loop_BA_is_running() || !slam_->mapping_module_is_enabled()) {
-            spdlog::info("### solver[{}] 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+            spdlog::info("### [{}] solver 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            spdlog::info("### solver[{}] 4", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+            spdlog::info("### [{}] solver 4", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         }
-        spdlog::info("### solver[{}] 5", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] solver 5", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     }
 
     const auto tp_after_bundle_adjust = std::chrono::steady_clock::now();
@@ -300,6 +352,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         set_stage_description_("Tracking");
 
     // Track forwards (without mapping) to calculate the non-keyframe camera positions
+    //slam_->tracker_->tracking_state_ = tracker_state_t::Lost;
     slam_->disable_mapping_module();
     int solved_frame_count(0), unsolved_frame_count(0);
     for (int frame = begin; frame <= end; ++frame) {
@@ -350,7 +403,6 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
 
     // Store the metrics
     if (final_solve) {
-        metrics& track_metrics = *metrics::get_instance();
 
         // Convert the timestamped metrics to frame numbers
         track_metrics.create_frame_metrics();

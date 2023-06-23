@@ -102,10 +102,72 @@ bool bundle_adjust_map(data::map_database* map_db)
 
 
     double focal_after = stella_vslam_bfx::focal_length_x_pixels_from_camera(camera);
-    spdlog::warn("_bundla_adjust_map_ Focal length {:03.2f} -> {:03.2f} ->", focal_before, focal_after);
+    spdlog::warn("_bundle_adjust_map_ Focal length {:03.2f} -> {:03.2f} ->", focal_before, focal_after);
 
 
     return ok;;
+}
+
+bool print_optimiser_error(g2o::SparseOptimizer& optimizer, bool before) {
+
+    // In my experience, this also happens if the statistical errors get large, e.g. when the optimizer diverges.
+    // The statistical error also gets large if you use large values in the information matrix.
+    optimizer.computeActiveErrors();
+    double rms = sqrt(optimizer.activeChi2() / (double)optimizer.activeEdges().size());
+    double rms_robust = sqrt(optimizer.activeRobustChi2() / (double)optimizer.activeEdges().size());
+    double chi2 = optimizer.activeChi2();
+    double chi2_robust = optimizer.activeRobustChi2();
+    double edges = optimizer.activeEdges().size();
+
+    std::string tag("$$$gauge");
+    spdlog::info("{} local opt {} chi2 {} robust-chi2 {} edges {} rms {} robust-rms {}", tag, (before ? "before" : "after"), chi2, chi2_robust, edges, rms, rms_robust);
+
+    return true;
+}
+
+// Guage check
+// Attempt to fix/detect the error message "Cholesky failure, writing debug.txt(Hessian loadable by Octave)"
+// https://github.com/RainerKuemmerle/g2o/issues/125
+// https://github.com/RainerKuemmerle/g2o/issues/35
+bool optimizer_guage_check(g2o::SparseOptimizer & optimizer) {
+
+    // At least one node should be fixed.
+    const g2o::SparseOptimizer::VertexContainer & active_vertices = optimizer.activeVertices();
+    int fixed(0), not_fixed(0);
+    for (auto const& vertex : active_vertices)
+        if (vertex->fixed())
+            ++fixed;
+        else
+            ++not_fixed;
+
+    // Graph should be connected.
+
+    // Information matrices should be positive semidefinite
+    /**
+     * verify that all the information of the edges are semi positive definite,
+     * i.e., all Eigenvalues are >= 0.
+     * @param verbose output edges with not PSD information matrix on cerr
+     * @return true if all edges have PSD information matrix
+     */
+    bool verbose_info_matrix_check(true);
+    bool all_psd = optimizer.verifyInformationMatrices(verbose_info_matrix_check);
+
+    // There should be no gauge freedom
+    int num_guage_freedom(0);
+    while (optimizer.gaugeFreedom()) {
+        ++num_guage_freedom;
+        g2o::OptimizableGraph::Vertex* gauge_node = optimizer.findGauge();
+        gauge_node->setFixed(true);
+    }
+
+    // "In my experience, this also happens if the statistical errors get large, e.g. when the optimizer diverges.
+    // The statistical error also gets large if you use large values in the information matrix."
+    // See bool print_error(g2o::SparseOptimizer& optimizer) above
+
+    std::string tag("$$$gauge");
+    spdlog::info("{} #fixed {}, #not-fixed {}, all PSD {}, gauge vertices {}", tag, fixed, not_fixed, all_psd, num_guage_freedom);
+
+    return true;
 }
 
 void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
@@ -249,6 +311,10 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
         block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
         algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
     }
+
+    // Setting to false prevents g20 writing debug files to disk (with message "Cholesky failure, writing debug.txt(Hessian loadable by Octave)")
+    bool debug_cholesky(false);
+    algorithm->setWriteDebug(debug_cholesky);
 
     g2o::SparseOptimizer optimizer;
     auto terminateAction = new terminate_action;
@@ -397,20 +463,26 @@ void local_bundle_adjuster_g2o::optimize(data::map_database* map_db,
         return;
     }
 
-
     if (camera_intrinsics_vtx) {
         double focal_length_x_pixels = camera_intrinsics_vtx->focal_length_x_pixels();
-        spdlog::warn("             before first -> {:03.2f} ->", focal_length_x_pixels);
+        spdlog::warn("             focal length before first local optimisation -> {:03.2f} ->", focal_length_x_pixels);
     }
 
-
     optimizer.initializeOptimization();
+
+    if (debug_cholesky) {
+        optimizer_guage_check(optimizer);
+        print_optimiser_error(optimizer, true);
+    }
+
     optimizer.optimize(active_num_first_iter);
 
+    if (debug_cholesky)
+        print_optimiser_error(optimizer, false);
 
     if (camera_intrinsics_vtx) {
         double focal_length_x_pixels = camera_intrinsics_vtx->focal_length_x_pixels();
-        spdlog::warn("             after first -> {:03.2f} ->", focal_length_x_pixels);
+        spdlog::warn("             focal length after first local optimisation -> {:03.2f} ->", focal_length_x_pixels);
     }
 
     // 6. Discard outliers, then perform the second optimization

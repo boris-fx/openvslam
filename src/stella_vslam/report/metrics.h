@@ -135,7 +135,6 @@ public:
     // Convert the timestamped metrics to frame numbers
     void create_frame_metrics();
 
-    int total_frames() const;
     std::set<std::pair<std::string, tracking_problem_level>> problems() const;
     std::optional<tracking_problem_level> max_problem_level() const;
 
@@ -143,8 +142,12 @@ public:
 
     float feature_min_size_scale;
 
-    struct candidate_map_stats { std::pair<int, int > frame_range; int key_count; };
+    struct candidate_map_stats { std::pair<int, int > frame_range; int key_count; int fail_count; bool abandoned; bool selected; };
     std::list<candidate_map_stats> candidate_map_list;
+
+    int pass_1_end_keyframes;
+    int pass_2_frames;
+    int pass_2_end_keyframes;
 
 public:
     std::set<std::set<double>> initialisation_frame_timestamps; /// For tracker internal use
@@ -192,6 +195,7 @@ public:
     struct stage_and_frame_pair_param {
         std::array<std::map<std::pair<int, int>, T>, max_stage> by_stage_and_frame;
         std::list<curve_section> graph() const;
+        std::list<curve_section> frame_separation_graph() const;
     };
 protected:
 

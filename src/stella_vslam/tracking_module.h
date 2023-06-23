@@ -136,6 +136,9 @@ public:
     //! current frame and its image
     data::frame curr_frm_;
 
+    //! last frame
+    data::frame last_frm_;
+
     //! optional hard on/off control for running re-initialisation when tracking fails
     stella_vslam_bfx::map_selector map_selector_;
 
@@ -216,9 +219,6 @@ protected:
     std::vector<std::shared_ptr<data::keyframe>> local_keyfrms_;
     //! local landmarks
     std::vector<std::shared_ptr<data::landmark>> local_landmarks_;
-
-    //! last frame
-    data::frame last_frm_;
 
     //! mutex for pause process
     mutable std::mutex mtx_last_frm_;

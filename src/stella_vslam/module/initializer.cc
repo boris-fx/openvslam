@@ -92,9 +92,15 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
             //initialize::initialisation_cache init_cache;
             //initialize::initialisation_cache* cache(refine_initialisation ? &init_cache : nullptr);
 
+            double base_parallax_threshold_degrees(1.0); // stella default is 1.0
+            double parallax_threshold_modifier_for_refinement(0.7);
+            double parallax_threshold_modifier_for_auto_focal(0.3); // just a test
+            double parallax_threshold_start = optimise_focal_length ? base_parallax_threshold_degrees * parallax_threshold_modifier_for_auto_focal : base_parallax_threshold_degrees;
+            double parallax_threshold_refine = parallax_threshold_start; // base_parallax_threshold_degrees* parallax_threshold_modifier_for_refinement;
+
             // try to initialize
             bool focal_length_was_modified;
-            if (!try_initialize_for_monocular(curr_frm, 1.0, true, &focal_length_was_modified)) {
+            if (!try_initialize_for_monocular(curr_frm, parallax_threshold_start, true, &focal_length_was_modified)) {
                 // failed
                 return false;
             }
@@ -137,7 +143,7 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                    spdlog::debug("Refining initialisation, before initialiser create impl {:p}", (void*)initializer_.get());
                    create_initializer(init_frm); // create a new initialiser
                    spdlog::debug("Refining initialisation,  after initialiser create impl {:p}", (void*)initializer_.get());
-                   bool ok_initialize = try_initialize_for_monocular(curr_frm, 0.7, false, &focal_length_was_modified); // Reinitialise with the new focal length
+                   bool ok_initialize = try_initialize_for_monocular(curr_frm, parallax_threshold_refine, false, &focal_length_was_modified); // Reinitialise with the new focal length
                                                                                                                         // and lower parallax threshold
                    
                    

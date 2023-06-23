@@ -91,6 +91,12 @@ public:
 
     //! Save the map database to file
     bool save_map_database(const std::string& path) const;
+    
+    //! Save the map database to a block of memory
+    bool save_map_database_to_memory(std::vector<unsigned char>& memory) const;
+
+    //! Load the map database from a block of memory
+    bool load_map_database_from_memory(std::vector<unsigned char> const& memory) const;
 
     //! Get the map publisher
     const std::shared_ptr<publish::map_publisher> get_map_publisher() const;

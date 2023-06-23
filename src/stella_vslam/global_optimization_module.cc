@@ -124,10 +124,12 @@ void global_optimization_module::run() {
 
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        //spdlog::info("### [{}] global_optimization_module::run() - after sleep", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
 
         // check if termination is requested
         if (terminate_is_requested()) {
             // terminate and break
+            spdlog::info("### [{}] global_optimization_module::run() - terminate requested", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
             terminate();
             break;
         }
@@ -203,7 +205,7 @@ void global_optimization_module::run() {
         correct_loop();
     }
 
-    spdlog::info("terminate global optimization module");
+    spdlog::info("### [{}] global_optimization_module::run() - terminated", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
 }
 
 void global_optimization_module::queue_keyframe(const std::shared_ptr<data::keyframe>& keyfrm) {
@@ -232,6 +234,10 @@ void global_optimization_module::run_forced_loop_bundle() {
         return;
     }
 
+    if (!cur_keyfrm_) {
+        auto all_keyframes = map_db_->get_all_keyframes();
+        cur_keyfrm_ = *all_keyframes.begin();
+    }
     // 0. pre-processing
 
     // 0-1. stop the mapping module and the previous loop bundle adjuster
@@ -714,6 +720,8 @@ void global_optimization_module::resume() {
 }
 
 std::shared_future<void> global_optimization_module::async_terminate() {
+    spdlog::info("### [{}] global_optimization_module::async_terminate()", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+
     std::lock_guard<std::mutex> lock(mtx_terminate_);
     terminate_is_requested_ = true;
     if (!future_terminate_.valid()) {
@@ -733,7 +741,7 @@ bool global_optimization_module::terminate_is_requested() const {
 }
 
 void global_optimization_module::terminate() {
-    spdlog::info("terminate: global_optimization_module");
+    spdlog::info("### [{}] global_optimization_module::terminate()", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     std::lock_guard<std::mutex> lock(mtx_terminate_);
     is_terminated_ = true;
     promise_terminate_.set_value();
@@ -743,18 +751,18 @@ void global_optimization_module::terminate() {
 
 bool global_optimization_module::loop_BA_is_running() const {
     if (force_loop_bundle_)
-        spdlog::info("### global_optimization_module::loop_BA_is_running[{}] 1 force_loop_bundle_==true", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] global_optimization_module::loop_BA_is_running 1 force_loop_bundle_==true", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     else
-        spdlog::info("### global_optimization_module::loop_BA_is_running[{}] 1 force_loop_bundle_==false", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] global_optimization_module::loop_BA_is_running 1 force_loop_bundle_==false", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     return loop_bundle_adjuster_->is_running() || force_loop_bundle_;
 }
 
 void global_optimization_module::run_loop_BA() {
-    spdlog::info("### global_optimization_module::run_loop_BA[{}] 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    spdlog::info("### [{}] global_optimization_module::run_loop_BA 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
-    spdlog::info("### global_optimization_module::run_loop_BA[{}] 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    spdlog::info("### [{}] global_optimization_module::run_loop_BA 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     force_loop_bundle_ = true;
-    spdlog::info("### global_optimization_module::run_loop_BA[{}] 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    spdlog::info("### [{}] global_optimization_module::run_loop_BA 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
 }
 
 void global_optimization_module::abort_loop_BA() {

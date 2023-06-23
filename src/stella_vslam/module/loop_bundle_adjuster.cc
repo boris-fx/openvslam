@@ -26,12 +26,12 @@ void loop_bundle_adjuster::abort() {
 }
 
 bool loop_bundle_adjuster::is_running() const {
-    spdlog::info("### loop_bundle_adjuster::is_running[{}] 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    spdlog::info("### [{}] loop_bundle_adjuster::is_running 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     std::lock_guard<std::mutex> lock(mtx_thread_);
     if (loop_BA_is_running_)
-        spdlog::info("### loop_bundle_adjuster::is_running[{}] 2 Running", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] loop_bundle_adjuster::is_running 2 Running", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     else
-        spdlog::info("### loop_bundle_adjuster::is_running[{}] 2 Not running", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] loop_bundle_adjuster::is_running 2 Not running", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     return loop_BA_is_running_;
 }
 
@@ -56,9 +56,9 @@ void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_
 
     {
         std::lock_guard<std::mutex> lock(mtx_thread_);
-        spdlog::info("### loop_bundle_adjuster::optimise[{}] 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] loop_bundle_adjuster::optimise 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         loop_BA_is_running_ = true;
-        spdlog::info("### loop_bundle_adjuster::optimise[{}] 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] loop_bundle_adjuster::optimise 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         abort_loop_BA_ = false;
     }
 
@@ -78,9 +78,9 @@ void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_
 
         // if the loop BA was aborted, cannot update the map
         if (!ok) {
-            spdlog::info("### loop_bundle_adjuster::optimise[{}] 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+            spdlog::info("### [{}] loop_bundle_adjuster::optimise 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
             loop_BA_is_running_ = false;
-            spdlog::info("### loop_bundle_adjuster::optimise[{}] 4", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+            spdlog::info("### [{}] loop_bundle_adjuster::optimise 4", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
             abort_loop_BA_ = false;
             return;
         }
@@ -188,9 +188,9 @@ void loop_bundle_adjuster::optimize(const std::shared_ptr<data::keyframe>& curr_
         }
 
         mapper_->resume();
-        spdlog::info("### loop_bundle_adjuster::optimise[{}] 5", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] loop_bundle_adjuster::optimise 5", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
         loop_BA_is_running_ = false;
-        spdlog::info("### loop_bundle_adjuster::optimise[{}] 6", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+        spdlog::info("### [{}] loop_bundle_adjuster::optimise 6", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     }
 }
 

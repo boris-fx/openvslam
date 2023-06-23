@@ -216,6 +216,21 @@ namespace stella_vslam_bfx {
         }
         return gg;
     }
+
+    template<typename T>
+    std::list<curve_section> metrics::stage_and_frame_pair_param<T>::frame_separation_graph() const
+    {
+        std::list<curve_section> gg;
+        for (int stage = 0; stage < max_stage; ++stage) {
+            std::map<double, double> g;
+            for (auto const& i : by_stage_and_frame[stage])
+                g[i.first.second] = i.first.second - i.first.first;
+            if (!g.empty())
+                gg.push_back({ g, stage });
+        }
+        return gg;
+    }
+
     //////////////////////////////////////////////////////////////
 
     const double metrics::par_percent_error_trigger = 20.0;
@@ -361,9 +376,14 @@ namespace stella_vslam_bfx {
                 min_num_valid_triangulated_points = num_valid_triangulated_points.value().second;
         }
         if (triangulation_parallax) {
-            this->triangulation_parallax.by_stage_and_frame[stage][frames] = triangulation_parallax.value().first;
-            if (!max_triangulation_parallax)
-                max_triangulation_parallax = triangulation_parallax.value().second;
+            // NB: raw value is cosine of the parallax
+            const double pi = 3.14159265358979323846;
+            double parallax_degrees = std::acos(triangulation_parallax.value().first) * 180.0 / pi;
+            this->triangulation_parallax.by_stage_and_frame[stage][frames] = parallax_degrees;
+            if (!max_triangulation_parallax) {
+                double parallax_threshold_degrees = std::acos(triangulation_parallax.value().second) * 180.0 / pi;
+                max_triangulation_parallax = parallax_threshold_degrees;
+            }
         }
         if (triangulation_ambiguity) {
             this->triangulation_ambiguity.by_stage_and_frame[stage][frames] = triangulation_ambiguity.value().first;
@@ -415,11 +435,6 @@ namespace stella_vslam_bfx {
 
         //transform_metrics_frame_data(map_size);
         //transform_metrics_frame_data(tracking_fail_count, *timestamp_to_stage_and_frame);
-    }
-
-    int metrics::total_frames() const
-    {
-        return solved_frame_count + unsolved_frame_count;
     }
 
     double percent_difference(double a, double b)
@@ -610,6 +625,9 @@ namespace stella_vslam_bfx {
 
 void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative,
     std::optional<double> known_focal_length_x_pixels) const {
+
+    int video_frame_count = solved_frame_count + unsolved_frame_count;
+
     std::ofstream myfile;
     myfile.open(filename.data());
 
@@ -644,46 +662,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " pixels.</p>\n";
     html << "<p>Feature detector adaptive min size scale: " << feature_min_size_scale << ".</p>\n";
     
-    if (debugging.debug_initialisation) {
-        html << "<h2>Initialisation debug</h2>\n";
-        initialisation_debug_object.add_to_html(html, input_video_metadata.ground_truth_focal_length_x_pixels());
-    }
 
-    // Number of features and matches by frame
-    curve_section graph_num_matches = select_second_frame_data(initialisation_debug_object.p_num_matches.by_frame);
-    curve_section graph_feature_count;
-    for (auto const& i : initialisation_debug_object.feature_count_by_frame)
-        graph_feature_count[i.first] = i.second;
-    graph_num_matches.stage = graph_feature_count.stage = 0;
-    write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Feature count", graph_feature_count}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
-    html << "<hr>" << std::endl;
-
-    // Structure type (planar or non-planar) costs during two-view matching 
-    std::map<double, double> graph_cost_H = select_second_frame_data(initialisation_debug_object.p_cost_H.by_frame);
-    std::map<double, double> graph_cost_F = select_second_frame_data(initialisation_debug_object.p_cost_F.by_frame);
-    html << "<h2>Structure type</h2>" << std::endl;
-    double cost_percentile90 = 1.1 * std::max(percentile_y_value(graph_cost_H, 0.9), percentile_y_value(graph_cost_F, 0.9));
-    
-    std::set<SplitCurve> cost_curves = { { "Planar error", { curve_section(graph_cost_H, 0) } },
-                                         { "Non-planar error", { curve_section(graph_cost_F, 0) } } };
-
-
-    //for (auto const& curve : cost_curves) {
-    //    html << " curve  " << curve.first << "\n";
-    //    for (auto const& g : curve.second) {
-    //        html << " struct  {\n";
-    //        html << " stage =  " << g.stage << "\n";
-    //        for (auto const& i : g)
-    //            html << "   {" << i.first << ", " << i.second << "},\n";
-    //        html << "}\n";
-    //    }
-    //}
-
-    //write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"Planar error", graph_cost_H}, {"Non-planar error", graph_cost_F} }), range_behaviour::no_max, cost_percentile90, std::nullopt));
-    write_graph_as_svg(html, Graph("Second init frame", "Cost", cost_curves, range_behaviour::no_max, cost_percentile90, std::nullopt));
-
-    html << "<p>Average feature match deviation from a planar or non-planar geometric model (pixels - with max of a few pixels).</p>" << std::endl;
-    html << "<hr>" << std::endl;
 
     html << "<h2>Parameters</h2>\n";
     if (known_focal_length_x_pixels)
@@ -744,6 +723,87 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
                 html << ".</p>\n";
         }
     }
+
+    html << "<h2> Map</h2>\n";
+    // Solved/unsolved cameras
+    html << "<p> " << solved_frame_count << " cameras created from the " << video_frame_count << " frames of video";
+    if (unsolved_frame_count != 0)
+        html << " - <mark class=\"red\"> \<" << unsolved_frame_count << " frames not tracked\></mark></p>\n";
+    html << "<p> " << num_points << " 3D points</p>\n";
+    if (initialisation_frames.empty())
+        html << "<p> No successful initialisations</p>\n";
+    for (auto const& initialisation_attempt_frames : initialisation_frames)
+        html << "<p> Initialisation Frames: " << print_initialisation(initialisation_attempt_frames, intermediate_focal_estimates) << "</p>\n";
+    if (initialisation_debug_object.average_init_frame_feature_count())
+        html << "<p> Initialisation average feature count: " << initialisation_debug_object.average_init_frame_feature_count().value() << "</p>\n";
+    if (initialisation_debug_object.average_init_frame_unguided_match_count())
+        html << "<p> Initialisation average match count: " << initialisation_debug_object.average_init_frame_unguided_match_count().value() << "</p>\n";
+
+    // Map growth
+    html << "<h2> Map Growth</h2>\n";
+    for (auto const& candidate_map : candidate_map_list)
+        if (candidate_map.abandoned)
+            html << "<p>Rejected map " << candidate_map.frame_range.first << "-" << candidate_map.frame_range.second << " (" << candidate_map.key_count << " keyframes, " << candidate_map.fail_count << " fails) " << (candidate_map.selected ? " (reinstated for second pass)" : "") << "</p>\n";
+        else
+            html << "<p>Final map " << candidate_map.frame_range.first << "-" << candidate_map.frame_range.second << " (" << candidate_map.key_count << " keyframes, " << candidate_map.fail_count << " fails) " << (candidate_map.selected ? " (used for second pass)" : "") << "</p>\n";
+    html << "<p>Second pass added " << pass_2_end_keyframes - pass_1_end_keyframes << " keyframes from " << pass_2_frames << " frames</p>\n";
+    html << "<p>Final pass created " << solved_frame_count << " camera positions from " << video_frame_count << " frames</p>\n";
+
+    // Timing
+    html << "<h2> Timing</h2>\n";
+    std::optional<double> fps(video_frame_count == 0 ? std::nullopt : std::optional<double>((double(video_frame_count) / track_timings.total_time_sec())));
+    html << "<p> Total tracking time:" << track_timings.total_time_sec() << " sec";
+    if (fps)
+        html << " (" << fps.value() << "fps)";
+    html << "</p>\n ";
+    html << "<p> Forward mapping: " << track_timings.forward_mapping << ".</p>\n";
+    html << "<p> Backward mapping: " << track_timings.backward_mapping << ".</p>\n";
+    html << "<p> Loop Closing: " << track_timings.loop_closing << ".</p>\n";
+    html << "<p> Optimisation: " << track_timings.optimisation << ".</p>\n";
+    html << "<p> Final Tracking: " << track_timings.tracking << ".</p>\n";
+
+    html << "<h2> Intermediate focal length estimates</h2>\n";
+
+    if (debugging.debug_initialisation) {
+        html << "<h2>Initialisation debug</h2>\n";
+        initialisation_debug_object.add_to_html(html, input_video_metadata.ground_truth_focal_length_x_pixels());
+    }
+
+    // Number of features and matches by frame
+    curve_section graph_num_matches = select_second_frame_data(initialisation_debug_object.p_num_matches.by_frame);
+    curve_section graph_feature_count;
+    for (auto const& i : initialisation_debug_object.feature_count_by_frame)
+        graph_feature_count[i.first] = i.second;
+    graph_num_matches.stage = graph_feature_count.stage = 0;
+    write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Feature count", graph_feature_count}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
+    html << "<hr>" << std::endl;
+
+    // Structure type (planar or non-planar) costs during two-view matching 
+    std::map<double, double> graph_cost_H = select_second_frame_data(initialisation_debug_object.p_cost_H.by_frame);
+    std::map<double, double> graph_cost_F = select_second_frame_data(initialisation_debug_object.p_cost_F.by_frame);
+    html << "<h2>Structure type</h2>" << std::endl;
+    double cost_percentile90 = 1.1 * std::max(percentile_y_value(graph_cost_H, 0.9), percentile_y_value(graph_cost_F, 0.9));
+
+    std::set<SplitCurve> cost_curves = { { "Planar error", { curve_section(graph_cost_H, 0) } },
+                                         { "Non-planar error", { curve_section(graph_cost_F, 0) } } };
+
+
+    //for (auto const& curve : cost_curves) {
+    //    html << " curve  " << curve.first << "\n";
+    //    for (auto const& g : curve.second) {
+    //        html << " struct  {\n";
+    //        html << " stage =  " << g.stage << "\n";
+    //        for (auto const& i : g)
+    //            html << "   {" << i.first << ", " << i.second << "},\n";
+    //        html << "}\n";
+    //    }
+    //}
+
+    //write_graph_as_svg(html, Graph("Second init frame", "Cost", std::set<Curve>({ {"Planar error", graph_cost_H}, {"Non-planar error", graph_cost_F} }), range_behaviour::no_max, cost_percentile90, std::nullopt));
+    write_graph_as_svg(html, Graph("Second init frame", "Cost", cost_curves, range_behaviour::no_max, cost_percentile90, std::nullopt));
+
+    html << "<p>Average feature match deviation from a planar or non-planar geometric model (pixels - with max of a few pixels).</p>" << std::endl;
+    html << "<hr>" << std::endl;
 
     // Intermediate focal length estimates
     if (!known_focal_length_x_pixels) {
@@ -839,41 +899,11 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     write_graph_as_svg(html, Graph("Frame #2", "Ave candidates", std::set<SplitCurve>({ {"Ave candidates", area_match_ave_candidates.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max));
 
 
-    write_graph_as_svg(html, Graph("Frame #2", "Valid Points", std::set<SplitCurve>({ {"Valid Points", num_valid_triangulated_points.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, min_num_valid_triangulated_points));
-    write_graph_as_svg(html, Graph("Frame #2", "Ambiguity", std::set<SplitCurve>({ {"Ambiguity", triangulation_ambiguity.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, max_triangulation_ambiguity));
-    write_graph_as_svg(html, Graph("Frame #2", "Parallax", std::set<SplitCurve>({ {"Parallax", triangulation_parallax.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_min_0, max_triangulation_parallax));
-    write_graph_as_svg(html, Graph("Frame #2", "Triangulated Points", std::set<SplitCurve>({ {"Points", num_triangulated_points.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, min_num_triangulated_points));
-
-
-    html << "<h2> Map</h2>\n";
-    // Solved/unsolved cameras
-    html << "<p> " << solved_frame_count << " cameras created from the " << total_frames() << " frames of video";
-    if (unsolved_frame_count!=0)
-        html << " - <mark class=\"red\"> \<" << unsolved_frame_count << " frames not tracked\></mark></p>\n";
-    html << "<p> " << num_points << " 3D points</p>\n";
-    if (initialisation_frames.empty())
-        html << "<p> No successful initialisations</p>\n";
-    for (auto const& initialisation_attempt_frames : initialisation_frames)
-        html << "<p> Initialisation Frames: " << print_initialisation(initialisation_attempt_frames, intermediate_focal_estimates) << "</p>\n";
-    if (initialisation_debug_object.average_init_frame_feature_count())
-        html << "<p> Initialisation average feature count: " << initialisation_debug_object.average_init_frame_feature_count().value() << "</p>\n";
-    if (initialisation_debug_object.average_init_frame_unguided_match_count())
-        html << "<p> Initialisation average match count: " << initialisation_debug_object.average_init_frame_unguided_match_count().value() << "</p>\n";
-    for (auto const& candidate_map : candidate_map_list)
-        html << "<p> Candidate map frames: " << candidate_map.frame_range.first << "-" << candidate_map.frame_range.second << " keyframes: " << candidate_map.key_count << "</p>\n";
-
-    // Timing
-    html << "<h2> Timing</h2>\n";
-    std::optional<double> fps(total_frames() == 0 ? std::nullopt : std::optional<double>((double(total_frames()) / track_timings.total_time_sec())));
-    html << "<p> Total tracking time:" << track_timings.total_time_sec() << " sec";
-    if (fps)
-        html << " (" << fps.value() << "fps)";
-    html << "</p>\n ";
-    html << "<p> Forward mapping: " << track_timings.forward_mapping << ".</p>\n";
-    html << "<p> Backward mapping: " << track_timings.backward_mapping << ".</p>\n";
-    html << "<p> Loop Closing: " << track_timings.loop_closing << ".</p>\n";
-    html << "<p> Optimisation: " << track_timings.optimisation << ".</p>\n";
-    html << "<p> Final Tracking: " << track_timings.tracking << ".</p>\n";
+    write_graph_as_svg(html, Graph("Frame #2", "Valid Points (match rejected if below threshold)", std::set<SplitCurve>({ {"Valid Points", num_valid_triangulated_points.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, min_num_valid_triangulated_points));
+    write_graph_as_svg(html, Graph("Frame #2", "Ambiguity (match rejected if above threshold)", std::set<SplitCurve>({ {"Ambiguity", triangulation_ambiguity.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, max_triangulation_ambiguity));
+    write_graph_as_svg(html, Graph("Frame #2", "Parallax (match rejected if below threshold)", std::set<SplitCurve>({ {"Parallax", triangulation_parallax.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_min_0, max_triangulation_parallax));
+    write_graph_as_svg(html, Graph("Frame #2", "Triangulated Points (match rejected if below threshold)", std::set<SplitCurve>({ {"Points", num_triangulated_points.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, min_num_triangulated_points));
+    write_graph_as_svg(html, Graph("Frame #2", "Frames of separation", std::set<SplitCurve>({ {"Separation", triangulation_parallax.frame_separation_graph()} }), range_behaviour::split_by_stage, range_behaviour::no_min_0));
 
     // Print the config settings
     std::stringstream ss_settings;
@@ -1016,8 +1046,9 @@ void metrics::save_html_overview(std::string_view const& filename,
 
     for (auto const& test_info : track_test_info_list) {
         metrics const* m(test_info.m);
+        int video_frame_count = m->solved_frame_count + m->unsolved_frame_count;
         bool fail(m->solved_frame_count == 0);
-        std::optional<double> fps(m->total_frames() == 0 ? std::nullopt : std::optional<double>((double(m->total_frames()) / m->track_timings.total_time_sec())));
+        std::optional<double> fps(video_frame_count == 0 ? std::nullopt : std::optional<double>((double(video_frame_count) / m->track_timings.total_time_sec())));
         std::string style = fail ? "style=\"background-color: #ffcccc; .hover:background-color: #dc8c8c;\"" : "";
 
         html << "  <a role=\"row\" class=\"row\" href=\"" << test_info.html_filename << "\"" << style << ">\n";
@@ -1029,7 +1060,7 @@ void metrics::save_html_overview(std::string_view const& filename,
         html << "      \n";
         html << "    </div>\n";
         html << "    <div role=\"gridcell\" class=\"cell\">\n";
-        html << "      <text>" << m->total_frames() << " frames, " << m->track_timings.total_time_sec() << " sec";
+        html << "      <text>" << video_frame_count << " frames, " << m->track_timings.total_time_sec() << " sec";
         if (fps)
             html << " (" << fps.value() << "fps)";
         html << "</text>\n ";

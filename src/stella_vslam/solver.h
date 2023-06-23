@@ -110,8 +110,10 @@ protected:
     std::function<void(std::shared_ptr<frame_display_data>)> display_frame_;
     std::function<bool()> cancel_;
 
-    std::shared_ptr<stella_vslam::system> slam_;
-    std::shared_ptr<stella_vslam::config> cfg_;
+    std::shared_ptr<stella_vslam::system>  slam_;
+    std::shared_ptr<stella_vslam::config>  cfg_;
+    std::ifstream                         *vocab_data_;
+    std::string                            vocab_file_path_;
 };
 
 } // namespace stella_vslam_bfx

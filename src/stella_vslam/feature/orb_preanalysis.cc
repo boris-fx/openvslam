@@ -28,7 +28,7 @@ void preanalysis(//stella_vslam::config const& cfg,
                  const cv::Mat& img_2, const cv::Mat& mask_2,
                  stella_vslam::system * sys) {
 
-    int min_matches(75);
+    int min_matches(100);
 
     float boost(1.0f);
     for (int i = 0; i < 10; ++i) {

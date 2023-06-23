@@ -115,6 +115,14 @@ void tracking_module::finish_relocalize_by_pose_request() {
     relocalize_by_pose_is_requested_ = false;
 }
 
+std::string state_string(tracker_state_t state)
+{
+    if (state == tracker_state_t::Initializing) return "Initializing";
+    if (state == tracker_state_t::Tracking) return "Tracking";
+    if (state == tracker_state_t::Lost) return "Lost";
+    return "";
+};
+
 void tracking_module::reset() {
     spdlog::info("resetting system");
 
@@ -126,8 +134,10 @@ void tracking_module::reset() {
     future_mapper_reset.get();
     future_global_optimizer_reset.get();
 
-    map_selector_.map_reset(map_db_);
-    
+    spdlog::info("[] tracking_module::reset() - storing map  (fail is {})", map_selector_.track_fail_count);
+    map_selector_.store_abandoned_map(map_db_);
+    spdlog::info("[] tracking_module::reset() - map was stored  (fail is {})", map_selector_.track_fail_count);
+
     bow_db_->clear();
     map_db_->clear();
 
@@ -136,11 +146,32 @@ void tracking_module::reset() {
     last_reloc_frm_id_ = 0;
     last_reloc_frm_timestamp_ = 0.0;
 
+    spdlog::info("tracking_module::reset() tracking_state_ changed from {} to {}", state_string(tracking_state_), state_string(tracker_state_t::Initializing));
     tracking_state_ = tracker_state_t::Initializing;
 
     
 }
 
+// returns true if the map was reset
+bool reset_map_if_too_many_fails(stella_vslam_bfx::map_selector &map_selector,
+                                 data::map_database* map_db_,
+                                 tracking_module *tracker,
+                                 mapping_module* mapper,
+                                 data::frame const& curr_frm)
+{
+    bool reset_map(map_selector.should_reset_map_for_tracking_failure(map_db_));
+    spdlog::info("[] tracking_module::feed_frame - reset map is {} (fail is {})", reset_map, map_selector.track_fail_count);
+    if (!mapper->is_paused())
+    stella_vslam_bfx::metrics::get_instance()->submit_map_size_and_tracking_fails(curr_frm.timestamp_, map_db_->get_num_keyframes(), map_selector.track_fail_count);
+    if (!mapper->is_paused() && reset_map) { // reset the map
+        spdlog::info("re-running initialization");
+        tracker->reset();
+        stella_vslam_bfx::metrics::get_instance()->submit_mapping_reset(curr_frm.timestamp_);
+        spdlog::info("[] tracking_module::feed_frame - map was reset  (fail is {})", reset_map, map_selector.track_fail_count);
+        return true;
+    }
+    return false;
+}
 std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
     
     //spdlog::info("tracking_module::feed_frame {} {}", curr_frm.id_, curr_frm.timestamp_);
@@ -153,6 +184,8 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
     }
 
     curr_frm_ = curr_frm;
+
+    spdlog::info("feed_frame() tracking_state_ {}", state_string(tracking_state_));
 
     bool succeeded = false;
     if (tracking_state_ == tracker_state_t::Initializing) {
@@ -174,26 +207,32 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
 
     // state transition
     if (succeeded) {
+        spdlog::info("feed_frame() tracking_state_ changed from {} to {}", state_string(tracking_state_), state_string(tracker_state_t::Tracking));
         tracking_state_ = tracker_state_t::Tracking;
         if (!mapper_->is_paused())
             stella_vslam_bfx::metrics::get_instance()->submit_map_size_and_tracking_fails(curr_frm_.timestamp_, map_db_->get_num_keyframes(), map_selector_.track_fail_count);
     }
     else if (tracking_state_ == tracker_state_t::Tracking) {
+        spdlog::info("feed_frame() tracking_state_ changed from {} to {}", state_string(tracking_state_), state_string(tracker_state_t::Lost));
         tracking_state_ = tracker_state_t::Lost;
 
         spdlog::info("tracking lost: frame {}", curr_frm_.id_);
+        spdlog::info("[] tracking_module::feed_frame - set to lost {} (enabled {}, reset {})", map_selector_.track_fail_count, map_selector_.enabled, map_selector_.allow_reset);
         if (map_selector_.enabled) {
-            if (map_selector_.allow_reset) {
-                bool reset_map(map_selector_.should_reset_map_for_tracking_failure(map_db_));
-                if (!mapper_->is_paused())
-                    stella_vslam_bfx::metrics::get_instance()->submit_map_size_and_tracking_fails(curr_frm_.timestamp_, map_db_->get_num_keyframes(), map_selector_.track_fail_count);
-                if (!mapper_->is_paused() && reset_map) { // reset the map
-                    spdlog::info("re-running initialization");
-                    reset();
-                    stella_vslam_bfx::metrics::get_instance()->submit_mapping_reset(curr_frm_.timestamp_);
-                    return nullptr;
-                }
-            }
+            //bool reset_map(map_selector_.should_reset_map_for_tracking_failure(map_db_));
+            //spdlog::info("[] tracking_module::feed_frame - reset map is {} (fail is {})", reset_map, map_selector_.track_fail_count);
+            //if (!mapper_->is_paused())
+            //    stella_vslam_bfx::metrics::get_instance()->submit_map_size_and_tracking_fails(curr_frm_.timestamp_, map_db_->get_num_keyframes(), map_selector_.track_fail_count);
+            //if (!mapper_->is_paused() && reset_map) { // reset the map
+            //    spdlog::info("re-running initialization");
+            //    reset();
+            //    stella_vslam_bfx::metrics::get_instance()->submit_mapping_reset(curr_frm_.timestamp_);
+            //    spdlog::info("[] tracking_module::feed_frame - map was reset  (fail is {})", reset_map, map_selector_.track_fail_count);
+            //    return nullptr;
+            //}
+
+            if (bool map_was_reset = reset_map_if_too_many_fails(map_selector_, map_db_, this, mapper_, curr_frm))
+                return nullptr;
         }
         else {
             // if tracking is failed within 60.0 sec after initialization, reset the system
@@ -205,6 +244,10 @@ std::shared_ptr<Mat44_t> tracking_module::feed_frame(data::frame curr_frm) {
                 return nullptr;
             }
         }
+    }
+    else if (tracking_state_ == tracker_state_t::Lost) {
+        if (bool map_was_reset = reset_map_if_too_many_fails(map_selector_, map_db_, this, mapper_, curr_frm))
+            return nullptr;
     }
 
     std::shared_ptr<Mat44_t> cam_pose_wc = nullptr;
@@ -235,6 +278,7 @@ bool tracking_module::track(bool relocalization_is_needed) {
     // update the camera pose of the last frame
     // because the mapping module might optimize the camera pose of the last frame's reference keyframe
     SPDLOG_TRACE("tracking_module: update the camera pose of the last frame (curr_frm_={})", curr_frm_.id_);
+    spdlog::info("tracking_module: update the camera pose of the last frame(curr_frm_ = {})", curr_frm_.id_);
     update_last_frame();
 
     // set the reference keyframe of the current frame
@@ -242,21 +286,25 @@ bool tracking_module::track(bool relocalization_is_needed) {
 
     bool succeeded = false;
     if (relocalize_by_pose_is_requested()) {
+        spdlog::info("tracking_module: relocalize_by_pose (curr_frm_={})", curr_frm_.id_);
         // Force relocalization by pose
         succeeded = relocalize_by_pose(get_relocalize_by_pose_request());
     }
     else if (!relocalization_is_needed) {
         SPDLOG_TRACE("tracking_module: track_current_frame (curr_frm_={})", curr_frm_.id_);
+        spdlog::info("tracking_module: track_current_frame (curr_frm_={})", curr_frm_.id_);
         succeeded = track_current_frame();
     }
     else if (enable_auto_relocalization_) {
         // Compute the BoW representations to perform relocalization
         SPDLOG_TRACE("tracking_module: Compute the BoW representations to perform relocalization (curr_frm_={})", curr_frm_.id_);
+        spdlog::info("tracking_module: Compute the BoW representations to perform relocalization (curr_frm_={})", curr_frm_.id_);
         if (!curr_frm_.bow_is_available()) {
             curr_frm_.compute_bow(bow_vocab_);
         }
         // try to relocalize
         SPDLOG_TRACE("tracking_module: try to relocalize (curr_frm_={})", curr_frm_.id_);
+        spdlog::info("tracking_module: try to relocalize (curr_frm_={})", curr_frm_.id_);
         succeeded = relocalizer_.relocalize(bow_db_, curr_frm_);
         if (succeeded) {
             last_reloc_frm_id_ = curr_frm_.id_;
@@ -270,6 +318,7 @@ bool tracking_module::track(bool relocalization_is_needed) {
     unsigned int num_reliable_lms = 0;
     if (succeeded) {
         SPDLOG_TRACE("tracking_module: update_local_map (curr_frm_={})", curr_frm_.id_);
+        spdlog::info("tracking_module: update_local_map (curr_frm_={})", curr_frm_.id_);
         update_local_map();
         SPDLOG_TRACE("tracking_module: optimize_current_frame_with_local_map (curr_frm_={})", curr_frm_.id_);
         succeeded = optimize_current_frame_with_local_map(num_tracked_lms, num_reliable_lms, min_num_obs_thr);
@@ -598,6 +647,9 @@ bool tracking_module::new_keyframe_is_needed(unsigned int num_tracked_lms,
     if (curr_frm_.timestamp_ < last_reloc_frm_timestamp_ + 1.0) {
         return false;
     }
+
+    if (!curr_frm_.ref_keyfrm_)
+        spdlog::error("tracking_module::new_keyframe_is_needed(): curr_frm_.ref_keyfrm_ is null");
 
     // check the new keyframe is needed
     return keyfrm_inserter_.new_keyframe_is_needed(map_db_, curr_frm_, num_tracked_lms, num_reliable_lms, *curr_frm_.ref_keyfrm_, min_num_obs_thr);

@@ -287,6 +287,22 @@ bool system::save_map_database(const std::string& path) const {
     return ok;
 }
 
+bool system::load_map_database_from_memory(std::vector<unsigned char> const& memory) const {
+    pause_other_threads();
+    spdlog::debug("load_map_database_from_memory: {}", memory.size());
+    bool ok = map_database_io_->load_from_mem(memory, cam_db_, orb_params_db_, map_db_, bow_db_, bow_vocab_);
+    resume_other_threads();
+    return ok;
+}
+
+bool system::save_map_database_to_memory(std::vector<unsigned char> & memory) const {
+    pause_other_threads();
+    spdlog::debug("save_map_database_to_memory: {}", memory.size());
+    bool ok = map_database_io_->save_to_mem(memory, cam_db_, orb_params_db_, map_db_);
+    resume_other_threads();
+    return ok;
+}
+
 const std::shared_ptr<publish::map_publisher> system::get_map_publisher() const {
     return map_publisher_;
 }

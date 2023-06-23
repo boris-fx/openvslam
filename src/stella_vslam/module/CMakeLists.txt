@@ -4,6 +4,7 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/initializer.h
                ${CMAKE_CURRENT_SOURCE_DIR}/relocalizer.h
                ${CMAKE_CURRENT_SOURCE_DIR}/frame_tracker.h
+			   ${CMAKE_CURRENT_SOURCE_DIR}/frame_track_repositioning.h
                ${CMAKE_CURRENT_SOURCE_DIR}/keyframe_inserter.h
                ${CMAKE_CURRENT_SOURCE_DIR}/two_view_triangulator.h
                ${CMAKE_CURRENT_SOURCE_DIR}/local_map_cleaner.h
@@ -14,6 +15,7 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/initializer.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/relocalizer.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/frame_tracker.cc
+			   ${CMAKE_CURRENT_SOURCE_DIR}/frame_track_repositioning.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/keyframe_inserter.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/two_view_triangulator.cc
                ${CMAKE_CURRENT_SOURCE_DIR}/local_map_cleaner.cc
