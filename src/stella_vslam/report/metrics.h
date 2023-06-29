@@ -130,6 +130,10 @@ public:
                                         std::optional<std::pair<double, double>> triangulation_ambiguity); // threshold is a maximum
     void submit_mapping_reset(double timestamp);
 
+    void submit_initialiser_constrained_matching_stats(std::vector<bool> const& homography_inliers, std::vector<bool> const& fundamental_inliers);
+
+    void submit_focal_length_estimate(double focal_length, double stability);
+
     double current_frame_timestamp;
 
     // Convert the timestamped metrics to frame numbers
@@ -197,6 +201,11 @@ public:
         std::list<curve_section> graph() const;
         std::list<curve_section> frame_separation_graph() const;
     };
+
+protected:
+
+    void add_matching_details(std::stringstream& html, curve_section const& graph_feature_count, curve_section const& graph_num_matches) const;
+
 protected:
 
     std::list<focal_estimate> intermediate_focal_estimates;
@@ -214,15 +223,22 @@ protected:
     stage_and_frame_pair_param<double> area_match_num_attempted;
     stage_and_frame_pair_param<double> area_match_ave_candidates;
 
-    stage_and_frame_pair_param<double>  num_triangulated_points;
-    stage_and_frame_pair_param<double>  num_valid_triangulated_points;
-    stage_and_frame_pair_param<double>  triangulation_parallax;
-    stage_and_frame_pair_param<double>  triangulation_ambiguity;
+    stage_and_frame_pair_param<double>  num_triangulated_points; // 3
+    stage_and_frame_pair_param<double>  num_valid_triangulated_points; // 0
+    stage_and_frame_pair_param<double>  triangulation_parallax; // 2
+    stage_and_frame_pair_param<double>  triangulation_ambiguity; // 1
 
-    std::optional<double> min_num_triangulated_points;
-    std::optional<double> min_num_valid_triangulated_points;
-    std::optional<double> max_triangulation_parallax;
-    std::optional<double> max_triangulation_ambiguity;
+    std::optional<double> min_num_triangulated_points; // 3
+    std::optional<double> min_num_valid_triangulated_points; // 0
+    std::optional<double> max_triangulation_parallax; // 2
+    std::optional<double> max_triangulation_ambiguity; // 1
+
+    stage_and_frame_pair_param<double>  initialisation_homography_fundamental_candidates;
+    stage_and_frame_pair_param<double>  initialisation_homography_inliers;
+    stage_and_frame_pair_param<double>  initialisation_fundamental_inliers;
+
+    stage_and_frame_pair_param<double>  initialisation_focal_length_estimate;
+    stage_and_frame_pair_param<double>  initialisation_focal_length_stability;
 
     std::list<double> mapping_reset_timestamps;
     std::list<int> mapping_reset_frames;

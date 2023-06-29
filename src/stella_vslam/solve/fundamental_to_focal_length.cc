@@ -255,6 +255,7 @@ double min_geometric_error_focal_length(stella_vslam::Mat33_t const& F_21, camer
     //    approaching infinity, and the focal length giving the minimum error
     double stability = error_for_max_focal_length / error_min_value;
     *focal_length_estimate_is_stable = stability > 2.0;
+    metrics::get_instance()->submit_focal_length_estimate(focal_length_x_pixels_2, stability);
     //*focal_length_estimate_is_stable = error_for_max_focal_length > 0.04; // to be explored more
 
     spdlog::info("Initialisation focal length: error_for_max_focal_length {}, error_min_value {} (stability {})", error_for_max_focal_length, error_min_value, stability);

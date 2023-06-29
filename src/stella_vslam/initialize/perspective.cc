@@ -68,7 +68,8 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
 
     // Average cost per match (pixels)
     stella_vslam_bfx::metrics::initialisation_debug().submit_homography_fundamental_cost(cost_H/double(ref_cur_matches_.size()), cost_F/double(ref_cur_matches_.size()));
-
+    stella_vslam_bfx::metrics::get_instance()->submit_initialiser_constrained_matching_stats(homography_solver.get_inlier_matches(), fundamental_solver.get_inlier_matches());
+    
     // select a case according to the cost
     if (0.5 > rel_cost_H && homography_solver.solution_is_valid()) {
         spdlog::debug("reconstruct_with_H");
