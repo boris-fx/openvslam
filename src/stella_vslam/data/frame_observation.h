@@ -34,6 +34,26 @@ struct frame_observation {
     std::vector<float> depths_;
     //! keypoint indices in each of the cells
     std::vector<std::vector<std::vector<unsigned int>>> keypt_indices_in_cells_;
+
+    //-----------------------------------------
+    // stella_vslam_bfx modification for importing tracked point matches
+
+    //! index range of prematched keypoints (first is inclusive, second is exclusive)
+    std::pair<int, int> prematched_keypts_ = std::make_pair(-1, -1);
+    //! ID of each prematched point by index (persists across frames)
+    std::unordered_map<unsigned, unsigned> prematched_idx_to_id_;
+    //! find the index of a prematched point in this frame from its ID
+    std::unordered_map<unsigned, unsigned> prematched_id_to_idx_;
+
+    //! Does the given index belong to a prematched keypoint?
+    bool idx_is_prematched(const int idx) const {
+        return 0 <= prematched_keypts_.first && idx >= prematched_keypts_.first && idx < prematched_keypts_.second;
+    }
+
+    unsigned int num_prematched_points() const {
+        return 0 > prematched_keypts_.first ? 0 : prematched_keypts_.second - prematched_keypts_.first;
+    }
+
 };
 
 } // namespace data

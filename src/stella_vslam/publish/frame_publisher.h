@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_PUBLISH_FRAME_PUBLISHER_H
 #define STELLA_VSLAM_PUBLISH_FRAME_PUBLISHER_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/config.h"
 #include "stella_vslam/tracking_module.h"
 
@@ -21,7 +22,7 @@ class map_database;
 
 namespace publish {
 
-class frame_publisher {
+class STELLA_VSLAM_API frame_publisher {
 public:
     /**
      * Constructor

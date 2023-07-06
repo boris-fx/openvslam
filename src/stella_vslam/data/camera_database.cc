@@ -7,7 +7,9 @@
 
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#ifdef USE_SQLITE
 #include <sqlite3.h>
+#endif
 
 namespace stella_vslam {
 namespace data {
@@ -61,10 +63,12 @@ void camera_database::from_json(const nlohmann::json& json_cameras) {
         const auto setup_type = camera::base::load_setup_type(json_camera.at("setup_type").get<std::string>());
         const auto model_type = camera::base::load_model_type(json_camera.at("model_type").get<std::string>());
         const auto color_order = camera::base::load_color_order(json_camera.at("color_order").get<std::string>());
+        camera::autocalibration_parameters autocalibration;
+        autocalibration.optimise_focal_length = json_camera.at("autocalibration.optimise_focal_length").get<bool>();
 
         switch (model_type) {
             case camera::model_type_t::Perspective: {
-                camera = new camera::perspective(camera_name, setup_type, color_order,
+                camera = new camera::perspective(camera_name, setup_type, color_order, autocalibration,
                                                  json_camera.at("cols").get<unsigned int>(),
                                                  json_camera.at("rows").get<unsigned int>(),
                                                  json_camera.at("fps").get<double>(),
@@ -81,7 +85,7 @@ void camera_database::from_json(const nlohmann::json& json_cameras) {
                 break;
             }
             case camera::model_type_t::Fisheye: {
-                camera = new camera::fisheye(camera_name, setup_type, color_order,
+                camera = new camera::fisheye(camera_name, setup_type, color_order, autocalibration,
                                              json_camera.at("cols").get<unsigned int>(),
                                              json_camera.at("rows").get<unsigned int>(),
                                              json_camera.at("fps").get<double>(),
@@ -104,7 +108,7 @@ void camera_database::from_json(const nlohmann::json& json_cameras) {
                 break;
             }
             case camera::model_type_t::RadialDivision: {
-                camera = new camera::radial_division(camera_name, setup_type, color_order,
+                camera = new camera::radial_division(camera_name, setup_type, color_order, autocalibration,
                                                      json_camera.at("cols").get<unsigned int>(),
                                                      json_camera.at("rows").get<unsigned int>(),
                                                      json_camera.at("fps").get<double>(),
@@ -136,6 +140,7 @@ nlohmann::json camera_database::to_json() const {
     return cameras;
 }
 
+#ifdef USE_SQLITE
 bool camera_database::from_db(sqlite3* db) {
     std::lock_guard<std::mutex> lock(mtx_database_);
 
@@ -430,6 +435,7 @@ bool camera_database::to_db(sqlite3* db) const {
         return true;
     }
 }
+#endif  // USE_SQLITE
 
 } // namespace data
 } // namespace stella_vslam

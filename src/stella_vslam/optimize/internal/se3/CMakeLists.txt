@@ -8,7 +8,8 @@ target_sources(${PROJECT_NAME}
                ${CMAKE_CURRENT_SOURCE_DIR}/pose_opt_edge_wrapper.h
                ${CMAKE_CURRENT_SOURCE_DIR}/reproj_edge_wrapper.h
                ${CMAKE_CURRENT_SOURCE_DIR}/shot_vertex_container.h
-               ${CMAKE_CURRENT_SOURCE_DIR}/shot_vertex.h)
+               ${CMAKE_CURRENT_SOURCE_DIR}/shot_vertex.h
+			   ${CMAKE_CURRENT_SOURCE_DIR}/perspective_reproj_tri_edge.h)
 
 # Install headers
 file(GLOB HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/*.h")

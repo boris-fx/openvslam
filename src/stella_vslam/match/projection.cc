@@ -19,11 +19,15 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm,
     unsigned int num_matches = 0;
 
     // Reproject the 3D points to the frame, then acquire the 2D-3D matches
+    // Ignore prematched points (which don't have correct descriptors anyway)
     for (auto local_lm : local_landmarks) {
         if (!lm_to_reproj.count(local_lm->id_)) {
             continue;
         }
         if (local_lm->will_be_erased()) {
+            continue;
+        }
+        if (local_lm->prematched_id_ >= 0) {
             continue;
         }
 
@@ -47,10 +51,16 @@ unsigned int projection::match_frame_and_landmarks(data::frame& frm,
         int best_idx = -1;
 
         for (const auto idx : indices_in_cell) {
+            if ( frm.frm_obs_.idx_is_prematched(idx) ) {
+                continue;
+            }
+
             const auto& lm = frm.get_landmark(idx);
             if (lm && lm->has_observation()) {
                 continue;
             }
+
+            assert(!lm || lm->prematched_id_ < 0);
 
             if (!frm.frm_obs_.stereo_x_right_.empty() && 0 < frm.frm_obs_.stereo_x_right_.at(idx)) {
                 const auto reproj_error = std::abs(lm_to_x_right.at(local_lm->id_) - frm.frm_obs_.stereo_x_right_.at(idx));
@@ -117,6 +127,12 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
     // Reproject the 3D points associated to the keypoints of the last frame,
     // then acquire the 2D-3D matches
     for (unsigned int idx_last = 0; idx_last < last_frm.frm_obs_.num_keypts_; ++idx_last) {
+
+        // Keypoint has already been matched externally
+        if ( last_frm.frm_obs_.idx_is_prematched(idx_last) ) {
+            continue;
+        }
+
         const auto& lm = last_frm.get_landmark(idx_last);
         if (!lm) {
             continue;
@@ -124,6 +140,8 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
         if (lm->will_be_erased()) {
             continue;
         }
+
+        assert(lm->prematched_id_ < 0);
 
         // 3D point coordinates with the global reference
         const Vec3_t pos_w = lm->get_pos_in_world();
@@ -167,10 +185,15 @@ unsigned int projection::match_current_and_last_frames(data::frame& curr_frm, co
         int best_idx = -1;
 
         for (const auto curr_idx : indices) {
+            if ( curr_frm.frm_obs_.idx_is_prematched(curr_idx) ) {
+                continue;
+            }
             const auto& curr_lm = curr_frm.get_landmark(curr_idx);
             if (curr_lm && curr_lm->has_observation()) {
                 continue;
             }
+
+            assert(!curr_lm || curr_lm->prematched_id_ < 0);
 
             if (!curr_frm.frm_obs_.stereo_x_right_.empty() && curr_frm.frm_obs_.stereo_x_right_.at(curr_idx) > 0) {
                 const float reproj_error = std::fabs(x_right - curr_frm.frm_obs_.stereo_x_right_.at(curr_idx));
@@ -232,6 +255,12 @@ unsigned int projection::match_frame_and_keyframe(const Mat44_t& cam_pose_cw,
     // Reproject the 3D points associated to the keypoints of the keyframe,
     // then acquire the 2D-3D matches
     for (unsigned int idx = 0; idx < landmarks.size(); idx++) {
+
+        // Keypoint has already been matched externally
+        if ( keyfrm->frm_obs_.idx_is_prematched(idx) ) {
+            continue;
+        }
+
         auto& lm = landmarks.at(idx);
         if (!lm) {
             continue;
@@ -243,6 +272,8 @@ unsigned int projection::match_frame_and_keyframe(const Mat44_t& cam_pose_cw,
         if (already_matched_lms.count(lm)) {
             continue;
         }
+
+        assert(lm->prematched_id_ < 0);
 
         // 3D point coordinates with the global reference
         const Vec3_t pos_w = lm->get_pos_in_world();
@@ -286,6 +317,12 @@ unsigned int projection::match_frame_and_keyframe(const Mat44_t& cam_pose_cw,
         int best_idx = -1;
 
         for (unsigned long curr_idx : indices) {
+
+            // Keypoint has already been matched externally
+            if ( frm_obs.idx_is_prematched(curr_idx) ) {
+                continue;
+            }
+
             if (frm_landmarks.at(curr_idx)) {
                 continue;
             }
@@ -337,6 +374,9 @@ unsigned int projection::match_by_Sim3_transform(const std::shared_ptr<data::key
         if (already_matched.count(lm)) {
             continue;
         }
+        if (lm->prematched_id_ >= 0) {
+            continue;
+        }
 
         // 3D point coordinates with the global reference
         const Vec3_t pos_w = lm->get_pos_in_world();
@@ -386,6 +426,12 @@ unsigned int projection::match_by_Sim3_transform(const std::shared_ptr<data::key
         int best_idx = -1;
 
         for (const auto idx : indices) {
+
+            // Keypoint has already been matched externally
+            if ( keyfrm->frm_obs_.idx_is_prematched(idx) ) {
+                continue;
+            }
+
             if (matched_lms_in_keyfrm.at(idx)) {
                 continue;
             }
@@ -441,11 +487,23 @@ unsigned int projection::match_keyframes_mutually(const std::shared_ptr<data::ke
     std::vector<bool> is_already_matched_in_keyfrm_2(landmarks_2.size(), false);
 
     for (unsigned int idx_1 = 0; idx_1 < landmarks_1.size(); ++idx_1) {
+        // Keypoint has already been matched externally
+        if ( keyfrm_1->frm_obs_.idx_is_prematched(idx_1) ) {
+            continue;
+        }
+
         auto& lm = matched_lms_in_keyfrm_1.at(idx_1);
         if (!lm) {
             continue;
         }
+
+        assert(lm->prematched_id_ < 0);
+
         const auto idx_2 = lm->get_index_in_keyframe(keyfrm_2);
+        if ( keyfrm_2->frm_obs_.idx_is_prematched(idx_2) ) {
+            continue;
+        }
+
         if (0 <= idx_2 && idx_2 < static_cast<int>(landmarks_2.size())) {
             is_already_matched_in_keyfrm_1.at(idx_1) = true;
             is_already_matched_in_keyfrm_2.at(idx_2) = true;
@@ -464,6 +522,12 @@ unsigned int projection::match_keyframes_mutually(const std::shared_ptr<data::ke
         const Mat33_t s_rot_21w = s_rot_21 * rot_1w;
         const Vec3_t trans_21w = s_rot_21 * trans_1w + trans_21;
         for (unsigned int idx_1 = 0; idx_1 < landmarks_1.size(); ++idx_1) {
+
+            // Keypoint has already been matched externally
+            if ( keyfrm_1->frm_obs_.idx_is_prematched(idx_1) ) {
+                continue;
+            }
+
             auto& lm = landmarks_1.at(idx_1);
             if (!lm) {
                 continue;
@@ -475,6 +539,8 @@ unsigned int projection::match_keyframes_mutually(const std::shared_ptr<data::ke
             if (is_already_matched_in_keyfrm_1.at(idx_1)) {
                 continue;
             }
+
+            assert(lm->prematched_id_ < 0);
 
             // 3D point coordinates with the global reference
             const Vec3_t pos_w = lm->get_pos_in_world();
@@ -516,6 +582,11 @@ unsigned int projection::match_keyframes_mutually(const std::shared_ptr<data::ke
             int best_idx_2 = -1;
 
             for (const auto idx_2 : indices) {
+
+                // Keypoint has already been matched externally
+                if ( keyfrm_2->frm_obs_.idx_is_prematched(idx_2) ) {
+                    continue;
+                }
                 const auto scale_level = static_cast<unsigned int>(keyfrm_2->frm_obs_.undist_keypts_.at(idx_2).octave);
 
                 // TODO: should determine the scale with 'keyfrm-> get_keypts_in_cell ()'
@@ -548,6 +619,12 @@ unsigned int projection::match_keyframes_mutually(const std::shared_ptr<data::ke
         const Mat33_t s_rot_12w = s_rot_12 * rot_2w;
         const Vec3_t trans_12w = s_rot_12 * trans_2w + trans_12;
         for (unsigned int idx_2 = 0; idx_2 < landmarks_2.size(); ++idx_2) {
+            
+            // Keypoint has already been matched externally
+            if ( keyfrm_2->frm_obs_.idx_is_prematched(idx_2) ) {
+                continue;
+            }
+
             auto& lm = landmarks_2.at(idx_2);
             if (!lm) {
                 continue;
@@ -559,6 +636,8 @@ unsigned int projection::match_keyframes_mutually(const std::shared_ptr<data::ke
             if (is_already_matched_in_keyfrm_2.at(idx_2)) {
                 continue;
             }
+
+            assert(lm->prematched_id_ < 0);
 
             // 3D point coordinates with the global reference
             const Vec3_t pos_w = lm->get_pos_in_world();
@@ -601,6 +680,11 @@ unsigned int projection::match_keyframes_mutually(const std::shared_ptr<data::ke
             int best_idx_1 = -1;
 
             for (const auto idx_1 : indices) {
+                // Keypoint has already been matched externally
+                if ( keyfrm_1->frm_obs_.idx_is_prematched(idx_1) ) {
+                    continue;
+                }
+
                 const auto scale_level = static_cast<unsigned int>(keyfrm_1->frm_obs_.undist_keypts_.at(idx_1).octave);
 
                 // TODO: should determine the scale with 'keyfrm-> get_keypts_in_cell ()'

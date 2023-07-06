@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_FRAME_H
 #define STELLA_VSLAM_DATA_FRAME_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 #include "stella_vslam/camera/base.h"
 #include "stella_vslam/feature/orb_params.h"
@@ -33,9 +34,11 @@ namespace data {
 class keyframe;
 class landmark;
 
-class frame {
+class STELLA_VSLAM_API frame {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    static void reset_next_id() { next_id_ = 0; }
 
     frame() = default;
 
@@ -190,13 +193,14 @@ public:
     bow_vector bow_vec_;
     bow_feature_vector bow_feat_vec_;
 
+    //! landmarks, whose nullptr indicates no-association
+    std::vector<std::shared_ptr<landmark>> landmarks_;
+    std::unordered_map<std::shared_ptr<landmark>, unsigned int> landmarks_idx_map_;
+
     //! reference keyframe for tracking
     std::shared_ptr<keyframe> ref_keyfrm_ = nullptr;
 
 private:
-    //! landmarks, whose nullptr indicates no-association
-    std::vector<std::shared_ptr<landmark>> landmarks_;
-    std::unordered_map<std::shared_ptr<landmark>, unsigned int> landmarks_idx_map_;
 
     //! camera pose: world -> camera
     bool pose_is_valid_ = false;

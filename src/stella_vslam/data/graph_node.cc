@@ -2,6 +2,8 @@
 #include "stella_vslam/data/graph_node.h"
 #include "stella_vslam/data/landmark.h"
 
+#include <list>
+
 namespace {
 struct {
     bool operator()(const std::pair<unsigned int, std::shared_ptr<stella_vslam::data::keyframe>>& a, const std::pair<unsigned int, std::shared_ptr<stella_vslam::data::keyframe>>& b) {
@@ -17,7 +19,7 @@ graph_node::graph_node(std::shared_ptr<keyframe>& keyfrm)
     : owner_keyfrm_(keyfrm) {}
 
 void graph_node::add_connection(const std::shared_ptr<keyframe>& keyfrm, const unsigned int num_shared_lms) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     bool need_update = false;
     if (!connected_keyfrms_and_num_shared_lms_.count(keyfrm)) {
         // if `keyfrm` not exists
@@ -36,7 +38,7 @@ void graph_node::add_connection(const std::shared_ptr<keyframe>& keyfrm, const u
 }
 
 void graph_node::erase_connection(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     bool need_update = false;
     if (connected_keyfrms_and_num_shared_lms_.count(keyfrm)) {
         connected_keyfrms_and_num_shared_lms_.erase(keyfrm);
@@ -143,7 +145,7 @@ void graph_node::update_connections(unsigned int min_num_shared_lms) {
     }
 
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
 
         connected_keyfrms_and_num_shared_lms_ = decltype(connected_keyfrms_and_num_shared_lms_)(keyfrm_to_num_shared_lms.begin(), keyfrm_to_num_shared_lms.end());
 
@@ -161,7 +163,7 @@ void graph_node::update_connections(unsigned int min_num_shared_lms) {
 }
 
 void graph_node::update_covisibility_orders() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     update_covisibility_orders_impl();
 }
 
@@ -187,7 +189,7 @@ void graph_node::update_covisibility_orders_impl() {
 }
 
 std::set<std::shared_ptr<keyframe>> graph_node::get_connected_keyframes() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::set<std::shared_ptr<keyframe>> keyfrms;
 
     for (const auto& keyfrm_and_num_shared_lms : connected_keyfrms_and_num_shared_lms_) {
@@ -198,7 +200,7 @@ std::set<std::shared_ptr<keyframe>> graph_node::get_connected_keyframes() const 
 }
 
 std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::vector<std::shared_ptr<keyframe>> covisibilities;
 
     for (const auto& covisibility : ordered_covisibilities_) {
@@ -211,7 +213,7 @@ std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities() const {
 }
 
 std::vector<std::shared_ptr<keyframe>> graph_node::get_top_n_covisibilities(const unsigned int num_covisibilities) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::vector<std::shared_ptr<keyframe>> covisibilities;
     unsigned int i = 0;
     for (const auto& covisibility : ordered_covisibilities_) {
@@ -228,7 +230,7 @@ std::vector<std::shared_ptr<keyframe>> graph_node::get_top_n_covisibilities(cons
 }
 
 std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities_over_min_num_shared_lms(const unsigned int min_num_shared_lms) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     if (ordered_covisibilities_.empty()) {
         return std::vector<std::shared_ptr<keyframe>>();
@@ -264,7 +266,7 @@ std::vector<std::shared_ptr<keyframe>> graph_node::get_covisibilities_over_min_n
 }
 
 unsigned int graph_node::get_num_shared_landmarks(const std::shared_ptr<keyframe>& keyfrm) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (connected_keyfrms_and_num_shared_lms_.count(keyfrm)) {
         return connected_keyfrms_and_num_shared_lms_.at(keyfrm);
     }
@@ -275,34 +277,34 @@ unsigned int graph_node::get_num_shared_landmarks(const std::shared_ptr<keyframe
 
 void graph_node::set_spanning_parent(const std::shared_ptr<keyframe>& keyfrm) {
     // NOTE: keyfrm can be nullptr
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     assert(spanning_parent_.expired());
     spanning_parent_ = keyfrm;
 }
 
 std::shared_ptr<keyframe> graph_node::get_spanning_parent() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return spanning_parent_.lock();
 }
 
 void graph_node::change_spanning_parent(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_parent_ = keyfrm;
     keyfrm->graph_node_->add_spanning_child(owner_keyfrm_.lock());
 }
 
 void graph_node::add_spanning_child(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_children_.insert(keyfrm);
 }
 
 void graph_node::erase_spanning_child(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_children_.erase(keyfrm);
 }
 
 void graph_node::recover_spanning_connections() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     // 1. find new parents for my children
 
@@ -365,7 +367,7 @@ void graph_node::recover_spanning_connections() {
 }
 
 id_ordered_set<std::shared_ptr<keyframe>> graph_node::get_spanning_children() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     id_ordered_set<std::shared_ptr<keyframe>> locked_spanning_children;
     for (const auto& keyfrm : spanning_children_) {
         locked_spanning_children.insert(keyfrm.lock());
@@ -374,19 +376,19 @@ id_ordered_set<std::shared_ptr<keyframe>> graph_node::get_spanning_children() co
 }
 
 bool graph_node::has_spanning_child(const std::shared_ptr<keyframe>& keyfrm) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return static_cast<bool>(spanning_children_.count(keyfrm));
 }
 
 void graph_node::add_loop_edge(const std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     loop_edges_.insert(keyfrm);
     // cannot erase loop edges
     owner_keyfrm_.lock()->set_not_to_be_erased();
 }
 
 std::set<std::shared_ptr<keyframe>> graph_node::get_loop_edges() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     std::set<std::shared_ptr<keyframe>> locked_loop_edges;
     for (const auto& keyfrm : loop_edges_) {
         locked_loop_edges.insert(keyfrm.lock());
@@ -395,12 +397,12 @@ std::set<std::shared_ptr<keyframe>> graph_node::get_loop_edges() const {
 }
 
 bool graph_node::has_loop_edge() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return !loop_edges_.empty();
 }
 
 std::shared_ptr<keyframe> graph_node::get_spanning_root() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return get_spanning_root_impl();
 }
 
@@ -422,7 +424,7 @@ std::shared_ptr<keyframe> graph_node::get_spanning_root_impl() {
 }
 
 bool graph_node::is_spanning_root() const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     return is_spanning_root_impl();
 }
 
@@ -434,7 +436,7 @@ bool graph_node::is_spanning_root_impl() const {
 }
 
 void graph_node::set_spanning_root(std::shared_ptr<keyframe>& keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     spanning_root_ = keyfrm;
 }
 

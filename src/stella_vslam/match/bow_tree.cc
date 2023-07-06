@@ -29,6 +29,12 @@ unsigned int bow_tree::match_frame_and_keyframe(const std::shared_ptr<data::keyf
             const auto& frm_indices = frm_itr->second;
 
             for (const auto keyfrm_idx : keyfrm_indices) {
+
+                // Keypoint has already been matched externally
+                if ( keyfrm->frm_obs_.idx_is_prematched(keyfrm_idx) ) {
+                    continue;
+                }
+
                 // Ignore if the keypoint of keyframe is not associated any 3D points
                 auto& lm = keyfrm_lms.at(keyfrm_idx);
                 if (!lm) {
@@ -37,6 +43,7 @@ unsigned int bow_tree::match_frame_and_keyframe(const std::shared_ptr<data::keyf
                 if (lm->will_be_erased()) {
                     continue;
                 }
+                assert(lm->prematched_id_ < 0);
 
                 const auto& keyfrm_desc = keyfrm->frm_obs_.descriptors_.row(keyfrm_idx);
 
@@ -48,6 +55,11 @@ unsigned int bow_tree::match_frame_and_keyframe(const std::shared_ptr<data::keyf
                     if (matched_lms_in_frm.at(frm_idx)) {
                         continue;
                     }
+
+                    // Keypoint has already been matched externally
+                    if (frm.frm_obs_.idx_is_prematched(frm_idx) ) {
+						continue;
+					}
 
                     if (check_orientation_ && std::abs(util::angle::diff(keyfrm->frm_obs_.undist_keypts_.at(keyfrm_idx).angle, frm.frm_obs_.undist_keypts_.at(frm_idx).angle)) > 30.0) {
                         continue;
@@ -123,6 +135,12 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
             const auto& keyfrm_2_indices = itr_2->second;
 
             for (const auto idx_1 : keyfrm_1_indices) {
+
+                // Keypoint has already been matched externally
+                if ( keyfrm_1->frm_obs_.idx_is_prematched(idx_1) ) {
+                    continue;
+                }
+
                 // Ignore if the keypoint is not associated any 3D points
                 // (because this function is used for Sim3 estimation)
                 auto& lm_1 = keyfrm_1_lms.at(idx_1);
@@ -132,6 +150,7 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
                 if (lm_1->will_be_erased()) {
                     continue;
                 }
+                assert(lm_1->prematched_id_ < 0);
 
                 const auto& desc_1 = keyfrm_1->frm_obs_.descriptors_.row(idx_1);
 
@@ -140,6 +159,12 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
                 unsigned int second_best_hamm_dist = MAX_HAMMING_DIST;
 
                 for (const auto idx_2 : keyfrm_2_indices) {
+
+                    // Keypoint has already been matched externally
+                    if ( keyfrm_2->frm_obs_.idx_is_prematched(idx_2) ) {
+                        continue;
+                    }
+                    
                     // Ignore if the keypoint is not associated any 3D points
                     // (because this function is used for Sim3 estimation)
                     auto& lm_2 = keyfrm_2_lms.at(idx_2);
@@ -153,6 +178,8 @@ unsigned int bow_tree::match_keyframes(const std::shared_ptr<data::keyframe>& ke
                     if (is_already_matched_in_keyfrm_2.at(idx_2)) {
                         continue;
                     }
+                    
+                    assert(lm_2->prematched_id_ < 0);
 
                     if (check_orientation_ && std::abs(util::angle::diff(keyfrm_1->frm_obs_.undist_keypts_.at(idx_1).angle, keyfrm_2->frm_obs_.undist_keypts_.at(idx_2).angle)) > 30.0) {
                         continue;

@@ -22,7 +22,7 @@ public:
      * @param num_first_iter
      * @param num_second_iter
      */
-    explicit local_bundle_adjuster_g2o(const YAML::Node& yaml_node,
+    explicit local_bundle_adjuster_g2o(const stella_vslam_bfx::config_settings& settings,
                                        const unsigned int num_first_iter = 5,
                                        const unsigned int num_second_iter = 10);
 
@@ -46,6 +46,8 @@ private:
     const unsigned int num_second_iter_;
     //!
     const unsigned int use_additional_keyframes_for_monocular_ = false;
+
+   // void optimize2(data::map_database* map_db, const std::shared_ptr<data::keyframe>& curr_keyfrm, bool* const force_stop_flag) const;
 };
 
 } // namespace optimize

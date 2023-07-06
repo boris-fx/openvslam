@@ -1,15 +1,18 @@
 #ifndef STELLA_VSLAM_SYSTEM_H
 #define STELLA_VSLAM_SYSTEM_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/type.h"
 #include "stella_vslam/data/bow_vocabulary_fwd.h"
 
+#include <fstream>
 #include <string>
 #include <thread>
 #include <memory>
 #include <mutex>
 #include <atomic>
 #include <memory>
+#include <optional>
 
 #include <opencv2/core/mat.hpp>
 
@@ -26,6 +29,7 @@ class base;
 
 namespace data {
 class frame;
+struct frame_observation;
 class camera_database;
 class orb_params_database;
 class map_database;
@@ -50,11 +54,14 @@ namespace io {
 class map_database_io_base;
 }
 
-class system {
+class STELLA_VSLAM_API system {
 public:
     //! Constructor
     system(const std::shared_ptr<config>& cfg, const std::string& vocab_file_path);
 
+#if !defined(USE_DBOW2)
+    system(const std::shared_ptr<config>& cfg, std::ifstream & vocab_data);
+#endif
     //! Destructor
     ~system();
 
@@ -84,12 +91,30 @@ public:
 
     //! Save the map database to file
     bool save_map_database(const std::string& path) const;
+    
+    //! Save the map database to a block of memory
+    bool save_map_database_to_memory(std::vector<unsigned char>& memory) const;
+
+    //! Load the map database from a block of memory
+    bool load_map_database_from_memory(std::vector<unsigned char> const& memory) const;
 
     //! Get the map publisher
     const std::shared_ptr<publish::map_publisher> get_map_publisher() const;
 
     //! Get the frame publisher
     const std::shared_ptr<publish::frame_publisher> get_frame_publisher() const;
+
+    //! Get the current frame
+    const data::frame& get_current_frame() const;
+
+    //! Get the earliest map kayframe
+    double get_first_map_keyframe_timestamp() const;
+
+    //! Relocalise tracking to the position of the first keyframe
+    bool relocalize_by_first_map_keyframe_pose();
+
+    //! Get the camera focal length in x-direction pixels (where appropriate)
+    double focal_length_x_pixels() const;
 
     //-----------------------------------------
     // module management
@@ -102,6 +127,9 @@ public:
 
     //! The mapping module is enabled or not
     bool mapping_module_is_enabled() const;
+
+    //! Optional hard on/off control for running re-initialisation when tracking fails
+    void enable_map_reinitialisation(std::optional<bool> always_enabled);
 
     //! Enable the loop detector
     void enable_loop_detector();
@@ -118,6 +146,9 @@ public:
     //! Loop BA is running or not
     bool loop_BA_is_running() const;
 
+    //! Force a global bundle adjustment if one is not already running
+    void run_loop_BA();
+
     //! Abort the loop BA externally
     void abort_loop_BA();
 
@@ -131,8 +162,10 @@ public:
 
     //! Feed a monocular frame to SLAM system
     //! (NOTE: distorted images are acceptable if calibrated)
-    data::frame create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{});
-    std::shared_ptr<Mat44_t> feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{});
+    data::frame create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{},
+                                                     const stella_vslam_bfx::prematched_points* extra_keypoints = nullptr);
+    std::shared_ptr<Mat44_t> feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask = cv::Mat{},
+                                                     const stella_vslam_bfx::prematched_points* extra_keypoints = nullptr);
 
     //! Feed a stereo frame to SLAM system
     //! (Note: Left and Right images must be stereo-rectified)
@@ -190,7 +223,13 @@ public:
     //! depthmap factor (pixel_value / depthmap_factor = true_depth)
     double depthmap_factor_ = 1.0;
 
+    //! Default is 1. Use this to generate more features.
+    void boost_extractors(float boost);
+
 private:
+    //! Common constructor code
+    void init(const config *);
+
     //! Check reset request of the system
     void check_reset_request();
 
@@ -200,12 +239,21 @@ private:
     //! Resume the mapping module and the global optimization module
     void resume_other_threads() const;
 
+    //! Store the supplied prematched points in the given vector of keypoints
+    void store_prematched_points(const stella_vslam_bfx::prematched_points* extra_keypoints,
+                        std::vector<cv::KeyPoint>& keypts, data::frame_observation& frm_obs) const;
+
+    bool extractor_boost_check(std::vector<cv::KeyPoint> const& keypts);
+
     //! config
     const std::shared_ptr<config> cfg_;
+
+public:
     //! camera model
     camera::base* camera_ = nullptr;
+private:
 
-    //! camera database
+   //! camera database
     data::camera_database* cam_db_ = nullptr;
 
     //! parameters for orb feature extraction
@@ -214,17 +262,21 @@ private:
     //! orb_params database
     data::orb_params_database* orb_params_db_ = nullptr;
 
+public:
     //! map database
     data::map_database* map_db_ = nullptr;
 
+    //! tracker
+    tracking_module* tracker_ = nullptr;
+
+private:
     //! BoW vocabulary
     data::bow_vocabulary* bow_vocab_ = nullptr;
 
     //! BoW database
     data::bow_database* bow_db_ = nullptr;
 
-    //! tracker
-    tracking_module* tracker_ = nullptr;
+
 
     //! mapping module
     mapping_module* mapper_ = nullptr;
@@ -236,13 +288,17 @@ private:
     //! global optimization thread
     std::unique_ptr<std::thread> global_optimization_thread_ = nullptr;
 
+    //! Use ORB features if true
+    const bool use_orb_features_;
+    //! Apply undistortion to prematched points if true
+    const bool undistort_prematches_;
+
     // ORB extractors
     //! ORB extractor for left/monocular image
     feature::orb_extractor* extractor_left_ = nullptr;
     //! ORB extractor for right image
     feature::orb_extractor* extractor_right_ = nullptr;
-    //! ORB extractor only when used in initializing
-    feature::orb_extractor* ini_extractor_left_ = nullptr;
+    bool extractor_boost_checked_ = false;
 
     //! marker detector
     marker_detector::base* marker_detector_ = nullptr;

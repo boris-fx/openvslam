@@ -2,41 +2,18 @@
 #define STELLA_VSLAM_CAMERA_BASE_H
 
 #include "stella_vslam/type.h"
+#include "stella_vslam/config_settings.h"
+#include "stella_vslam/exports.h"
 
 #include <string>
 #include <limits>
+#include <functional>
 
 #include <opencv2/core/types.hpp>
-#include <yaml-cpp/yaml.h>
 #include <nlohmann/json_fwd.hpp>
 
 namespace stella_vslam {
 namespace camera {
-
-enum class setup_type_t {
-    Monocular = 0,
-    Stereo = 1,
-    RGBD = 2
-};
-
-const std::array<std::string, 3> setup_type_to_string = {{"Monocular", "Stereo", "RGBD"}};
-
-enum class model_type_t {
-    Perspective = 0,
-    Fisheye = 1,
-    Equirectangular = 2,
-    RadialDivision = 3
-};
-
-const std::array<std::string, 4> model_type_to_string = {{"Perspective", "Fisheye", "Equirectangular", "RadialDivision"}};
-
-enum class color_order_t {
-    Gray = 0,
-    RGB = 1,
-    BGR = 2
-};
-
-const std::array<std::string, 3> color_order_to_string = {{"Gray", "RGB", "BGR"}};
 
 struct image_bounds {
     //! Default constructor
@@ -53,10 +30,19 @@ struct image_bounds {
     float max_y_ = 0.0;
 };
 
-class base {
+struct autocalibration_parameters {
+
+    bool optimise_focal_length;
+    std::function<bool(stella_vslam::data::map_database const* map, std::string const& filename)> writeMapVideo;
+
+    autocalibration_parameters(bool optimise_focal_length=false);
+};
+
+class STELLA_VSLAM_API base {
 public:
     //! Constructor
-    base(const std::string& name, const setup_type_t setup_type, const model_type_t model_type, const color_order_t color_order,
+    base(const std::string& name, const setup_type_t setup_type, const model_type_t model_type,
+         const color_order_t color_order, autocalibration_parameters autocalibration,
          const unsigned int cols, const unsigned int rows, const double fps,
          const double focal_x_baseline, const double true_baseline, const double depth_thr,
          const unsigned int num_grid_cols = 64, const unsigned int num_grid_rows = 48);
@@ -71,8 +57,8 @@ public:
     const setup_type_t setup_type_;
     //! Get setup type as string
     std::string get_setup_type_string() const { return setup_type_to_string.at(static_cast<unsigned int>(setup_type_)); }
-    //! Load setup type from YAML
-    static setup_type_t load_setup_type(const YAML::Node& yaml_node);
+    //! Load setup type from settings
+    static setup_type_t load_setup_type(const stella_vslam_bfx::config_settings& settings);
     //! Load setup type from string
     static setup_type_t load_setup_type(const std::string& setup_type_str);
 
@@ -80,8 +66,8 @@ public:
     const model_type_t model_type_;
     //! Get model type as string
     std::string get_model_type_string() const { return model_type_to_string.at(static_cast<unsigned int>(model_type_)); }
-    //! Load model type from YAML
-    static model_type_t load_model_type(const YAML::Node& yaml_node);
+    //! Load model type from settings
+    static model_type_t load_model_type(const stella_vslam_bfx::config_settings& settings);
     //! Load model type from string
     static model_type_t load_model_type(const std::string& model_type_str);
 
@@ -89,10 +75,12 @@ public:
     const color_order_t color_order_;
     //! Get color order as string
     std::string get_color_order_string() const { return color_order_to_string.at(static_cast<unsigned int>(color_order_)); }
-    //! Load color order from YAML
-    static color_order_t load_color_order(const YAML::Node& yaml_node);
+    //! Load color order from settings
+    static color_order_t load_color_order(const stella_vslam_bfx::config_settings& settings);
     //! Load color order from string
     static color_order_t load_color_order(const std::string& color_order_str);
+
+    autocalibration_parameters autocalibration_parameters_;
 
     //! Return whether the image size specified by the camera matches the size of the input image
     bool is_valid_shape(const cv::Mat& img) const;

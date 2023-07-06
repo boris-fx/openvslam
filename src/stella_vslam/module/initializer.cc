@@ -3,29 +3,40 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
+#include "stella_vslam/data/map_camera_helpers.h"
 #include "stella_vslam/initialize/bearing_vector.h"
 #include "stella_vslam/initialize/perspective.h"
 #include "stella_vslam/marker_model/base.h"
 #include "stella_vslam/match/area.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/module/initializer.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
+#include "stella_vslam/report/metrics.h"
+#include "stella_vslam/solve/fundamental_consistency.h"
 
 #include <spdlog/spdlog.h>
+#include <spdlog/fmt/fmt.h>
+#include <nlohmann/json.hpp>
+
+#include <iostream>
+#include <fstream>
+#include <iomanip>
 
 namespace stella_vslam {
 namespace module {
 
 initializer::initializer(data::map_database* map_db, data::bow_database* bow_db,
-                         const YAML::Node& yaml_node)
+                         const stella_vslam_bfx::config_settings& settings)
     : map_db_(map_db), bow_db_(bow_db),
-      num_ransac_iters_(yaml_node["num_ransac_iterations"].as<unsigned int>(100)),
-      min_num_valid_pts_(yaml_node["min_num_valid_pts"].as<unsigned int>(50)),
-      min_num_triangulated_pts_(yaml_node["min_num_triangulated_pts"].as<unsigned int>(50)),
-      parallax_deg_thr_(yaml_node["parallax_deg_threshold"].as<float>(1.0)),
-      reproj_err_thr_(yaml_node["reprojection_error_threshold"].as<float>(4.0)),
-      num_ba_iters_(yaml_node["num_ba_iterations"].as<unsigned int>(20)),
-      scaling_factor_(yaml_node["scaling_factor"].as<float>(1.0)),
-      use_fixed_seed_(yaml_node["use_fixed_seed"].as<bool>(false)) {
+      num_ransac_iters_(settings.num_ransac_iterations_),
+      min_num_valid_pts_(settings.min_num_valid_pts_),
+      min_num_triangulated_pts_(settings.min_num_triangulated_pts_),
+      parallax_deg_thr_(settings.parallax_deg_threshold_),
+      reproj_err_thr_(settings.reprojection_error_threshold_),
+      num_ba_iters_(settings.num_ba_iterations_),
+      scaling_factor_(settings.scaling_factor_),
+      use_fixed_seed_(settings.use_fixed_seed_),
+      use_orb_features_(settings.use_orb_features_) {
     spdlog::debug("CONSTRUCT: module::initializer");
 }
 
@@ -38,6 +49,7 @@ void initializer::reset() {
     state_ = initializer_state_t::NotReady;
     init_frm_id_ = 0;
     init_frm_stamp_ = 0.0;
+    init_matches_.clear();
 }
 
 initializer_state_t initializer::get_state() const {
@@ -56,6 +68,12 @@ bool initializer::get_use_fixed_seed() const {
     return use_fixed_seed_;
 }
 
+void update_frame_bearing_vectors(data::frame& frm, camera::base const* camera)
+{
+    frm.frm_obs_.bearings_.clear();
+    camera->convert_keypoints_to_bearings(frm.frm_obs_.undist_keypts_, frm.frm_obs_.bearings_);
+}
+
 bool initializer::initialize(const camera::setup_type_t setup_type,
                              data::bow_vocabulary* bow_vocab, data::frame& curr_frm) {
     switch (setup_type) {
@@ -66,14 +84,111 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
                 return false;
             }
 
+            bool optimise_focal_length = curr_frm.camera_->autocalibration_parameters_.optimise_focal_length;
+            double last_focal_length = stella_vslam_bfx::focal_length_x_pixels_from_camera(curr_frm.camera_);
+            bool refine_initialisation(optimise_focal_length);
+            bool destroy_initialiser_in_createMap(!refine_initialisation);
+
+            //initialize::initialisation_cache init_cache;
+            //initialize::initialisation_cache* cache(refine_initialisation ? &init_cache : nullptr);
+
+            double base_parallax_threshold_degrees(1.0); // stella default is 1.0
+            double parallax_threshold_modifier_for_refinement(0.7);
+            double parallax_threshold_modifier_for_auto_focal(0.3); // just a test
+            double parallax_threshold_start = optimise_focal_length ? base_parallax_threshold_degrees * parallax_threshold_modifier_for_auto_focal : base_parallax_threshold_degrees;
+            double parallax_threshold_refine = parallax_threshold_start; // base_parallax_threshold_degrees* parallax_threshold_modifier_for_refinement;
+
             // try to initialize
-            if (!try_initialize_for_monocular(curr_frm)) {
+            bool focal_length_was_modified;
+            if (!try_initialize_for_monocular(curr_frm, parallax_threshold_start, true, &focal_length_was_modified)) {
                 // failed
                 return false;
             }
 
+            if (focal_length_was_modified) {
+                last_focal_length = stella_vslam_bfx::focal_length_x_pixels_from_camera(curr_frm.camera_);
+                // Update bearing vectors for the frame objects used by create_map_for_monocular
+                update_frame_bearing_vectors(curr_frm, curr_frm.camera_);
+                update_frame_bearing_vectors(init_frm_, curr_frm.camera_);
+            }
+
             // create new map if succeeded
-            create_map_for_monocular(bow_vocab, curr_frm);
+            create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
+
+            stella_vslam_bfx::metrics& track_metrics = *stella_vslam_bfx::metrics::get_instance();
+            track_metrics.initialisation_frame_timestamps.insert({init_frm_.timestamp_, curr_frm.timestamp_ });
+
+            // Try to improve the initialisation now that the focal length estimate has been improved
+            if (refine_initialisation) {
+               double const focal_length_change_percent_threshold(5.0); /// Stop iterating if the change percent falls below this
+               for (int i = 0; i <4; ++i) {
+                   double new_focal_length = stella_vslam_bfx::focal_length_x_pixels_from_camera(curr_frm.camera_);
+                   double focal_length_change_percent = fabs(100.0 * (new_focal_length - last_focal_length) / last_focal_length);
+                   last_focal_length = new_focal_length;
+                   if (focal_length_change_percent < focal_length_change_percent_threshold)
+                       break;
+#if 1
+                   data::frame init_frm = init_frm_; // store the init frame
+                   data::frame curr_frm_cp = curr_frm; // store the curr frame
+
+                   init_frm_.ref_keyfrm_.reset();
+                   curr_frm.ref_keyfrm_.reset();
+                   init_frm_.invalidate_pose();
+                   curr_frm.invalidate_pose();
+                   for (unsigned int idx = 0; idx < curr_frm.landmarks_.size(); ++idx) {
+                       curr_frm.landmarks_[idx].reset();
+                   }
+
+                   reset(); // reset the initialisation data (initialiser impl and others)
+                   spdlog::debug("Refining initialisation, before initialiser create impl {:p}", (void*)initializer_.get());
+                   create_initializer(init_frm); // create a new initialiser
+                   spdlog::debug("Refining initialisation,  after initialiser create impl {:p}", (void*)initializer_.get());
+                   bool ok_initialize = try_initialize_for_monocular(curr_frm, parallax_threshold_refine, false, &focal_length_was_modified); // Reinitialise with the new focal length
+                                                                                                                        // and lower parallax threshold
+                   
+                   
+                   if (ok_initialize) {
+                       spdlog::debug("Refine initialisation success, recreating map. impl {:p} {}", (void*)initializer_.get(), ok_initialize);
+                       map_db_->clear(); // reset the map_db
+                       create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
+                   }
+                   else {
+                       spdlog::debug("Refine initialisation fail, keeping old map. impl {:p} {}", (void*)initializer_.get(), ok_initialize);
+                       // keep the existing map
+                       state_ = initializer_state_t::Succeeded;
+                       init_frm_ = init_frm; // restore the init frame
+                       curr_frm = curr_frm_cp; // restore the curr frame
+                       break;
+                   }
+
+#else
+
+                   if (!refine_initialize_for_monocular(curr_frm, cache)) {
+                       // failed
+                       break;
+                   }
+
+                   //break;
+
+                   // create new map if succeeded
+                   map_db_->clear();
+                   state_ = initializer_state_t::Initializing;
+                   create_map_for_monocular(bow_vocab, curr_frm, destroy_initialiser_in_createMap, optimise_focal_length);
+#endif
+               }
+            }
+
+            //nlohmann::json json_keyfrms, json_landmarks;
+            //map_db_->to_json(json_keyfrms, json_landmarks);
+            //std::ofstream file_keyfrms("keyframes.json"), file_landmarks("landmarks.json");
+            //file_keyfrms << std::setw(4) << json_keyfrms << std::endl;
+            //file_keyfrms.close();
+            //file_landmarks << std::setw(4) << json_landmarks << std::endl;
+            //file_landmarks.close();
+
+            if (!destroy_initialiser_in_createMap)
+                initializer_.reset(nullptr);
+
             break;
         }
         case camera::setup_type_t::Stereo:
@@ -97,11 +212,14 @@ bool initializer::initialize(const camera::setup_type_t setup_type,
 
     // check the state is succeeded or not
     if (state_ == initializer_state_t::Succeeded) {
+        spdlog::debug("Initialisation Succeeded");
+
         init_frm_id_ = curr_frm.id_;
         init_frm_stamp_ = curr_frm.timestamp_;
         return true;
     }
     else {
+        spdlog::debug("Initialisation Failed");
         return false;
     }
 }
@@ -143,25 +261,106 @@ void initializer::create_initializer(data::frame& curr_frm) {
     state_ = initializer_state_t::Initializing;
 }
 
-bool initializer::try_initialize_for_monocular(data::frame& curr_frm) {
+bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier, bool initialize_focal_length, bool* focal_length_was_modified) {
     assert(state_ == initializer_state_t::Initializing);
 
-    match::area matcher(0.9, true);
-    const auto num_matches = matcher.match_in_consistent_area(init_frm_, curr_frm, prev_matched_coords_, init_matches_, 100);
+    spdlog::debug("try_initialize_for_monocular, start impl {:p}", (void*)initializer_.get());
+
+    // store the timestamps of the two frames - perhaps combine these
+    stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
+    stella_vslam_bfx::metrics::initialisation_debug().current_init_frame_timestamps = { init_frm_.timestamp_, curr_frm.timestamp_ };
+
+    unsigned int num_matches = 0;
+    if (use_orb_features_) {
+        match::area matcher(0.9, true);
+        stella_vslam_bfx::metrics::get_instance()->capture_area_matching = true;
+        num_matches = matcher.match_in_consistent_area(init_frm_, curr_frm, prev_matched_coords_, init_matches_, 100);
+        stella_vslam_bfx::metrics::get_instance()->capture_area_matching = false;
+    }
+    num_matches += stella_vslam_bfx::get_frames_prematches(init_frm_, curr_frm, prev_matched_coords_, init_matches_);
+
+
+    stella_vslam_bfx::metrics::initialisation_debug().submit_feature_match_debugging(num_matches);
+    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[init_frm_.timestamp_] = init_frm_.frm_obs_.num_keypts_;
+    stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[curr_frm.timestamp_] = curr_frm.frm_obs_.num_keypts_;
+    spdlog::info("Features {} (@{}), {} (@{}), unguided matches {}", init_frm_.frm_obs_.num_keypts_, init_frm_.timestamp_, curr_frm.frm_obs_.num_keypts_, curr_frm.timestamp_, num_matches);
 
     if (num_matches < min_num_valid_pts_) {
         // rebuild the initializer with the next frame
         reset();
+        spdlog::debug("try_initialize_for_monocular, fail ({} matches) impl {:p}", num_matches, (void*)initializer_.get());
         return false;
     }
 
     // try to initialize with the initial frame and the current frame
+    if (!initializer_)
+       spdlog::debug("error!! initialiser impl is empty");
     assert(initializer_);
     spdlog::debug("try to initialize with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
-    return initializer_->initialize(curr_frm, init_matches_);
+
+    return initializer_->initialize(curr_frm, init_matches_, parallax_deg_thr_multiplier, initialize_focal_length, focal_length_was_modified);
 }
 
-bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm) {
+#if 0
+bool initializer::refine_initialize_for_monocular(data::frame& curr_frm, initialize::initialisation_cache* cache) {
+
+
+   #if 1 // complete reset
+
+initializer_.reset(nullptr);
+
+{ // create_initialiser without setting the init frame to current
+
+       // initialize the previously matched coordinates
+    prev_matched_coords_.resize(init_frm_.frm_obs_.undist_keypts_.size());
+    for (unsigned int i = 0; i < init_frm_.frm_obs_.undist_keypts_.size(); ++i) {
+        prev_matched_coords_.at(i) = init_frm_.frm_obs_.undist_keypts_.at(i).pt;
+    }
+
+    // initialize matchings (init_idx -> curr_idx)
+    std::fill(init_matches_.begin(), init_matches_.end(), -1);
+
+    // build a initializer
+    initializer_.reset(nullptr);
+    switch (init_frm_.camera_->model_type_) {
+        case camera::model_type_t::Perspective:
+        case camera::model_type_t::Fisheye:
+        case camera::model_type_t::RadialDivision: {
+            initializer_ = std::unique_ptr<initialize::perspective>(
+                new initialize::perspective(
+                    init_frm_, num_ransac_iters_, min_num_triangulated_, min_num_valid_pts_,
+                    parallax_deg_thr_, reproj_err_thr_, use_fixed_seed_));
+            break;
+        }
+        case camera::model_type_t::Equirectangular: {
+            initializer_ = std::unique_ptr<initialize::bearing_vector>(
+                new initialize::bearing_vector(
+                    init_frm_, num_ransac_iters_, min_num_triangulated_, min_num_valid_pts_,
+                    parallax_deg_thr_, reproj_err_thr_, use_fixed_seed_));
+            break;
+        }
+    }
+
+    state_ = initializer_state_t::Initializing;
+}
+
+bool init = try_initialize_for_monocular(curr_frm, cache);
+return init;
+   #else
+
+   if (init_matches_.empty())
+        return false;
+
+    // try to initialize with the initial frame and the current frame
+    assert(initializer_);
+    spdlog::debug("refine initialization with the initial frame and the current frame: frame {} - frame {}", init_frm_.id_, curr_frm.id_);
+    bool init = initializer_->cached_initialize(curr_frm, init_matches_, cache);
+    return init;
+    #endif
+}
+#endif
+
+bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm, bool destroy_initialiser, bool optimise_focal_length) {
     assert(state_ == initializer_state_t::Initializing);
 
     eigen_alloc_vector<Vec3_t> init_triangulated_pts;
@@ -189,7 +388,8 @@ bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data
         curr_frm.set_pose_cw(cam_pose_cw);
 
         // destruct the initializer
-        initializer_.reset(nullptr);
+        if (destroy_initialiser)
+            initializer_.reset(nullptr);
     }
 
     // create initial keyframes
@@ -274,8 +474,15 @@ bool initializer::create_map_for_monocular(data::bow_vocabulary* bow_vocab, data
 
     // global bundle adjustment
     const auto global_bundle_adjuster = optimize::global_bundle_adjuster(num_ba_iters_, true);
-    std::vector<std::shared_ptr<data::keyframe>> keyfrms{init_keyfrm, curr_keyfrm};
-    global_bundle_adjuster.optimize_for_initialization(keyfrms, lms, markers);
+	std::vector<std::shared_ptr<data::keyframe>> keyfrms{init_keyfrm, curr_keyfrm};
+    bool *const null_force_stop_flag(nullptr), camera_was_modified;
+    global_bundle_adjuster.optimize_for_initialization(keyfrms, lms, markers, null_force_stop_flag, &camera_was_modified);
+    if (camera_was_modified) {
+        curr_frm.frm_obs_.bearings_.clear();
+        curr_frm.camera_->convert_keypoints_to_bearings(curr_frm.frm_obs_.undist_keypts_, curr_frm.frm_obs_.bearings_);
+        init_frm_.frm_obs_.bearings_.clear();
+        init_frm_.camera_->convert_keypoints_to_bearings(init_frm_.frm_obs_.undist_keypts_, init_frm_.frm_obs_.bearings_);
+    }
 
     if (indefinite_scale) {
         // scale the map so that the median of depths is 1.0

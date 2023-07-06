@@ -3,14 +3,17 @@
 
 #include "stella_vslam/type.h"
 #include "stella_vslam/data/frame.h"
+#include "stella_vslam/data/map_database.h"
 #include "stella_vslam/module/initializer.h"
 #include "stella_vslam/module/relocalizer.h"
 #include "stella_vslam/module/keyframe_inserter.h"
 #include "stella_vslam/module/frame_tracker.h"
+#include "stella_vslam/module/map_selector.h"
 
 #include <mutex>
 #include <memory>
 #include <future>
+#include <optional>
 
 #include <opencv2/core/types.hpp>
 #include <opencv2/features2d/features2d.hpp>
@@ -139,6 +142,12 @@ public:
     //! current frame and its image
     data::frame curr_frm_;
 
+    //! last frame
+    data::frame last_frm_;
+
+    //! optional hard on/off control for running re-initialisation when tracking fails
+    stella_vslam_bfx::map_selector map_selector_;
+
 protected:
     //-----------------------------------------
     // tracking processes
@@ -222,9 +231,6 @@ protected:
     //! local landmarks
     std::vector<std::shared_ptr<data::landmark>> local_landmarks_;
 
-    //! last frame
-    data::frame last_frm_;
-
     //! mutex for pause process
     mutable std::mutex mtx_last_frm_;
 
@@ -286,6 +292,10 @@ protected:
     bool relocalize_by_pose_is_requested_ = false;
     //! Requested pose to update
     pose_request relocalize_by_pose_request_;
+    
+    //! Use ORB features if true
+    const bool use_orb_features_;
+
 };
 
 } // namespace stella_vslam

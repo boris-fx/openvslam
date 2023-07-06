@@ -17,6 +17,10 @@ class map_database;
 class bow_database;
 } // namespace data
 
+namespace initialize {
+struct initialisation_cache;
+}
+
 namespace module {
 
 // initializer state
@@ -33,7 +37,7 @@ public:
 
     //! Constructor
     initializer(data::map_database* map_db, data::bow_database* bow_db,
-                const YAML::Node& yaml_node);
+                const stella_vslam_bfx::config_settings& settings);
 
     //! Destructor
     ~initializer();
@@ -89,6 +93,8 @@ private:
     const float scaling_factor_;
     //! Use fixed random seed for RANSAC if true
     const bool use_fixed_seed_;
+    //! Use ORB features if true
+    const bool use_orb_features_;
 
     //-----------------------------------------
     // for monocular camera model
@@ -97,10 +103,13 @@ private:
     void create_initializer(data::frame& curr_frm);
 
     //! Try to initialize a map with monocular camera setup
-    bool try_initialize_for_monocular(data::frame& curr_frm);
+    bool try_initialize_for_monocular(data::frame& curr_frm, double parallax_deg_thr_multiplier, bool initialize_focal_length, bool *focal_length_was_modified);
+
+    //! Try to improve initialization after improving focal length estimate
+   // bool refine_initialize_for_monocular(data::frame& curr_frm, initialize::initialisation_cache* cache);
 
     //! Create an initial map with monocular camera setup
-    bool create_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm);
+    bool create_map_for_monocular(data::bow_vocabulary* bow_vocab, data::frame& curr_frm, bool destroy_initialiser, bool optimise_focal_length);
 
     //! Scaling up or down a initial map
     void scale_map(const std::shared_ptr<data::keyframe>& init_keyfrm, const std::shared_ptr<data::keyframe>& curr_keyfrm, const double scale);

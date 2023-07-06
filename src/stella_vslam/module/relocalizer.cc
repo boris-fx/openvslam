@@ -2,6 +2,7 @@
 #include "stella_vslam/data/keyframe.h"
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/bow_database.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/module/local_map_updater.h"
 #include "stella_vslam/module/relocalizer.h"
 #include "stella_vslam/optimize/pose_optimizer_g2o.h"
@@ -18,26 +19,28 @@ relocalizer::relocalizer(const std::shared_ptr<optimize::pose_optimizer>& pose_o
                          const unsigned int min_num_bow_matches, const unsigned int min_num_valid_obs,
                          const bool use_fixed_seed,
                          const bool search_neighbor,
-                         const unsigned int top_n_covisibilities_to_search)
+                         const unsigned int top_n_covisibilities_to_search,
+                         const bool use_orb_features)
     : min_num_bow_matches_(min_num_bow_matches), min_num_valid_obs_(min_num_valid_obs),
       bow_matcher_(bow_match_lowe_ratio, false), proj_matcher_(proj_match_lowe_ratio, false),
       robust_matcher_(robust_match_lowe_ratio, false),
       pose_optimizer_(pose_optimizer), use_fixed_seed_(use_fixed_seed),
       search_neighbor_(search_neighbor),
-      top_n_covisibilities_to_search_(top_n_covisibilities_to_search) {
+      top_n_covisibilities_to_search_(top_n_covisibilities_to_search),
+      use_orb_features_(use_orb_features) {
     spdlog::debug("CONSTRUCT: module::relocalizer");
 }
 
-relocalizer::relocalizer(const std::shared_ptr<optimize::pose_optimizer>& pose_optimizer, const YAML::Node& yaml_node)
+relocalizer::relocalizer(const std::shared_ptr<optimize::pose_optimizer>& pose_optimizer, const stella_vslam_bfx::config_settings& settings)
     : relocalizer(pose_optimizer,
-                  yaml_node["bow_match_lowe_ratio"].as<double>(0.75),
-                  yaml_node["proj_match_lowe_ratio"].as<double>(0.9),
-                  yaml_node["robust_match_lowe_ratio"].as<double>(0.8),
-                  yaml_node["min_num_bow_matches"].as<unsigned int>(20),
-                  yaml_node["min_num_valid_obs"].as<unsigned int>(50),
-                  yaml_node["use_fixed_seed"].as<bool>(false),
-                  yaml_node["search_neighbor"].as<bool>(true),
-                  yaml_node["top_n_covisibilities_to_search"].as<unsigned int>(10)) {
+	              settings.bow_match_lowe_ratio_,
+                  settings.proj_match_lowe_ratio_,
+                  settings.robust_match_lowe_ratio_,
+                  settings.min_num_bow_matches_,
+                  settings.min_num_valid_obs_,
+                  settings.relocalizer_use_fixed_seed_,
+                  true, 10,
+                  settings.use_orb_features_) {
 }
 
 relocalizer::~relocalizer() {
@@ -114,12 +117,12 @@ bool relocalizer::reloc_by_candidate(data::frame& curr_frm,
     }
 
     ok = refine_pose(curr_frm, candidate_keyfrm, already_found_landmarks);
-    if (!ok) {
+    if (!ok)
         return false;
-    }
 
-    ok = refine_pose_by_local_map(curr_frm, candidate_keyfrm);
-    return ok;
+    return refine_pose_by_local_map(curr_frm, candidate_keyfrm);
+	
+    return true;
 }
 
 bool relocalizer::relocalize_by_pnp_solver(data::frame& curr_frm,
@@ -127,8 +130,13 @@ bool relocalizer::relocalize_by_pnp_solver(data::frame& curr_frm,
                                            bool use_robust_matcher,
                                            std::vector<unsigned int>& inlier_indices,
                                            std::vector<std::shared_ptr<data::landmark>>& matched_landmarks) const {
-    const auto num_matches = use_robust_matcher ? robust_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, matched_landmarks)
+    unsigned int num_matches = 0;
+    if (use_orb_features_) {
+        num_matches = use_robust_matcher ? robust_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, matched_landmarks)
                                                 : bow_matcher_.match_frame_and_keyframe(candidate_keyfrm, curr_frm, matched_landmarks);
+    }
+    num_matches += stella_vslam_bfx::get_frame_and_keyframe_prematches(candidate_keyfrm, curr_frm, matched_landmarks, false);
+
     // Discard the candidate if the number of 2D-3D matches is less than the threshold
     if (num_matches < min_num_bow_matches_) {
         spdlog::debug("Number of 2D-3D matches ({}) < threshold ({}). candidate keyframe id is {}", num_matches, min_num_bow_matches_, candidate_keyfrm->id_);
@@ -232,7 +240,8 @@ bool relocalizer::refine_pose(data::frame& curr_frm,
     auto num_valid_obs = already_found_landmarks.size();
 
     // Projection match based on the pre-optimized camera pose
-    auto num_found = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks, 10, 100);
+    auto num_found = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks, 10, 100)
+        + stella_vslam_bfx::add_keyframe_prematches(curr_frm, candidate_keyfrm, already_found_landmarks, 10);
     // Discard the candidate if the number of the inliers is less than the threshold
     if (num_valid_obs + num_found < min_num_valid_obs_) {
         spdlog::debug("Number of inliers ({}) < threshold ({}). candidate keyframe id is {}", num_valid_obs + num_found, min_num_valid_obs_, candidate_keyfrm->id_);
@@ -255,7 +264,8 @@ bool relocalizer::refine_pose(data::frame& curr_frm,
         already_found_landmarks1.insert(lm);
     }
     // Apply projection match again, then set the 2D-3D matches
-    auto num_additional = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks1, 3, 64);
+    auto num_additional = proj_matcher_.match_frame_and_keyframe(curr_frm, candidate_keyfrm, already_found_landmarks1, 3, 64)
+        + stella_vslam_bfx::add_keyframe_prematches(curr_frm, candidate_keyfrm, already_found_landmarks, 3);
 
     // Discard if the number of the observations is less than the threshold
     if (num_valid_obs1 + num_additional < min_num_valid_obs_) {
@@ -350,7 +360,8 @@ bool relocalizer::refine_pose_by_local_map(data::frame& curr_frm,
         // acquire more 2D-3D matches by projecting the local landmarks to the current frame
         match::projection projection_matcher(0.8);
         const float margin = margins[i];
-        auto num_additional_matches = projection_matcher.match_frame_and_landmarks(curr_frm, local_landmarks, lm_to_reproj, lm_to_x_right, lm_to_scale, margin);
+        auto num_additional_matches = projection_matcher.match_frame_and_landmarks(curr_frm, local_landmarks, lm_to_reproj, lm_to_x_right, lm_to_scale, margin)
+            + stella_vslam_bfx::add_prematched_landmarks(curr_frm, local_landmarks, lm_to_reproj, margin);
 
         // optimize the pose
         Mat44_t optimized_pose;

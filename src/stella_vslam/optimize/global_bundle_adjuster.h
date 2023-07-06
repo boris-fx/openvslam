@@ -1,6 +1,8 @@
 #ifndef STELLA_VSLAM_OPTIMIZE_GLOBAL_BUNDLE_ADJUSTER_H
 #define STELLA_VSLAM_OPTIMIZE_GLOBAL_BUNDLE_ADJUSTER_H
 
+#include <stella_vslam/optimize/internal/camera_intrinsics_vertex.h> // For camera_intrinsics_vertex. Should be forward declared, but that's not currently straightforward
+
 namespace stella_vslam {
 
 namespace data {
@@ -8,6 +10,8 @@ class map_database;
 } // namespace data
 
 namespace optimize {
+
+//namespace internal { class camera_intrinsics_vertex; }
 
 class global_bundle_adjuster {
 public:
@@ -26,7 +30,7 @@ public:
     void optimize_for_initialization(const std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
                                      const std::vector<std::shared_ptr<data::landmark>>& lms,
                                      const std::vector<std::shared_ptr<data::marker>>& markers,
-                                     bool* const force_stop_flag = nullptr) const;
+                                     bool* const force_stop_flag, bool* camera_was_modified) const;
 
     /**
      * Perform optimization
@@ -43,7 +47,7 @@ public:
                   std::unordered_set<unsigned int>& optimized_landmark_ids,
                   eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                   eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,
-                  bool* const force_stop_flag = nullptr) const;
+                        bool* const force_stop_flag, int num_iter, bool general_bundle, bool* camera_was_modified) const;
 
 private:
     //! number of iterations of optimization
@@ -52,6 +56,8 @@ private:
     //! use Huber loss or not
     const bool use_huber_kernel_;
 };
+
+internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset, stella_vslam::camera::base const* camera);
 
 } // namespace optimize
 } // namespace stella_vslam

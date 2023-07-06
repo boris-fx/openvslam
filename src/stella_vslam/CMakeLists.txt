@@ -10,7 +10,10 @@ set(json_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/json/include)
 set(tinycolormap_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/tinycolormap/include)
 
 # sqlite3
-find_package(SQLite3 REQUIRED)
+if(USE_SQLITE)
+    find_package(SQLite3 REQUIRED)
+endif()
+
 
 # g2o
 find_package(g2o REQUIRED
@@ -21,13 +24,17 @@ find_package(g2o REQUIRED
              g2o::types_sim3
              g2o::solver_dense
              g2o::solver_eigen
+             OPTIONAL_COMPONENTS
              g2o::solver_csparse
              g2o::csparse_extension
-             OPTIONAL_COMPONENTS
              g2o::csparse)
 
+#if(TARGET OpenMP::OpenMP_CXX)
+#    set(OPENMP_CXX_LIBRARY OpenMP::OpenMP_CXX)
+#endif()
+
 # gtsam
-set(USE_GTSAM ON CACHE BOOL "Enable gtsam")
+set(USE_GTSAM OFF CACHE BOOL "Enable gtsam")
 unset(GTSAM_INCLUDE_DIRS CACHE)
 find_path(GTSAM_INCLUDE_DIRS NAMES gtsam
           PATHS /usr/local/include/)
@@ -41,6 +48,14 @@ endif()
 # Check first if CSparse is built from g2o
 if(TARGET g2o::csparse)
     set(${CXSPARSE_LIBRARIES} g2o::csparse)
+    if(TARGET g2o::solver_csparse)
+        set(G2O_SOLVER_CSPARSE_LIBRARY g2o::solver_csparse)
+        target_compile_definitions(${PROJECT_NAME} PUBLIC HAVE_G2O_SOLVER_CSPARSE)
+    endif()
+    if(TARGET g2o::csparse_extension)
+        set(G2O_SOLVER_CSPARSE_EXTENSION_LIBRARY g2o::csparse_extension)
+        target_compile_definitions(${PROJECT_NAME} PUBLIC HAVE_G2O_SOLVER_CSPARSE_EXTENSION)
+    endif()
 else()
     # CXSparse for g2o
     find_package(CXSparse)
@@ -64,7 +79,9 @@ endif()
 if(BOW_FRAMEWORK MATCHES "DBoW2")
     find_package(DBoW2 REQUIRED)
 elseif(BOW_FRAMEWORK MATCHES "FBoW")
-    find_package(fbow QUIET)
+    if (NOT USE_EMBEDDED_BOW_FRAMEWORK)
+        find_package(fbow QUIET)
+    endif()
     if(NOT fbow_FOUND)
         add_subdirectory(${PROJECT_SOURCE_DIR}/3rd/FBoW ${PROJECT_BINARY_DIR}/3rd/FBoW)
     endif()
@@ -76,12 +93,17 @@ endif()
 
 add_library(${PROJECT_NAME}
             ${CMAKE_CURRENT_SOURCE_DIR}/config.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/config_settings.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/exports.h
             ${CMAKE_CURRENT_SOURCE_DIR}/type.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/solver.h
             ${CMAKE_CURRENT_SOURCE_DIR}/system.h
             ${CMAKE_CURRENT_SOURCE_DIR}/tracking_module.h
             ${CMAKE_CURRENT_SOURCE_DIR}/mapping_module.h
             ${CMAKE_CURRENT_SOURCE_DIR}/global_optimization_module.h
             ${CMAKE_CURRENT_SOURCE_DIR}/config.cc
+            ${CMAKE_CURRENT_SOURCE_DIR}/config_settings.cc
+            ${CMAKE_CURRENT_SOURCE_DIR}/solver.cc
             ${CMAKE_CURRENT_SOURCE_DIR}/system.cc
             ${CMAKE_CURRENT_SOURCE_DIR}/tracking_module.cc
             ${CMAKE_CURRENT_SOURCE_DIR}/mapping_module.cc
@@ -89,6 +111,7 @@ add_library(${PROJECT_NAME}
 
 # Set output directory of the library
 set_target_properties(${PROJECT_NAME} PROPERTIES
+                      DEFINE_SYMBOL STELLA_VSLAM_DLL_EXPORT
                       OUTPUT_NAME stella_vslam
                       ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
                       LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
@@ -164,12 +187,21 @@ else()
 endif()
 
 # Determinism
-set (DETERMINISTIC OFF CACHE BOOL "Use deterministic code")
+set (DETERMINISTIC ON CACHE BOOL "Use deterministic code")
 if (DETERMINISTIC)
     target_compile_definitions(${PROJECT_NAME} PUBLIC DETERMINISTIC)
     message(STATUS "Determinism: ENABLED")
 else()
     message(STATUS "Determinism: DISABLED")
+endif()
+
+# SQLite
+set(USE_SQLITE OFF CACHE BOOL "Use SQLite")
+if(USE_SQLITE)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC USE_SQLITE)
+    message(STATUS "SQLite: ENABLED")
+else()
+    message(STATUS "SQLite: DISABLED")
 endif()
 
 # ----- Configure stella_vslam library -----
@@ -189,10 +221,8 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
                       PUBLIC
                       Threads::Threads
-                      OpenMP::OpenMP_CXX
+                      ${OPENMP_CXX_LIBRARY}
                       Eigen3::Eigen
-                      yaml-cpp
-                      ${SQLite3_LIBRARIES}
                       opencv_core
                       opencv_features2d
                       opencv_calib3d
@@ -203,14 +233,23 @@ target_link_libraries(${PROJECT_NAME}
                       g2o::types_sim3
                       g2o::solver_dense
                       g2o::solver_eigen
-                      g2o::solver_csparse
-                      g2o::csparse_extension
+                      ${G2O_SOLVER_CSPARSE_LIBRARY}
+                      ${G2O_SOLVER_CSPARSE_EXTENSION_LIBRARY}
                       "$<$<BOOL:${USE_GTSAM}>:gtsam>"
                       ${CXSPARSE_LIBRARIES}
                       ${SUITESPARSE_LIBRARIES}
                       ${BoW_LIBRARY}
                       PRIVATE
                       ${LAPACK_LIBRARIES})
+
+if (USE_SQLITE)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${SQLite3_LIBRARIES})
+endif()
+
+if(BUILD_EXAMPLES)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${YAMLCPP_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${YAMLCPP_LIBRARIES})
+endif()
 
 # ----- Install configuration -----
 
@@ -249,6 +288,7 @@ add_subdirectory(match)
 add_subdirectory(module)
 add_subdirectory(optimize)
 add_subdirectory(publish)
+add_subdirectory(report)
 add_subdirectory(solve)
 add_subdirectory(util)
 

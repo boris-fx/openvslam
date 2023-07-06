@@ -2,9 +2,13 @@
 #include "stella_vslam/camera/radial_division.h"
 #include "stella_vslam/camera/fisheye.h"
 #include "stella_vslam/data/frame.h"
+#include "stella_vslam/data/map_camera_helpers.h"
 #include "stella_vslam/initialize/perspective.h"
 #include "stella_vslam/solve/homography_solver.h"
 #include "stella_vslam/solve/fundamental_solver.h"
+#include "stella_vslam/solve/fundamental_to_focal_length.h"
+#include "stella_vslam/solve/fundamental_consistency.h"
+#include "stella_vslam/report/metrics.h"
 
 #include <thread>
 
@@ -29,7 +33,7 @@ perspective::~perspective() {
     spdlog::debug("DESTRUCT: initialize::perspective");
 }
 
-bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur) {
+bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur, double parallax_deg_thr_multiplier, bool initialize_focal_length, bool* focal_length_was_modified) {
     // set the current camera model
     cur_camera_ = cur_frm.camera_;
     // store the keypoints and bearings
@@ -62,25 +66,79 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
     const auto cost_F = fundamental_solver.get_best_cost();
     const float rel_cost_H = cost_H / (cost_H + cost_F);
 
+    // Average cost per match (pixels)
+    stella_vslam_bfx::metrics::initialisation_debug().submit_homography_fundamental_cost(cost_H/double(ref_cur_matches_.size()), cost_F/double(ref_cur_matches_.size()));
+    stella_vslam_bfx::metrics::get_instance()->submit_initialiser_constrained_matching_stats(homography_solver.get_inlier_matches(), fundamental_solver.get_inlier_matches());
+    
     // select a case according to the cost
     if (0.5 > rel_cost_H && homography_solver.solution_is_valid()) {
         spdlog::debug("reconstruct_with_H");
         const Mat33_t H_ref_to_cur = homography_solver.get_best_H_21();
         const auto is_inlier_match = homography_solver.get_inlier_matches();
-        return reconstruct_with_H(H_ref_to_cur, is_inlier_match);
+        return reconstruct_with_H(H_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
     }
     else if (fundamental_solver.solution_is_valid()) {
         spdlog::debug("reconstruct_with_F");
         const Mat33_t F_ref_to_cur = fundamental_solver.get_best_F_21();
         const auto is_inlier_match = fundamental_solver.get_inlier_matches();
-        return reconstruct_with_F(F_ref_to_cur, is_inlier_match);
+        *focal_length_was_modified = false;
+        if (true && initialize_focal_length) {
+
+
+           bool focal_length_estimate_is_stable(true);
+            bool focal_length_changed(false);
+
+            bool const focal_length_via_points_test(false);
+            if (focal_length_via_points_test) {
+                stella_vslam_bfx::focal_length_estimator::test_v2(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_,
+                                                                  focal_length_estimate_is_stable, focal_length_changed);
+
+                stella_vslam_bfx::focal_length_estimator::get_instance()->add_frame_pair(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur);
+                stella_vslam_bfx::focal_length_estimator::get_instance()->run_optimisation(ref_camera_, focal_length_estimate_is_stable, focal_length_changed);
+            }
+            else
+                focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_, &focal_length_estimate_is_stable); // May update the camera if auto focal length is active
+
+            // If the focal length was changed we also need to update the bearing vectors,
+            //   and indicate to our calling function that it should do the same
+            if (focal_length_changed) {
+                //auto stage = stella_vslam_bfx::focal_estimation_stage::initialisation_before_ba;
+                //stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, stella_vslam_bfx::focal_length_x_pixels_from_camera(ref_camera_));
+
+                const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_).clear();
+                ref_camera_->convert_keypoints_to_bearings(ref_undist_keypts_, const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_));
+                cur_bearings_.clear();
+                ref_camera_->convert_keypoints_to_bearings(cur_undist_keypts_, cur_bearings_);
+            }
+            *focal_length_was_modified = focal_length_changed;
+
+            // If focal length estimation was required but failed, then intiialisation should fail
+            if (!focal_length_estimate_is_stable)
+                return false;
+
+        }
+        else {
+            *focal_length_was_modified = false;
+        }
+        bool reconstruct_ok = reconstruct_with_F(F_ref_to_cur, is_inlier_match, parallax_deg_thr_multiplier);
+        
+        if (stella_vslam_bfx::metrics::initialisation_debug().active()) {
+            // Force initialisation to fail, so can collect more initialisation data
+            spdlog::info("initialization forced to fail with F (initialisation_debug test active");
+            return false;
+        }
+        else
+            if (reconstruct_ok)
+                spdlog::info("initialization succeeded with F");
+
+        return reconstruct_ok;
     }
     else {
         return false;
     }
 }
 
-bool perspective::reconstruct_with_H(const Mat33_t& H_ref_to_cur, const std::vector<bool>& is_inlier_match) {
+bool perspective::reconstruct_with_H(const Mat33_t& H_ref_to_cur, const std::vector<bool>& is_inlier_match, double parallax_deg_thr_multiplier) {
     // found the most plausible pose from the EIGHT hypothesis computed from the H matrix
 
     // decompose the H matrix
@@ -94,7 +152,7 @@ bool perspective::reconstruct_with_H(const Mat33_t& H_ref_to_cur, const std::vec
     assert(init_rots.size() == 8);
     assert(init_transes.size() == 8);
 
-    const auto pose_is_found = find_most_plausible_pose(init_rots, init_transes, is_inlier_match, true);
+    const auto pose_is_found = find_most_plausible_pose(init_rots, init_transes, is_inlier_match, true, parallax_deg_thr_multiplier);
     if (!pose_is_found) {
         return false;
     }
@@ -103,7 +161,7 @@ bool perspective::reconstruct_with_H(const Mat33_t& H_ref_to_cur, const std::vec
     return true;
 }
 
-bool perspective::reconstruct_with_F(const Mat33_t& F_ref_to_cur, const std::vector<bool>& is_inlier_match) {
+bool perspective::reconstruct_with_F(const Mat33_t& F_ref_to_cur, const std::vector<bool>& is_inlier_match, double parallax_deg_thr_multiplier) {
     // found the most plausible pose from the FOUR hypothesis computed from the F matrix
 
     // decompose the F matrix
@@ -116,12 +174,11 @@ bool perspective::reconstruct_with_F(const Mat33_t& F_ref_to_cur, const std::vec
     assert(init_rots.size() == 4);
     assert(init_transes.size() == 4);
 
-    const auto pose_is_found = find_most_plausible_pose(init_rots, init_transes, is_inlier_match, true);
+    const auto pose_is_found = find_most_plausible_pose(init_rots, init_transes, is_inlier_match, true, parallax_deg_thr_multiplier);
     if (!pose_is_found) {
         return false;
     }
 
-    spdlog::info("initialization succeeded with F");
     return true;
 }
 

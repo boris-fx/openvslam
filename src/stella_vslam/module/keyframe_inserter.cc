@@ -23,13 +23,13 @@ keyframe_inserter::keyframe_inserter(const double max_interval,
       lms_ratio_thr_view_changed_(lms_ratio_thr_view_changed),
       enough_lms_thr_(enough_lms_thr) {}
 
-keyframe_inserter::keyframe_inserter(const YAML::Node& yaml_node)
-    : keyframe_inserter(yaml_node["max_interval"].as<double>(1.0),
-                        yaml_node["min_interval"].as<double>(0.1),
-                        yaml_node["max_distance"].as<double>(-1.0),
-                        yaml_node["lms_ratio_thr_almost_all_lms_are_tracked"].as<double>(0.9),
-                        yaml_node["lms_ratio_thr_view_changed"].as<double>(0.5),
-                        yaml_node["enough_lms_thr"].as<unsigned int>(100)) {}
+keyframe_inserter::keyframe_inserter(const stella_vslam_bfx::config_settings& settings)
+    : keyframe_inserter(settings.max_interval_,
+                        settings.min_interval_,
+                        settings.max_distance_,
+                        settings.lms_ratio_thr_almost_all_lms_are_tracked_,
+                        settings.lms_ratio_thr_view_changed_,
+                        settings.enough_lms_thr_) {}
 
 void keyframe_inserter::set_mapping_module(mapping_module* mapper) {
     mapper_ = mapper;

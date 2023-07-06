@@ -162,11 +162,9 @@ inline bool stereo_perspective_reproj_edge::write(std::ostream& os) const {
     for (unsigned int i = 0; i < 3; ++i) {
         os << measurement()(i) << " ";
     }
-    for (unsigned int i = 0; i < 3; ++i) {
-        for (unsigned int j = i; j < 3; ++j) {
-            os << " " << information()(i, j);
-        }
-    }
+    os << " " << information()(0, 0);
+    os << " " << information()(0, 1); // == information()(1, 0)
+    os << " " << information()(1, 1);
     return os.good();
 }
 

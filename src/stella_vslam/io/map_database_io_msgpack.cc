@@ -103,5 +103,63 @@ bool map_database_io_msgpack::load(const std::string& path,
     return true;
 }
 
+bool map_database_io_msgpack::save_to_mem(std::vector<unsigned char>& msgpack,
+    const data::camera_database* const cam_db,
+    const data::orb_params_database* const orb_params_db,
+    const data::map_database* const map_db) {
+    std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
+
+    assert(cam_db && orb_params_db && map_db);
+    const auto cameras = cam_db->to_json();
+    const auto orb_params = orb_params_db->to_json();
+    nlohmann::json keyfrms;
+    nlohmann::json landmarks;
+    map_db->to_json(keyfrms, landmarks);
+
+    nlohmann::json json{ {"cameras", cameras},
+                        {"orb_params", orb_params},
+                        {"keyframes", keyfrms},
+                        {"landmarks", landmarks},
+                        {"keyframe_next_id", static_cast<unsigned int>(map_db->next_keyframe_id_)},
+                        {"landmark_next_id", static_cast<unsigned int>(map_db->next_landmark_id_)} };
+
+    msgpack = nlohmann::json::to_msgpack(json);
+
+    return true;
+}
+
+bool map_database_io_msgpack::load_from_mem(std::vector<unsigned char> const& msgpack,
+    data::camera_database* cam_db,
+    data::orb_params_database* orb_params_db,
+    data::map_database* map_db,
+    data::bow_database* bow_db,
+    data::bow_vocabulary* bow_vocab) {
+    std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
+    assert(cam_db && orb_params_db && map_db && bow_db && bow_vocab);
+
+    // parse into JSON
+
+    const auto json = nlohmann::json::from_msgpack(msgpack);
+
+    // load database
+    const auto json_cameras = json.at("cameras");
+    cam_db->from_json(json_cameras);
+    const auto json_orb_params = json.at("orb_params");
+    orb_params_db->from_json(json_orb_params);
+    const auto json_keyfrms = json.at("keyframes");
+    const auto json_landmarks = json.at("landmarks");
+    map_db->from_json(cam_db, orb_params_db, bow_vocab, json_keyfrms, json_landmarks);
+    // load next ID
+    map_db->next_keyframe_id_ += json.at("keyframe_next_id").get<unsigned int>();
+    map_db->next_landmark_id_ += json.at("landmark_next_id").get<unsigned int>();
+
+    // update bow database
+    const auto keyfrms = map_db->get_all_keyframes();
+    for (const auto& keyfrm : keyfrms) {
+        bow_db->add_keyframe(keyfrm);
+    }
+    return true;
+}
+
 } // namespace io
 } // namespace stella_vslam

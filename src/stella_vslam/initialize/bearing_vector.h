@@ -31,12 +31,13 @@ public:
     ~bearing_vector() override;
 
     //! Initialize with the current frame
-    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur) override;
+    bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur,
+                    double parallax_deg_thr_multiplier, bool initialize_focal_length, bool* focal_length_was_modified) override;
 
 private:
     //! Reconstruct the initial map with the E matrix
     //! (NOTE: the output variables will be set if succeeded)
-    bool reconstruct_with_E(const Mat33_t& E_ref_to_cur, const std::vector<bool>& is_inlier_match);
+    bool reconstruct_with_E(const Mat33_t& E_ref_to_cur, const std::vector<bool>& is_inlier_match, double parallax_deg_thr_multiplier);
 
     //! Use fixed random seed for RANSAC if true
     const bool use_fixed_seed_;

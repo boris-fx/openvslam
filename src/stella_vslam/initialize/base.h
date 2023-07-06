@@ -35,7 +35,9 @@ public:
     virtual ~base() = default;
 
     //! Initialize with the current frame
-    virtual bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur) = 0;
+    virtual bool initialize(const data::frame& cur_frm, const std::vector<int>& ref_matches_with_cur,
+                            double parallax_deg_thr_multiplier, bool initialize_focal_length, bool* focal_length_was_modified)
+        = 0;
 
     //! Get the rotation from the reference to the current
     Mat33_t get_rotation_ref_to_cur() const;
@@ -52,7 +54,7 @@ public:
 protected:
     //! Find the most plausible pose and set them to the member variables (outputs)
     bool find_most_plausible_pose(const eigen_alloc_vector<Mat33_t>& init_rots, const eigen_alloc_vector<Vec3_t>& init_transes,
-                                  const std::vector<bool>& is_inlier_match, const bool depth_is_positive);
+                                  const std::vector<bool>& is_inlier_match, const bool depth_is_positive, double parallax_deg_thr_multiplier);
 
     //! Generate 3D points from matches with valid and sufficient parallax
     unsigned int triangulate(const Mat33_t& rot_ref_to_cur, const Vec3_t& trans_ref_to_cur,

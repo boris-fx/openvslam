@@ -1,6 +1,7 @@
 #include "stella_vslam/data/frame.h"
 #include "stella_vslam/match/area.h"
 #include "stella_vslam/util/angle.h"
+#include "stella_vslam/report/metrics.h"
 
 namespace stella_vslam {
 namespace match {
@@ -14,12 +15,23 @@ unsigned int area::match_in_consistent_area(data::frame& frm_1, data::frame& frm
     std::vector<unsigned int> matched_dists_in_frm_2(frm_2.frm_obs_.undist_keypts_.size(), MAX_HAMMING_DIST);
     std::vector<int> matched_indices_1_in_frm_2(frm_2.frm_obs_.undist_keypts_.size(), -1);
 
+    int count_fail_prematched(0), count_fail_scale(0), count_fail_cell(0), count_fail_hamming(0), count_fail_ratio(0);
+    int count_indices_exist(0), count_num_indices(0);
+
     for (unsigned int idx_1 = 0; idx_1 < frm_1.frm_obs_.undist_keypts_.size(); ++idx_1) {
+
+        // Keypoint has already been matched externally
+        if ( frm_1.frm_obs_.idx_is_prematched(idx_1) ) {
+            ++count_fail_prematched;
+            continue;
+        }
+
         const auto& undist_keypt_1 = frm_1.frm_obs_.undist_keypts_.at(idx_1);
         const auto scale_level_1 = undist_keypt_1.octave;
 
         // Use only keypoints with the 0-th scale
         if (0 < scale_level_1) {
+            ++count_fail_scale;
             continue;
         }
 
@@ -27,6 +39,7 @@ unsigned int area::match_in_consistent_area(data::frame& frm_1, data::frame& frm
         const auto indices = frm_2.get_keypoints_in_cell(prev_matched_pts.at(idx_1).x, prev_matched_pts.at(idx_1).y,
                                                          margin, scale_level_1, scale_level_1);
         if (indices.empty()) {
+            ++count_fail_cell;
             continue;
         }
 
@@ -36,7 +49,16 @@ unsigned int area::match_in_consistent_area(data::frame& frm_1, data::frame& frm
         unsigned int second_best_hamm_dist = MAX_HAMMING_DIST;
         int best_idx_2 = -1;
 
+        ++count_indices_exist;
+        count_num_indices += indices.size();
+
         for (const auto idx_2 : indices) {
+
+            // Keypoint has already been matched externally
+            if ( frm_2.frm_obs_.idx_is_prematched(idx_2) ) {
+				continue;
+			}
+
             if (check_orientation_ && std::abs(util::angle::diff(frm_1.frm_obs_.undist_keypts_.at(idx_1).angle, frm_2.frm_obs_.undist_keypts_.at(idx_2).angle)) > 30.0) {
                 continue;
             }
@@ -61,11 +83,13 @@ unsigned int area::match_in_consistent_area(data::frame& frm_1, data::frame& frm
         }
 
         if (HAMMING_DIST_THR_LOW < best_hamm_dist) {
+            ++count_fail_hamming;
             continue;
         }
 
         // Ratio test
         if (second_best_hamm_dist * lowe_ratio_ < static_cast<float>(best_hamm_dist)) {
+            ++count_fail_ratio;
             continue;
         }
 
@@ -93,6 +117,10 @@ unsigned int area::match_in_consistent_area(data::frame& frm_1, data::frame& frm
             prev_matched_pts.at(idx_1) = frm_2.frm_obs_.undist_keypts_.at(matched_indices_2_in_frm_1.at(idx_1)).pt;
         }
     }
+
+    stella_vslam_bfx::metrics::get_instance()->submit_area_matching(frm_1.frm_obs_.undist_keypts_.size(), 
+                                count_fail_prematched, count_fail_scale, count_fail_cell, count_fail_hamming, count_fail_ratio,
+                                count_indices_exist, count_num_indices, num_matches);
 
     return num_matches;
 }

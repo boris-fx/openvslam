@@ -1,8 +1,9 @@
 #ifndef STELLA_VSLAM_FEATURE_ORB_PARAMS_H
 #define STELLA_VSLAM_FEATURE_ORB_PARAMS_H
 
+#include "stella_vslam/config_settings.h"
+
 #include <nlohmann/json_fwd.hpp>
-#include <yaml-cpp/yaml.h>
 #include <cmath>
 
 namespace stella_vslam {
@@ -17,7 +18,7 @@ struct orb_params {
     orb_params(const std::string& name);
 
     //! Constructor
-    explicit orb_params(const YAML::Node& yaml_node);
+    explicit orb_params(const stella_vslam_bfx::config_settings& settings);
 
     //! Destructor
     virtual ~orb_params() = default;
@@ -27,7 +28,7 @@ struct orb_params {
     //! name (id for saving)
     const std::string name_;
 
-    const float scale_factor_ = 1.2;
+    const float scale_factor_ = 1.2f;
     const float log_scale_factor_ = std::log(1.2);
     const unsigned int num_levels_ = 8;
     const unsigned int ini_fast_thr_ = 20;

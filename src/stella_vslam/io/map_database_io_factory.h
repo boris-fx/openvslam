@@ -23,7 +23,11 @@ public:
     static std::shared_ptr<map_database_io_base> create(const std::string& map_format) {
         std::shared_ptr<map_database_io_base> map_database_io;
         if (map_format == "sqlite3") {
+#ifdef USE_SQLITE
             map_database_io = std::make_shared<io::map_database_io_sqlite3>();
+#else
+            throw std::runtime_error("Map format: " + map_format + " is disabled");
+#endif
         }
         else if (map_format == "msgpack") {
             map_database_io = std::make_shared<io::map_database_io_msgpack>();

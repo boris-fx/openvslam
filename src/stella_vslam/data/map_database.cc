@@ -13,7 +13,9 @@
 
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#ifdef USE_SQLITE
 #include <sqlite3.h>
+#endif
 
 namespace stella_vslam {
 namespace data {
@@ -25,9 +27,42 @@ map_database::map_database(unsigned int min_num_shared_lms)
     spdlog::debug("CONSTRUCT: data::map_database");
 }
 
+map_database::map_database(const map_database& that)
+{
+    operator=(that);
+}
+
 map_database::~map_database() {
     clear();
     spdlog::debug("DESTRUCT: data::map_database");
+}
+    
+map_database& map_database::operator=(const map_database &that) {
+
+    //! next ID
+    next_keyframe_id_.store(that.next_keyframe_id_.load());
+    next_landmark_id_.store(that.next_landmark_id_.load());
+
+    //! IDs and keyframes
+    keyframes_ = that.keyframes_;
+    //! IDs and landmarks
+    landmarks_ = that.landmarks_;
+    //! IDs and markers
+    markers_ = that.markers_;
+
+    //! spanning roots
+    spanning_roots_ = that.spanning_roots_;
+
+    //! The last keyframe added to the database
+    last_inserted_keyfrm_ = that.last_inserted_keyfrm_;
+
+    //! local landmarks
+    local_landmarks_ = that.local_landmarks_;
+
+    //! frame statistics
+    frm_stats_ = that.frm_stats_;
+
+    return *this;
 }
 
 void map_database::set_fixed_keyframe_id_threshold() {
@@ -497,6 +532,7 @@ void map_database::to_json(nlohmann::json& json_keyfrms, nlohmann::json& json_la
     json_landmarks = landmarks;
 }
 
+#ifdef USE_SQLITE
 bool map_database::from_db(sqlite3* db,
                            camera_database* cam_db,
                            orb_params_database* orb_params_db,
@@ -809,6 +845,7 @@ bool map_database::save_associations_to_db(sqlite3* db, const std::string& table
     sqlite3_finalize(stmt);
     return util::sqlite3_util::commit(db);
 }
+#endif  // USE_SQLITE
 
 } // namespace data
 } // namespace stella_vslam

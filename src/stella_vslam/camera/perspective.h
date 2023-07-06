@@ -2,6 +2,7 @@
 #define STELLA_VSLAM_CAMERA_PERSPECTIVE_H
 
 #include "stella_vslam/camera/base.h"
+#include "stella_vslam/exports.h"
 
 #include <opencv2/core/version.hpp>
 #if CV_MAJOR_VERSION == 3
@@ -13,17 +14,18 @@
 namespace stella_vslam {
 namespace camera {
 
-class perspective final : public base {
+class STELLA_VSLAM_API perspective final : public base {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     perspective(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
+                const autocalibration_parameters& autocalibration,
                 const unsigned int cols, const unsigned int rows, const double fps,
                 const double fx, const double fy, const double cx, const double cy,
                 const double k1, const double k2, const double p1, const double p2, const double k3,
                 const double focal_x_baseline = 0.0, const double depth_thr = 0.0);
 
-    perspective(const YAML::Node& yaml_node);
+    perspective(const stella_vslam_bfx::config_settings& settings);
 
     ~perspective() override;
 
@@ -51,8 +53,8 @@ public:
     // Parameters specific to this model
 
     //! pinhole params
-    const double fx_;
-    const double fy_;
+          double fx_;
+          double fy_;
     const double cx_;
     const double cy_;
     const double fx_inv_;

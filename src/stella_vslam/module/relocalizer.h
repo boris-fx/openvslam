@@ -27,9 +27,10 @@ public:
                          const unsigned int min_num_bow_matches = 20, const unsigned int min_num_valid_obs = 50,
                          const bool use_fixed_seed = false,
                          const bool search_neighbor = true,
-                         const unsigned int top_n_covisibilities_to_search = 10);
+                         const unsigned int top_n_covisibilities_to_search = 10,
+                         const bool use_orb_features = true);
 
-    explicit relocalizer(const std::shared_ptr<optimize::pose_optimizer>& pose_optimizer, const YAML::Node& yaml_node);
+    explicit relocalizer(const std::shared_ptr<optimize::pose_optimizer>& pose_optimizer, const stella_vslam_bfx::config_settings& settings);
 
     //! Destructor
     virtual ~relocalizer();
@@ -90,6 +91,9 @@ private:
     const bool search_neighbor_ = true;
     //! number of neighbor keyframes
     const unsigned int top_n_covisibilities_to_search_ = 10;
+    
+    //! Use ORB features if true
+    const bool use_orb_features_;
 };
 
 } // namespace module

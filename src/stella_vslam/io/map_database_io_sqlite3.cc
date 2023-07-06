@@ -1,3 +1,5 @@
+#ifdef USE_SQLITE
+
 #include "stella_vslam/data/frame.h"
 #include "stella_vslam/data/keyframe.h"
 #include "stella_vslam/data/landmark.h"
@@ -145,3 +147,5 @@ bool map_database_io_sqlite3::load_stats(sqlite3* db, data::map_database* map_db
 
 } // namespace io
 } // namespace stella_vslam
+
+#endif  // USE_SQLITE

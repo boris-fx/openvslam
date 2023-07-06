@@ -6,12 +6,13 @@
 namespace stella_vslam {
 namespace module {
 
-local_map_cleaner::local_map_cleaner(const YAML::Node& yaml_node, data::map_database* map_db, data::bow_database* bow_db)
+local_map_cleaner::local_map_cleaner(const stella_vslam_bfx::config_settings& settings,
+                                    data::map_database* map_db, data::bow_database* bow_db)
     : map_db_(map_db), bow_db_(bow_db),
-      redundant_obs_ratio_thr_(yaml_node["redundant_obs_ratio_thr"].as<double>(0.9)),
-      observed_ratio_thr_(yaml_node["observed_ratio_thr"].as<double>(0.3)),
-      num_reliable_keyfrms_(yaml_node["num_reliable_keyfrms"].as<unsigned int>(2)),
-      top_n_covisibilities_to_search_(yaml_node["top_n_covisibilities_to_search"].as<unsigned int>(30)) {}
+      redundant_obs_ratio_thr_(settings.redundant_obs_ratio_thr_),
+      observed_ratio_thr_(settings.observed_ratio_thr_),
+      num_reliable_keyfrms_(settings.num_reliable_keyfrms_),
+	  top_n_covisibilities_to_search_(settings.top_n_covisibilities_to_search) {}
 
 void local_map_cleaner::reset() {
     fresh_landmarks_.clear();

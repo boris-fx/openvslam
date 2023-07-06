@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "stella_vslam/feature/orb_impl.h"
 #include "stella_vslam/feature/orb_point_pairs.h"
 #include "stella_vslam/util/trigonometric.h"
+#include "stella_vslam/type.h"
 
 #ifdef USE_SSE_ORB
 #ifdef _MSC_VER

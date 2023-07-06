@@ -6,10 +6,12 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/match/fuse.h"
+#include "stella_vslam/match/prematched.h"
 #include "stella_vslam/match/robust.h"
 #include "stella_vslam/module/two_view_triangulator.h"
 #include "stella_vslam/optimize/local_bundle_adjuster_factory.h"
 #include "stella_vslam/solve/essential_solver.h"
+#include "stella_vslam/report/initialisation_debugging.h"
 
 #include <thread>
 
@@ -17,31 +19,29 @@
 
 namespace stella_vslam {
 
-mapping_module::mapping_module(const YAML::Node& yaml_node, data::map_database* map_db, data::bow_database* bow_db, data::bow_vocabulary* bow_vocab)
-    : local_map_cleaner_(new module::local_map_cleaner(yaml_node, map_db, bow_db)),
+mapping_module::mapping_module(const stella_vslam_bfx::config_settings& settings, data::map_database* map_db, data::bow_database* bow_db, data::bow_vocabulary* bow_vocab)
+    : local_map_cleaner_(new module::local_map_cleaner(settings, map_db, bow_db)),
       map_db_(map_db), bow_db_(bow_db), bow_vocab_(bow_vocab),
-      local_bundle_adjuster_(optimize::local_bundle_adjuster_factory::create(yaml_node)),
-      enable_interruption_of_landmark_generation_(yaml_node["enable_interruption_of_landmark_generation"].as<bool>(true)),
-      enable_interruption_before_local_BA_(yaml_node["enable_interruption_before_local_BA"].as<bool>(true)),
-      num_covisibilities_for_landmark_generation_(yaml_node["num_covisibilities_for_landmark_generation"].as<unsigned int>(10)),
-      num_covisibilities_for_landmark_fusion_(yaml_node["num_covisibilities_for_landmark_fusion"].as<unsigned int>(10)),
-      erase_temporal_keyframes_(yaml_node["erase_temporal_keyframes"].as<bool>(false)),
-      num_temporal_keyframes_(yaml_node["num_temporal_keyframes"].as<unsigned int>(15)) {
+      use_orb_features_(settings.use_orb_features_),
+      local_bundle_adjuster_(optimize::local_bundle_adjuster_factory::create(settings)),
+      enable_interruption_of_landmark_generation_(settings.enable_interruption_of_landmark_generation_),
+      enable_interruption_before_local_BA_(settings.enable_interruption_before_local_BA_),
+      num_covisibilities_for_landmark_generation_(settings.num_covisibilities_for_landmark_generation_),
+      num_covisibilities_for_landmark_fusion_(settings.num_covisibilities_for_landmark_fusion_),
+      erase_temporal_keyframes_(false),
+      num_temporal_keyframes_(15) {
     spdlog::debug("CONSTRUCT: mapping_module");
 
     spdlog::debug("load mapping parameters");
 
     spdlog::debug("load monocular mappping parameters");
-    if (yaml_node["baseline_dist_thr"]) {
-        if (yaml_node["baseline_dist_thr_ratio"]) {
-            throw std::runtime_error("Do not set both baseline_dist_thr_ratio and baseline_dist_thr.");
-        }
-        baseline_dist_thr_ = yaml_node["baseline_dist_thr"].as<double>(1.0);
+    if (!settings.use_baseline_dist_thr_ratio_) {
+        baseline_dist_thr_ = settings.baseline_dist_thr_;
         use_baseline_dist_thr_ratio_ = false;
         spdlog::debug("Use baseline_dist_thr: {}", baseline_dist_thr_);
     }
     else {
-        baseline_dist_thr_ratio_ = yaml_node["baseline_dist_thr_ratio"].as<double>(0.02);
+        baseline_dist_thr_ratio_ = settings.baseline_dist_thr_ratio_;
         use_baseline_dist_thr_ratio_ = true;
         spdlog::debug("Use baseline_dist_thr_ratio: {}", baseline_dist_thr_ratio_);
     }
@@ -61,6 +61,7 @@ void mapping_module::set_global_optimization_module(global_optimization_module* 
 
 void mapping_module::run() {
     spdlog::info("start mapping module");
+    stella_vslam_bfx::thread_dubugging::get_instance()->set_thread_name("Mapping");
 
     is_terminated_ = false;
     set_is_idle(true);
@@ -332,7 +333,10 @@ void mapping_module::create_new_landmarks(std::atomic<bool>& abort_create_new_la
 
         // vector of matches (idx in the current, idx in the neighbor)
         std::vector<std::pair<unsigned int, unsigned int>> matches;
-        robust_matcher.match_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches);
+        if (use_orb_features_) {
+            robust_matcher.match_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches);
+        }
+        stella_vslam_bfx::get_prematches_for_triangulation(cur_keyfrm_, ngh_keyfrm, E_ngh_to_cur, matches, false);
 
         // triangulation
         triangulate_with_two_keyframes(cur_keyfrm_, ngh_keyfrm, matches);
@@ -399,13 +403,15 @@ void mapping_module::update_new_keyframe() {
         if (lm->will_be_erased()) {
             continue;
         }
-        if (!lm->has_representative_descriptor()) {
-            spdlog::warn("has not representative descriptor {}", lm->id_);
-            lm->compute_descriptor();
-        }
-        if (!lm->has_valid_prediction_parameters()) {
-            spdlog::warn("has not valid prediction parameters");
-            lm->update_mean_normal_and_obs_scale_variance();
+        if (lm->prematched_id_ < 0) {
+            if (!lm->has_representative_descriptor()) {
+                spdlog::warn("has not representative descriptor {}", lm->id_);
+                lm->compute_descriptor();
+            }
+            if (!lm->has_valid_prediction_parameters()) {
+                spdlog::warn("has not valid prediction parameters");
+                lm->update_mean_normal_and_obs_scale_variance();
+            }
         }
     }
 
@@ -416,6 +422,48 @@ void mapping_module::update_new_keyframe() {
 void mapping_module::fuse_landmark_duplication(const std::vector<std::shared_ptr<data::keyframe>>& fuse_tgt_keyfrms,
                                                nondeterministic::unordered_map<std::shared_ptr<data::landmark>, std::shared_ptr<data::landmark>>& replaced_lms) {
     match::fuse fuse_matcher(0.6);
+
+    {
+        // handle prematched points separately; simply look for corresponding IDs
+        auto cur_landmarks = cur_keyfrm_->get_landmarks();
+        for (auto& lm : cur_landmarks) {
+            if (!lm) {
+                continue;
+            }
+            if (lm->will_be_erased()) {
+                continue;
+            }
+            if (lm->prematched_id_ < 0) {
+                continue;
+            }
+
+            for (const auto& fuse_tgt_keyfrm : fuse_tgt_keyfrms) {
+                if (lm->is_observed_in_keyframe(fuse_tgt_keyfrm)) {
+                    continue;
+                }
+
+                for (auto& tgt_lm : fuse_tgt_keyfrm->get_landmarks()) {
+                    if (!tgt_lm) {
+                        continue;
+                    }
+                    if (tgt_lm->will_be_erased()) {
+                        continue;
+                    }
+
+                    if (tgt_lm->id_ != lm->id_ && tgt_lm->prematched_id_ == lm->prematched_id_) {
+                        if (tgt_lm->num_observations() > lm->num_observations()) {
+                            replaced_lms[lm] = tgt_lm;
+                            lm->replace(tgt_lm, map_db_);
+                        }
+                        else{
+                            replaced_lms[tgt_lm] = lm;
+                            tgt_lm->replace(lm, map_db_);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     {
         // reproject the landmarks observed in the current keyframe to each of the targets, and acquire

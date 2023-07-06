@@ -2,6 +2,7 @@
 #include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/marker.h"
 #include "stella_vslam/data/map_database.h"
+#include "stella_vslam/data/map_camera_helpers.h"
 #include "stella_vslam/marker_model/base.h"
 #include "stella_vslam/optimize/global_bundle_adjuster.h"
 #include "stella_vslam/optimize/terminate_action.h"
@@ -10,6 +11,7 @@
 #include "stella_vslam/optimize/internal/se3/shot_vertex_container.h"
 #include "stella_vslam/optimize/internal/se3/reproj_edge_wrapper.h"
 #include "stella_vslam/util/converter.h"
+#include "stella_vslam/report/metrics.h"
 
 #include <g2o/core/solver.h>
 #include <g2o/core/block_solver.h>
@@ -17,11 +19,81 @@
 #include <g2o/core/robust_kernel_impl.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
 #include <g2o/solvers/eigen/linear_solver_eigen.h>
+
+#undef G2O_LINEAR_SOLVER_CLASS
+#if defined(HAVE_G2O_SOLVER_CSPARSE)
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
+#define G2O_LINEAR_SOLVER_CLASS LinearSolverCSparse 
+#else
+#define G2O_LINEAR_SOLVER_CLASS LinearSolverEigen
+#endif
+
 #include <g2o/core/optimization_algorithm_levenberg.h>
+
+#include <spdlog/spdlog.h>
 
 namespace stella_vslam {
 namespace optimize {
+
+/** This function allocates a camera vertex with \c new if necessary (ownership will pass to the optimiser it's added to) **/
+internal::camera_intrinsics_vertex* create_camera_intrinsics_vertex(const std::shared_ptr<unsigned int> offset,
+                                                                    stella_vslam::camera::base const* camera)
+{
+    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
+        return nullptr;
+
+    // Convert the camera intrinsics to a g2o vertex
+    auto vtx = new internal::camera_intrinsics_vertex();
+
+    const auto vtx_id = *offset;
+    (*offset)++;
+
+    vtx->setId(vtx_id);
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    vtx->setEstimate(internal::camera_intrinsics_vertex_type(stella_vslam_bfx::focal_length_x_pixels_from_camera(camera), 0.0, 0.0));
+#else
+    vtx->setEstimate(*autocalibration_wrapper.fx);
+#endif
+    vtx->setFixed(false);
+    vtx->setMarginalized(false); // "this node is marginalized out during the optimization"
+                                 // This is set to false for camera positions, true for points
+
+    return vtx;
+}
+
+/** Populate the shared keyframe camera from a camera intrinsics vertex **/
+bool populate_camera_from_vertex(std::vector<std::shared_ptr<data::keyframe>> const& keyfrms,
+                                 internal::camera_intrinsics_vertex *vertex)
+{
+    if (!vertex)
+        return false;
+
+    stella_vslam::camera::base *camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    if (!camera || !camera->autocalibration_parameters_.optimise_focal_length)
+        return false;
+
+    //stella_vslam_bfx::keyframe_autocalibration_wrapper autocalibration_wrapper(keyfrms);
+    //if (!autocalibration_wrapper())
+    //    return nullptr;
+    //if (!autocalibration_wrapper.autocalibration_params->optimise_focal_length)
+    //    return nullptr;
+
+#ifdef USE_PADDED_CAMERA_INTRINSICS_VERTEX
+    double focal_length_x_pixels = vertex->estimate()(0);
+#else
+    double focal_length_x_pixels = vertex->estimate();
+#endif
+
+#if 1
+    bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_x_pixels);
+    return set_f_ok;
+#else
+    double par = *autocalibration_wrapper.fy / *autocalibration_wrapper.fx;
+    *autocalibration_wrapper.fx = focal_length_x_pixels;
+    *autocalibration_wrapper.fy = focal_length_x_pixels * par;
+    return true;
+#endif
+}
 
 void optimize_impl(g2o::SparseOptimizer& optimizer,
                    const std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
@@ -31,21 +103,37 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
                    internal::se3::shot_vertex_container& keyfrm_vtx_container,
                    internal::landmark_vertex_container& lm_vtx_container,
                    internal::marker_vertex_container& marker_vtx_container,
+                   internal::camera_intrinsics_vertex* camera_intrinsics_vtx,
                    unsigned int num_iter,
                    bool use_huber_kernel,
                    bool* const force_stop_flag) {
     // 2. Construct an optimizer
 
-    std::unique_ptr<g2o::BlockSolverBase> block_solver;
-    auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolver_6_3::PoseMatrixType>>();
-    block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
-    auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+    g2o::OptimizationAlgorithmLevenberg* algorithm(nullptr);
+    // Block solver takes ownership of linear_solver
+    // algorithm takes ownership of block_solver
+    if (camera_intrinsics_vtx) {
+        std::unique_ptr<g2o::BlockSolverBase> block_solver;
+        auto linear_solver = g2o::make_unique<g2o::G2O_LINEAR_SOLVER_CLASS<g2o::BlockSolverX::PoseMatrixType>>();
+        block_solver = g2o::make_unique<g2o::BlockSolverX>(std::move(linear_solver));
+        algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+    }
+    else {
+        std::unique_ptr<g2o::BlockSolverBase> block_solver;
+        auto linear_solver = g2o::make_unique<g2o::G2O_LINEAR_SOLVER_CLASS<g2o::BlockSolver_6_3::PoseMatrixType>>();
+        block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
+        algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+    }
 
     optimizer.setAlgorithm(algorithm);
 
     if (force_stop_flag) {
         optimizer.setForceStopFlag(force_stop_flag);
     }
+
+    // If there's a camera intrinsics g2o vertex, add it to the optimizer
+    if (camera_intrinsics_vtx)
+        optimizer.addVertex(camera_intrinsics_vtx);
 
     // 3. Convert each of the keyframe to the g2o vertex, then set it to the optimizer
 
@@ -112,7 +200,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
             const auto sqrt_chi_sq = (keyfrm->camera_->setup_type_ == camera::setup_type_t::Monocular)
                                          ? sqrt_chi_sq_2D
                                          : sqrt_chi_sq_3D;
-            auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, lm, lm_vtx,
+            auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, lm, lm_vtx, camera_intrinsics_vtx,
                                                         idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
                                                         inv_sigma_sq, sqrt_chi_sq, use_huber_kernel);
             reproj_edge_wraps.push_back(reproj_edge_wrap);
@@ -154,7 +242,7 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
                 const auto& undist_pt = mkr_2d.undist_corners_.at(corner_idx);
                 const float x_right = -1.0;
                 const float inv_sigma_sq = 1.0;
-                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, nullptr, corner_vtx,
+                auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, nullptr, corner_vtx, camera_intrinsics_vtx,
                                                             0, undist_pt.x, undist_pt.y, x_right,
                                                             inv_sigma_sq, 0.0, false);
                 reproj_edge_wraps.push_back(reproj_edge_wrap);
@@ -165,8 +253,40 @@ void optimize_impl(g2o::SparseOptimizer& optimizer,
 
     // 5. Perform optimization
 
+    optimizer.setComputeBatchStatistics(true);
     optimizer.initializeOptimization();
-    optimizer.optimize(num_iter);
+
+    int pre_edges(-1);
+    double pre_rms(-1), pre_rms_robust(-1), pre_chi2(-1), pre_chi2_robust(-1);
+    if (true) { // should be removed - 
+      optimizer.computeActiveErrors();
+      pre_rms = sqrt(optimizer.activeChi2() / (double)optimizer.activeEdges().size());
+      pre_rms_robust = sqrt(optimizer.activeRobustChi2() / (double)optimizer.activeEdges().size());
+      pre_chi2 = optimizer.activeChi2();
+      pre_chi2_robust = optimizer.activeRobustChi2();
+      pre_edges = optimizer.activeEdges().size();
+      spdlog::info("              before BA  chi2 {} robust-chi2 {} edges {} rms {} robust-rms {}",
+                   pre_chi2, pre_chi2_robust, pre_edges, pre_rms, pre_rms_robust);
+    }
+
+
+    bool ok = optimizer.optimize(num_iter);
+
+    spdlog::info("optimizer.optimize iterations {} huber {} ok {}", num_iter, use_huber_kernel, ok);
+    double rms = sqrt(optimizer.activeChi2() / (double)optimizer.activeEdges().size());
+    double rms_robust = sqrt(optimizer.activeRobustChi2() / (double)optimizer.activeEdges().size());
+    spdlog::info("                         chi2 {} robust-chi2 {} edges {} rms {} robust-rms {}",
+       optimizer.activeChi2(), optimizer.activeRobustChi2(), optimizer.activeEdges().size(), rms, rms_robust);
+
+    g2o::BatchStatisticsContainer& stats = optimizer.batchStatistics();
+    for (int i = 0; i < stats.size(); ++i) {
+        if (stats[i].iteration < 0)
+            continue;
+        //auto const& stat(stats[i]);
+        //double gain = i == 0 ? 0 : (stats[i-1].chi2 - stats[i].chi2) / stats[i].chi2;
+        //double gain2 = i == 0 ? 0 : (sqrt(stats[i - 1].chi2) - sqrt(stats[i].chi2)) / sqrt(stats[i].chi2);
+        //spdlog::info("-> iter {} #vertices {} #edges {} chi2 {} gain {} {}", stat.iteration, stat.numVertices, stat.numEdges, stat.chi2, gain, gain2);
+    }
 
     if (force_stop_flag && *force_stop_flag) {
         return;
@@ -179,7 +299,7 @@ global_bundle_adjuster::global_bundle_adjuster(const unsigned int num_iter, cons
 void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
                                                          const std::vector<std::shared_ptr<data::landmark>>& lms,
                                                          const std::vector<std::shared_ptr<data::marker>>& markers,
-                                                         bool* const force_stop_flag) const {
+                                                         bool* const force_stop_flag, bool *camera_was_modified) const {
     std::vector<bool> is_optimized_lm(lms.size(), true);
 
     auto vtx_id_offset = std::make_shared<unsigned int>(0);
@@ -189,10 +309,16 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
     internal::landmark_vertex_container lm_vtx_container(vtx_id_offset, lms.size());
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
+    // Camera intrinsics vertex
+    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, camera);
 
     g2o::SparseOptimizer optimizer;
 
-    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container, marker_vtx_container,
+    double fx_before = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
+
+    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
+                  marker_vtx_container, camera_intrinsics_vtx,
                   num_iter_, use_huber_kernel_, force_stop_flag);
 
     if (force_stop_flag && *force_stop_flag) {
@@ -200,6 +326,23 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
     }
 
     // Extract the result
+    //static int hit(0);
+    //++hit;
+    //if (autocalibration_wrapper() && autocalibration_wrapper.camera) {
+    //    bool ok = autocalibration_wrapper.camera->autocalibration_parameters_.writeMapVideo(map_db_, std::string("bundle_a_") + std::to_string((int)hit));
+    //}
+
+    bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
+    double fx_after = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
+
+    if (camera_was_modified)
+        *camera_was_modified = focal_length_modified;
+    if (focal_length_modified) {
+        auto stage = stella_vslam_bfx::focal_estimation_type::initialisation_after_ba;
+        stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, fx_after);
+
+        spdlog::warn("global bundle (for initialization) focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    }
 
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
@@ -209,6 +352,11 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
         const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
 
         keyfrm->set_pose_cw(cam_pose_cw);
+
+        if (focal_length_modified && camera) {
+            keyfrm->frm_obs_.bearings_.clear();
+            camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
+        }
     }
 
     for (unsigned int i = 0; i < lms.size(); ++i) {
@@ -226,10 +374,13 @@ void global_bundle_adjuster::optimize_for_initialization(const std::vector<std::
 
         auto lm_vtx = lm_vtx_container.get_vertex(lm);
         const Vec3_t pos_w = lm_vtx->estimate();
-
         lm->set_pos_in_world(pos_w);
         lm->update_mean_normal_and_obs_scale_variance();
     }
+
+    //if (autocalibration_wrapper() && autocalibration_wrapper.camera) {
+    //    bool ok = autocalibration_wrapper.camera->autocalibration_parameters_.writeMapVideo(map_db_, std::string("bundle_b_") + std::to_string((int)hit));
+    //}
 }
 
 bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::keyframe>>& keyfrms,
@@ -237,7 +388,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
                                       std::unordered_set<unsigned int>& optimized_landmark_ids,
                                       eigen_alloc_unord_map<unsigned int, Vec3_t>& lm_to_pos_w_after_global_BA,
                                       eigen_alloc_unord_map<unsigned int, Mat44_t>& keyfrm_to_pose_cw_after_global_BA,
-                                      bool* const force_stop_flag) const {
+                                      bool* const force_stop_flag,
+									  int num_iter, bool general_bundle, bool* camera_was_modified) const {
     std::unordered_set<unsigned int> already_found_landmark_ids;
     std::vector<std::shared_ptr<data::landmark>> lms;
     for (const auto& keyfrm : keyfrms) {
@@ -282,14 +434,25 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
     internal::landmark_vertex_container lm_vtx_container(vtx_id_offset, lms.size());
     // Container of the landmark vertices
     internal::marker_vertex_container marker_vtx_container(vtx_id_offset, markers.size());
+    // Camera intrinsics vertex
+    stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+    internal::camera_intrinsics_vertex* camera_intrinsics_vtx = create_camera_intrinsics_vertex(vtx_id_offset, camera);
 
     g2o::SparseOptimizer optimizer;
+
     auto terminateAction = new terminate_action;
-    terminateAction->setGainThreshold(1e-3);
+    if (!general_bundle) // if general_bundle use default value of 1e-6
+        terminateAction->setGainThreshold(1e-3);
     optimizer.addPostIterationAction(terminateAction);
 
-    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container, marker_vtx_container,
-                  num_iter_, use_huber_kernel_, force_stop_flag);
+    double fx_before = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
+
+    // NB: Uses num_iter, not num_iter_
+    optimize_impl(optimizer, keyfrms, lms, markers, is_optimized_lm, keyfrm_vtx_container, lm_vtx_container,
+                  marker_vtx_container, camera_intrinsics_vtx,
+                  num_iter, use_huber_kernel_, force_stop_flag);
+   if (terminateAction->stopped_by_terminate_action_)
+       spdlog::warn("optimizeGlobal terminated early after failing to hit gain threshold of {}", terminateAction->gainThreshold());
 
     if (force_stop_flag && *force_stop_flag && !terminateAction->stopped_by_terminate_action_) {
         return false;
@@ -299,6 +462,21 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
 
     // Extract the result
 
+    bool focal_length_modified = populate_camera_from_vertex(keyfrms, camera_intrinsics_vtx);
+    double fx_after = camera ? stella_vslam_bfx::focal_length_x_pixels_from_camera(camera) : -1.0;
+
+
+    if (camera_was_modified)
+        *camera_was_modified = focal_length_modified;
+    if (focal_length_modified) {
+        auto stage = stella_vslam_bfx::focal_estimation_type::global_optimisation;
+        stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, fx_after);
+
+        spdlog::warn("global bundle focal length {:03.2f} -> {:03.2f} {}", fx_before, fx_after, focal_length_modified ? "(edit)" : "(no edit)");
+    }
+
+    spdlog::warn("global bundle setting cameras...");
+
     for (auto keyfrm : keyfrms) {
         if (keyfrm->will_be_erased()) {
             continue;
@@ -306,9 +484,16 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
         const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
 
+        if (focal_length_modified && camera) {
+            keyfrm->frm_obs_.bearings_.clear();
+            camera->convert_keypoints_to_bearings(keyfrm->frm_obs_.undist_keypts_, keyfrm->frm_obs_.bearings_);
+        }
+
         keyfrm_to_pose_cw_after_global_BA[keyfrm->id_] = cam_pose_cw;
         optimized_keyfrm_ids.insert(keyfrm->id_);
     }
+
+    spdlog::warn("global bundle setting landmarks...");
 
     for (unsigned int i = 0; i < lms.size(); ++i) {
         if (!is_optimized_lm.at(i)) {
@@ -329,6 +514,8 @@ bool global_bundle_adjuster::optimize(const std::vector<std::shared_ptr<data::ke
         lm_to_pos_w_after_global_BA[lm->id_] = pos_w;
         optimized_landmark_ids.insert(lm->id_);
     }
+
+    spdlog::warn("global bundle end");
 
     return true;
 }

@@ -12,9 +12,20 @@
 #include <g2o/core/block_solver.h>
 #include <g2o/core/sparse_optimizer.h>
 #include <g2o/core/robust_kernel_impl.h>
+
+#undef G2O_LINEAR_SOLVER_CLASS
+#if defined(HAVE_G2O_SOLVER_CSPARSE)
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
+#define G2O_LINEAR_SOLVER_CLASS LinearSolverCSparse
+#else
+#include <g2o/solvers/eigen/linear_solver_eigen.h>
+#define G2O_LINEAR_SOLVER_CLASS LinearSolverEigen
+#endif
+
 #include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/core/sparse_optimizer_terminate_action.h>
+
+#include <spdlog/spdlog.h>
 
 namespace stella_vslam {
 namespace optimize {
@@ -29,7 +40,10 @@ void graph_optimizer::optimize(const std::shared_ptr<data::keyframe>& loop_keyfr
                                std::unordered_map<unsigned int, unsigned int>& found_lm_to_ref_keyfrm_id) const {
     // 1. Construct an optimizer
 
-    auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolver_7_3::PoseMatrixType>>();
+    spdlog::warn("graph_optimiser::optimise - loop keyframe: {}, current keyframe: {}", loop_keyfrm->id_, curr_keyfrm->id_);
+
+
+    auto linear_solver = g2o::make_unique<g2o::G2O_LINEAR_SOLVER_CLASS<g2o::BlockSolver_7_3::PoseMatrixType>>();
     auto block_solver = g2o::make_unique<g2o::BlockSolver_7_3>(std::move(linear_solver));
     auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
 

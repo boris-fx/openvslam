@@ -1,6 +1,8 @@
 #ifndef STELLA_VSLAM_OPTIMIZE_LOCAL_BUNDLE_ADJUSTER_H
 #define STELLA_VSLAM_OPTIMIZE_LOCAL_BUNDLE_ADJUSTER_H
 
+#include "stella_vslam/config_settings.h"
+
 #include <memory>
 
 namespace stella_vslam {
@@ -14,7 +16,9 @@ namespace optimize {
 
 class local_bundle_adjuster {
 public:
-    /**
+    //explicit local_bundle_adjuster(const stella_vslam_bfx::config_settings& settings);
+
+     /**
      * Perform optimization
      * @param map_db
      * @param curr_keyfrm

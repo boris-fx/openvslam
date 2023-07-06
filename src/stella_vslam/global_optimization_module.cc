@@ -6,16 +6,17 @@
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/match/fuse.h"
 #include "stella_vslam/util/converter.h"
-#include "stella_vslam/util/yaml.h"
+#include "stella_vslam/report/initialisation_debugging.h"
 
 #include <spdlog/spdlog.h>
 
 namespace stella_vslam {
 
 global_optimization_module::global_optimization_module(data::map_database* map_db, data::bow_database* bow_db,
-                                                       data::bow_vocabulary* bow_vocab, const YAML::Node& yaml_node,
+                                                       data::bow_vocabulary* bow_vocab,
+                                                       const stella_vslam_bfx::config_settings& settings,
                                                        const bool fix_scale)
-    : loop_detector_(new module::loop_detector(bow_db, bow_vocab, util::yaml_optional_ref(yaml_node, "LoopDetector"), fix_scale)),
+    : loop_detector_(new module::loop_detector(bow_db, bow_vocab, settings, fix_scale)),
       loop_bundle_adjuster_(new module::loop_bundle_adjuster(map_db)),
       map_db_(map_db),
       graph_optimizer_(new optimize::graph_optimizer(fix_scale)) {
@@ -23,6 +24,7 @@ global_optimization_module::global_optimization_module(data::map_database* map_d
 }
 
 global_optimization_module::~global_optimization_module() {
+    spdlog::info("DESTRUCT: global_optimization_module");
     abort_loop_BA();
     if (thread_for_loop_BA_) {
         thread_for_loop_BA_->join();
@@ -116,15 +118,18 @@ bool global_optimization_module::loop_closure(const loop_closure_request& reques
 
 void global_optimization_module::run() {
     spdlog::info("start global optimization module");
+    stella_vslam_bfx::thread_dubugging::get_instance()->set_thread_name("Optimisation");
 
     is_terminated_ = false;
 
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        //spdlog::info("### [{}] global_optimization_module::run() - after sleep", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
 
         // check if termination is requested
         if (terminate_is_requested()) {
             // terminate and break
+            spdlog::info("### [{}] global_optimization_module::run() - terminate requested", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
             terminate();
             break;
         }
@@ -153,6 +158,15 @@ void global_optimization_module::run() {
 
         // if the queue is empty, the following process is not needed
         if (!keyframe_is_queued()) {
+
+            if (force_loop_bundle_requested()) {
+                run_forced_loop_bundle();
+                {
+                    std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
+                    force_loop_bundle_ = false;
+                    spdlog::info("global_optimization_module::run() force_loop_bundle_ {} running {}", force_loop_bundle_, loop_bundle_adjuster_->is_running());
+                }
+            }
             continue;
         }
 
@@ -191,7 +205,7 @@ void global_optimization_module::run() {
         correct_loop();
     }
 
-    spdlog::info("terminate global optimization module");
+    spdlog::info("### [{}] global_optimization_module::run() - terminated", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
 }
 
 void global_optimization_module::queue_keyframe(const std::shared_ptr<data::keyframe>& keyfrm) {
@@ -202,6 +216,129 @@ void global_optimization_module::queue_keyframe(const std::shared_ptr<data::keyf
 bool global_optimization_module::keyframe_is_queued() const {
     std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
     return !keyfrms_queue_.empty();
+}
+
+bool global_optimization_module::force_loop_bundle_requested() const {
+    std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
+    return force_loop_bundle_;
+}
+
+// Based on correct_loop() - just without the loop
+void global_optimization_module::run_forced_loop_bundle() {
+    //    auto final_candidate_keyfrm = loop_detector_->get_selected_candidate_keyframe();
+
+    spdlog::info("global_optimization_module::run_forced_loop_bundle");
+
+    if (map_db_->get_all_keyframes().empty()) {
+        spdlog::info("global_optimization_module::run_forced_loop_bundle terminated (no map keyframes)");
+        return;
+    }
+
+    if (!cur_keyfrm_) {
+        auto all_keyframes = map_db_->get_all_keyframes();
+        cur_keyfrm_ = *all_keyframes.begin();
+    }
+    // 0. pre-processing
+
+    // 0-1. stop the mapping module and the previous loop bundle adjuster
+
+    // pause the mapping module
+    auto future_pause = mapper_->async_pause();
+    // abort the previous loop bundle adjuster
+    if (thread_for_loop_BA_ || loop_bundle_adjuster_->is_running()) {
+        spdlog::info("global_optimization_module::run_forced_loop_bundle() aborting previous loop BA");
+        abort_loop_BA();
+    }
+    // wait till the mapping module pauses
+    future_pause.get();
+
+    // 0-2. update the graph
+
+//    cur_keyfrm_->graph_node_->update_connections();
+
+    // 1. compute the Sim3 of the covisibilities of the current keyframe whose Sim3 is already estimated by the loop detector
+    //    then, the covisibilities are moved to the corrected positions
+    //    finally, landmarks observed in them are also moved to the correct position using the camera poses before and after camera pose correction
+
+    // acquire the covisibilities of the current keyframe
+//    std::vector<std::shared_ptr<data::keyframe>> curr_neighbors = cur_keyfrm_->graph_node_->get_covisibilities();
+//    curr_neighbors.push_back(cur_keyfrm_);
+
+    // Sim3 camera poses BEFORE loop correction
+//    module::keyframe_Sim3_pairs_t Sim3s_nw_before_correction;
+    // Sim3 camera poses AFTER loop correction
+//    module::keyframe_Sim3_pairs_t Sim3s_nw_after_correction;
+
+    //std::unordered_map<unsigned int, unsigned int> found_lm_to_ref_keyfrm_id;
+    //const auto g2o_Sim3_cw_after_correction = loop_detector_->get_Sim3_world_to_current();
+    //{
+    //    std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
+
+    //    // camera pose of the current keyframe BEFORE loop correction
+    //    const Mat44_t cam_pose_wc_before_correction = cur_keyfrm_->get_pose_wc();
+
+    //    // compute Sim3s BEFORE loop correction
+    //    Sim3s_nw_before_correction = get_Sim3s_before_loop_correction(curr_neighbors);
+    //    // compute Sim3s AFTER loop correction
+    //    Sim3s_nw_after_correction = get_Sim3s_after_loop_correction(cam_pose_wc_before_correction, g2o_Sim3_cw_after_correction, curr_neighbors);
+
+    //    // correct covibisibility landmark positions
+    //    correct_covisibility_landmarks(Sim3s_nw_before_correction, Sim3s_nw_after_correction, found_lm_to_ref_keyfrm_id);
+    //    // correct covisibility keyframe camera poses
+    //    correct_covisibility_keyframes(Sim3s_nw_after_correction);
+    //}
+
+    // 2. resolve duplications of landmarks caused by loop fusion
+
+//    const auto curr_match_lms_observed_in_cand = loop_detector_->current_matched_landmarks_observed_in_candidate();
+//    replace_duplicated_landmarks(curr_match_lms_observed_in_cand, Sim3s_nw_after_correction);
+
+    // 3. extract the new connections created after loop fusion
+
+//    const auto new_connections = extract_new_connections(curr_neighbors);
+
+    // 4. pose graph optimization
+
+//    graph_optimizer_->optimize(final_candidate_keyfrm, cur_keyfrm_, Sim3s_nw_before_correction, Sim3s_nw_after_correction, new_connections, found_lm_to_ref_keyfrm_id);
+
+    // add a loop edge
+//    final_candidate_keyfrm->graph_node_->add_loop_edge(cur_keyfrm_);
+//    cur_keyfrm_->graph_node_->add_loop_edge(final_candidate_keyfrm);
+
+    // 5. launch loop BA
+
+
+    // 5. launch loop BA
+    SPDLOG_TRACE("global_optimization_module: wait for loop BA");
+    while (loop_bundle_adjuster_->is_running()) {
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
+    }
+    if (thread_for_loop_BA_) {
+        SPDLOG_TRACE("global_optimization_module: wait for last loop BA");
+        thread_for_loop_BA_->join();
+        thread_for_loop_BA_.reset(nullptr);
+    }
+
+    int loopClosingNumIter = loop_bundle_adjuster_->num_iter(); // store default
+    loop_bundle_adjuster_->set_num_iter(100);
+    int num_iter = 100;
+    bool general_bundle = true;
+    bool camera_was_modified;
+    
+    std::function<void(stella_vslam::module::loop_bundle_adjuster *, int, bool)> optimizeFunction = [&](stella_vslam::module::loop_bundle_adjuster* ba, int num_iter, bool general_bundle) {
+        ba->optimize(cur_keyfrm_, num_iter, general_bundle, &camera_was_modified);
+    };
+    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(optimizeFunction, loop_bundle_adjuster_.get(), num_iter, general_bundle));
+    
+    loop_bundle_adjuster_->set_num_iter(loopClosingNumIter); // revert to default
+
+    // 6. post-processing
+
+    // resume the mapping module
+    mapper_->resume();
+
+    // set the loop fusion information to the loop detector
+//    loop_detector_->set_loop_correct_keyframe_id(cur_keyfrm_->id_);
 }
 
 void global_optimization_module::correct_loop() {
@@ -293,8 +430,10 @@ void global_optimization_module::correct_loop() {
         thread_for_loop_BA_->join();
         thread_for_loop_BA_.reset(nullptr);
     }
+
     SPDLOG_TRACE("global_optimization_module: launch loop BA");
-    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get(), cur_keyfrm_));
+    bool camera_was_modified;
+    thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread([=, &camera_was_modified]() { loop_bundle_adjuster_->optimize(cur_keyfrm_, 10, false, &camera_was_modified); }));
 
     // 6. post-processing
 
@@ -529,6 +668,7 @@ void global_optimization_module::reset() {
     std::lock_guard<std::mutex> lock(mtx_reset_);
     spdlog::info("reset global optimization module");
     keyfrms_queue_.clear();
+    force_loop_bundle_ = false;
     loop_detector_->set_loop_correct_keyframe_id(0);
     reset_is_requested_ = false;
     promise_reset_.set_value();
@@ -580,6 +720,8 @@ void global_optimization_module::resume() {
 }
 
 std::shared_future<void> global_optimization_module::async_terminate() {
+    spdlog::info("### [{}] global_optimization_module::async_terminate()", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+
     std::lock_guard<std::mutex> lock(mtx_terminate_);
     terminate_is_requested_ = true;
     if (!future_terminate_.valid()) {
@@ -599,6 +741,7 @@ bool global_optimization_module::terminate_is_requested() const {
 }
 
 void global_optimization_module::terminate() {
+    spdlog::info("### [{}] global_optimization_module::terminate()", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
     std::lock_guard<std::mutex> lock(mtx_terminate_);
     is_terminated_ = true;
     promise_terminate_.set_value();
@@ -607,10 +750,23 @@ void global_optimization_module::terminate() {
 }
 
 bool global_optimization_module::loop_BA_is_running() const {
-    return loop_bundle_adjuster_->is_running();
+    if (force_loop_bundle_)
+        spdlog::info("### [{}] global_optimization_module::loop_BA_is_running 1 force_loop_bundle_==true", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    else
+        spdlog::info("### [{}] global_optimization_module::loop_BA_is_running 1 force_loop_bundle_==false", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    return loop_bundle_adjuster_->is_running() || force_loop_bundle_;
+}
+
+void global_optimization_module::run_loop_BA() {
+    spdlog::info("### [{}] global_optimization_module::run_loop_BA 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
+    spdlog::info("### [{}] global_optimization_module::run_loop_BA 2", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    force_loop_bundle_ = true;
+    spdlog::info("### [{}] global_optimization_module::run_loop_BA 3", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
 }
 
 void global_optimization_module::abort_loop_BA() {
+    spdlog::info("global_optimization_module::abort_loop_BA()");
     loop_bundle_adjuster_->abort();
 }
 

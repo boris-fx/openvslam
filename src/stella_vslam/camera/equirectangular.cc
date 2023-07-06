@@ -8,7 +8,8 @@ namespace camera {
 
 equirectangular::equirectangular(const std::string& name, const color_order_t& color_order,
                                  const unsigned int cols, const unsigned int rows, const double fps)
-    : base(name, setup_type_t::Monocular, model_type_t::Equirectangular, color_order, cols, rows, fps, 0.0, 0.0, 0.0) {
+    : base(name, setup_type_t::Monocular, model_type_t::Equirectangular,
+      color_order, autocalibration_parameters(), cols, rows, fps, 0.0, 0.0, 0.0) {
     spdlog::debug("CONSTRUCT: camera::equirectangular");
 
     img_bounds_ = compute_image_bounds();
@@ -17,12 +18,8 @@ equirectangular::equirectangular(const std::string& name, const color_order_t& c
     inv_cell_height_ = static_cast<double>(num_grid_rows_) / (img_bounds_.max_y_ - img_bounds_.min_y_);
 }
 
-equirectangular::equirectangular(const YAML::Node& yaml_node)
-    : equirectangular(yaml_node["name"].as<std::string>(),
-                      load_color_order(yaml_node),
-                      yaml_node["cols"].as<unsigned int>(),
-                      yaml_node["rows"].as<unsigned int>(),
-                      yaml_node["fps"].as<double>()) {}
+equirectangular::equirectangular(const stella_vslam_bfx::config_settings& settings)
+    : equirectangular("", load_color_order(settings), settings.cols_, settings.rows_, settings.fps_) {}
 
 equirectangular::~equirectangular() {
     spdlog::debug("DESTRUCT: camera::equirectangular");
@@ -86,6 +83,7 @@ nlohmann::json equirectangular::to_json() const {
     return {{"model_type", get_model_type_string()},
             {"setup_type", get_setup_type_string()},
             {"color_order", get_color_order_string()},
+            {"autocalibration.optimise_focal_length", autocalibration_parameters_.optimise_focal_length},
             {"cols", cols_},
             {"rows", rows_},
             {"fps", fps_},

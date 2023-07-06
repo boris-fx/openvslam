@@ -9,11 +9,13 @@ namespace stella_vslam {
 namespace camera {
 
 fisheye::fisheye(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
+                 const autocalibration_parameters& autocalibration,
                  const unsigned int cols, const unsigned int rows, const double fps,
                  const double fx, const double fy, const double cx, const double cy,
                  const double k1, const double k2, const double k3, const double k4,
                  const double focal_x_baseline, const double depth_thr)
-    : base(name, setup_type, model_type_t::Fisheye, color_order, cols, rows, fps, focal_x_baseline, focal_x_baseline / fx, depth_thr),
+    : base(name, setup_type, model_type_t::Fisheye, color_order, autocalibration, 
+      cols, rows, fps, focal_x_baseline, focal_x_baseline / fx, depth_thr),
       fx_(fx), fy_(fy), cx_(cx), cy_(cy), fx_inv_(1.0 / fx), fy_inv_(1.0 / fy),
       k1_(k1), k2_(k2), k3_(k3), k4_(k4) {
     spdlog::debug("CONSTRUCT: camera::fisheye");
@@ -30,23 +32,15 @@ fisheye::fisheye(const std::string& name, const setup_type_t& setup_type, const 
     inv_cell_height_ = static_cast<double>(num_grid_rows_) / (img_bounds_.max_y_ - img_bounds_.min_y_);
 }
 
-fisheye::fisheye(const YAML::Node& yaml_node)
-    : fisheye(yaml_node["name"].as<std::string>(),
-              load_setup_type(yaml_node),
-              load_color_order(yaml_node),
-              yaml_node["cols"].as<unsigned int>(),
-              yaml_node["rows"].as<unsigned int>(),
-              yaml_node["fps"].as<double>(),
-              yaml_node["fx"].as<double>(),
-              yaml_node["fy"].as<double>(),
-              yaml_node["cx"].as<double>(),
-              yaml_node["cy"].as<double>(),
-              yaml_node["k1"].as<double>(),
-              yaml_node["k2"].as<double>(),
-              yaml_node["k3"].as<double>(),
-              yaml_node["k4"].as<double>(),
-              yaml_node["focal_x_baseline"].as<double>(0.0),
-              yaml_node["depth_threshold"].as<double>(40.0)) {}
+fisheye::fisheye(const stella_vslam_bfx::config_settings& settings)
+    : fisheye("", load_setup_type(settings), load_color_order(settings), settings.optimise_focal_length_,
+              settings.cols_, settings.rows_, settings.fps_,
+              settings.fisheye_settings_.fx_, settings.fisheye_settings_.fy_,
+              settings.fisheye_settings_.cx_, settings.fisheye_settings_.cy_,
+              settings.fisheye_settings_.k1_, settings.fisheye_settings_.k2_,
+              settings.fisheye_settings_.k3_, settings.fisheye_settings_.k4_,
+              settings.focal_x_baseline_,
+              settings.depth_threshold_) {}
 
 fisheye::~fisheye() {
     spdlog::debug("DESTRUCT: camera::fisheye");
@@ -215,6 +209,7 @@ nlohmann::json fisheye::to_json() const {
     return {{"model_type", get_model_type_string()},
             {"setup_type", get_setup_type_string()},
             {"color_order", get_color_order_string()},
+            {"autocalibration.optimise_focal_length", autocalibration_parameters_.optimise_focal_length},
             {"cols", cols_},
             {"rows", rows_},
             {"fps", fps_},

@@ -30,6 +30,8 @@ public:
 
     bool robust_match_based_track(data::frame& curr_frm, const data::frame& last_frm, const std::shared_ptr<data::keyframe>& ref_keyfrm) const;
 
+    bool prematch_based_track(data::frame& curr_frm, const data::frame& last_frm, const std::shared_ptr<data::keyframe>& ref_keyfrm) const;
+
 private:
     unsigned int discard_outliers(const std::vector<bool>& outlier_flags, data::frame& curr_frm) const;
 

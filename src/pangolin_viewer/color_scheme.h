@@ -5,9 +5,11 @@
 #include <string>
 #include <cctype>
 
+#include "exports.h"
+
 namespace pangolin_viewer {
 
-class color_scheme {
+class PANGOLIN_VIEWER_API color_scheme {
 public:
     explicit color_scheme(const std::string& color_set_str);
 

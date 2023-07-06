@@ -6,12 +6,14 @@
 #include "stella_vslam/camera/camera_factory.h"
 #include "stella_vslam/data/camera_database.h"
 #include "stella_vslam/data/common.h"
+#include "stella_vslam/data/landmark.h"
 #include "stella_vslam/data/frame_observation.h"
 #include "stella_vslam/data/orb_params_database.h"
 #include "stella_vslam/data/map_database.h"
 #include "stella_vslam/data/bow_database.h"
 #include "stella_vslam/data/bow_vocabulary.h"
 #include "stella_vslam/data/marker2d.h"
+#include "stella_vslam/data/map_camera_helpers.h"
 #include "stella_vslam/marker_detector/aruco.h"
 #include "stella_vslam/match/stereo.h"
 #include "stella_vslam/feature/orb_extractor.h"
@@ -21,63 +23,132 @@
 #include "stella_vslam/publish/frame_publisher.h"
 #include "stella_vslam/util/converter.h"
 #include "stella_vslam/util/image_converter.h"
-#include "stella_vslam/util/yaml.h"
+#include "stella_vslam/report/initialisation_debugging.h"
+#include "stella_vslam/report/metrics.h"
+
+#include <opencv2/imgcodecs.hpp>
 
 #include <thread>
 
 #include <spdlog/spdlog.h>
 
+namespace {
+using namespace stella_vslam;
+
+double get_depthmap_factor(const camera::base* camera, const stella_vslam_bfx::config_settings& settings) {
+    spdlog::debug("load depthmap factor");
+    double depthmap_factor = 1.0;
+    if (camera->setup_type_ == camera::setup_type_t::RGBD) {
+        depthmap_factor = settings.depthmap_factor_;
+    }
+    if (depthmap_factor < 0.) {
+        throw std::runtime_error("depthmap_factor must be greater than 0");
+    }
+    return depthmap_factor;
+}
+
+data::bow_vocabulary * loadOrbVocabulary(std::ifstream & str)
+{
+    auto * bow_vocab = new fbow::Vocabulary();
+    bow_vocab->fromStream(str);
+    if (!bow_vocab->isValid()) {
+        spdlog::critical("wrong path to vocabulary");
+        delete bow_vocab;
+        bow_vocab = nullptr;
+        throw std::runtime_error("Vocabulary: invalid vocabulary");
+    }
+    return bow_vocab;
+}
+
+data::bow_vocabulary * loadOrbVocabulary(const std::string &vocab_file_path)
+{
+    spdlog::info("loading ORB vocabulary: {}", vocab_file_path);
+
+#ifdef USE_DBOW2
+    auto * bow_vocab = new data::bow_vocabulary();
+    try {
+        bow_vocab->loadFromBinaryFile(vocab_file_path);
+    }
+    catch (const std::exception&) {
+        spdlog::critical("wrong path to vocabulary");
+        delete bow_vocab;
+        bow_vocab = nullptr;
+        throw std::runtime_error("Vocabulary: invalid vocabulary");
+    }
+    return bow_vocab;
+#else
+    std::ifstream file(vocab_file_path,std::ios::binary);
+    if (!file)
+        throw std::runtime_error("Vocabulary::readFromFile could not open: "+ vocab_file_path);
+    return loadOrbVocabulary(file);
+#endif
+}
+
+} // namespace
+
 namespace stella_vslam {
 
 system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file_path)
-    : cfg_(cfg) {
+    : cfg_(cfg),
+      use_orb_features_(cfg->settings_.use_orb_features_),
+      undistort_prematches_(cfg->settings_.undistort_prematches_) {
+    spdlog::debug("CONSTRUCT: system");
+
+    bow_vocab_ = loadOrbVocabulary(vocab_file_path);
+
+    init(cfg_.get());
+}
+
+system::system(const std::shared_ptr<config>& cfg, std::ifstream & vocab_data)
+    : cfg_(cfg),
+    use_orb_features_(cfg->settings_.use_orb_features_),
+    undistort_prematches_(cfg->settings_.undistort_prematches_) {
+    spdlog::debug("CONSTRUCT: system");
+
+    bow_vocab_ = loadOrbVocabulary(vocab_data);
+
+    init(cfg_.get());
+}
+
+void system::init(const config * cfg)
+{
     spdlog::debug("CONSTRUCT: system");
     print_info();
 
-    // load ORB vocabulary
-    spdlog::info("loading ORB vocabulary: {}", vocab_file_path);
-    bow_vocab_ = data::bow_vocabulary_util::load(vocab_file_path);
+    // reset static data
+    data::frame::reset_next_id();
 
-    const auto system_params = util::yaml_optional_ref(cfg->yaml_node_, "System");
-
-    camera_ = camera::camera_factory::create(util::yaml_optional_ref(cfg->yaml_node_, "Camera"));
-    orb_params_ = new feature::orb_params(util::yaml_optional_ref(cfg->yaml_node_, "Feature"));
+    camera_ = camera::camera_factory::create(cfg_->settings_);
+    orb_params_ = new feature::orb_params(cfg_->settings_);
     spdlog::info("load orb_params \"{}\"", orb_params_->name_);
 
     // database
     cam_db_ = new data::camera_database();
     cam_db_->add_camera(camera_);
-    map_db_ = new data::map_database(system_params["min_num_shared_lms"].as<unsigned int>(15));
+    map_db_ = new data::map_database(cfg_->settings_.min_num_bow_matches_);
     bow_db_ = new data::bow_database(bow_vocab_);
     orb_params_db_ = new data::orb_params_database();
     orb_params_db_->add_orb_params(orb_params_);
 
     // frame and map publisher
-    frame_publisher_ = std::shared_ptr<publish::frame_publisher>(new publish::frame_publisher(cfg_, map_db_));
-    map_publisher_ = std::shared_ptr<publish::map_publisher>(new publish::map_publisher(cfg_, map_db_));
+    frame_publisher_ = std::make_shared<publish::frame_publisher>(cfg_, map_db_);
+    map_publisher_ = std::make_shared<publish::map_publisher>(cfg_, map_db_);
 
     // map I/O
-    auto map_format = system_params["map_format"].as<std::string>("msgpack");
-    map_database_io_ = io::map_database_io_factory::create(map_format);
+    map_database_io_ = io::map_database_io_factory::create(stella_vslam::io::map_format_to_string[static_cast<unsigned>(cfg_->settings_.map_format_)]);
 
     // tracking module
     tracker_ = new tracking_module(cfg_, camera_, map_db_, bow_vocab_, bow_db_);
     // mapping module
-    mapper_ = new mapping_module(cfg_->yaml_node_["Mapping"], map_db_, bow_db_, bow_vocab_);
+    mapper_ = new mapping_module(cfg_->settings_, map_db_, bow_db_, bow_vocab_);
     // global optimization module
-    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->yaml_node_, camera_->setup_type_ != camera::setup_type_t::Monocular);
+    global_optimizer_ = new global_optimization_module(map_db_, bow_db_, bow_vocab_, cfg_->settings_, camera_->setup_type_ != camera::setup_type_t::Monocular);
 
     // preprocessing modules
-    const auto preprocessing_params = util::yaml_optional_ref(cfg->yaml_node_, "Preprocessing");
-    if (camera_->setup_type_ == camera::setup_type_t::RGBD) {
-        depthmap_factor_ = preprocessing_params["depthmap_factor"].as<double>(depthmap_factor_);
-        if (depthmap_factor_ < 0.) {
-            throw std::runtime_error("depthmap_factor must be greater than 0");
-        }
-    }
-    auto mask_rectangles = util::get_rectangles(preprocessing_params["mask_rectangles"]);
-
-    const auto min_size = preprocessing_params["min_size"].as<unsigned int>(800);
+    depthmap_factor_ = get_depthmap_factor(camera_, cfg_->settings_);
+    auto mask_rectangles = cfg->settings_.mask_rectangles_;
+    const auto min_size = cfg->settings_.min_feature_size_;
+    spdlog::info("system - min_size: {}", min_size);
     extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
         extractor_right_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
@@ -167,8 +238,8 @@ void system::startup(const bool need_initialize) {
         tracker_->tracking_state_ = tracker_state_t::Lost;
     }
 
-    mapping_thread_ = std::unique_ptr<std::thread>(new std::thread(&stella_vslam::mapping_module::run, mapper_));
-    global_optimization_thread_ = std::unique_ptr<std::thread>(new std::thread(&stella_vslam::global_optimization_module::run, global_optimizer_));
+    mapping_thread_ = std::make_unique<std::thread>(&stella_vslam::mapping_module::run, mapper_);
+    global_optimization_thread_ = std::make_unique<std::thread>(&stella_vslam::global_optimization_module::run, global_optimizer_);
 }
 
 void system::shutdown() {
@@ -216,12 +287,69 @@ bool system::save_map_database(const std::string& path) const {
     return ok;
 }
 
+bool system::load_map_database_from_memory(std::vector<unsigned char> const& memory) const {
+    pause_other_threads();
+    spdlog::debug("load_map_database_from_memory: {}", memory.size());
+    bool ok = map_database_io_->load_from_mem(memory, cam_db_, orb_params_db_, map_db_, bow_db_, bow_vocab_);
+    resume_other_threads();
+    return ok;
+}
+
+bool system::save_map_database_to_memory(std::vector<unsigned char> & memory) const {
+    pause_other_threads();
+    spdlog::debug("save_map_database_to_memory: {}", memory.size());
+    bool ok = map_database_io_->save_to_mem(memory, cam_db_, orb_params_db_, map_db_);
+    resume_other_threads();
+    return ok;
+}
+
 const std::shared_ptr<publish::map_publisher> system::get_map_publisher() const {
     return map_publisher_;
 }
 
 const std::shared_ptr<publish::frame_publisher> system::get_frame_publisher() const {
     return frame_publisher_;
+}
+
+const data::frame& system::get_current_frame() const
+{
+    return tracker_->curr_frm_;
+}
+
+double system::get_first_map_keyframe_timestamp() const
+{
+    if (map_db_) {
+        auto keyfrms = map_db_->get_all_keyframes();
+        if (!keyfrms.empty()) {
+            std::shared_ptr<stella_vslam::data::keyframe> first_keyframe = *std::min_element(keyfrms.begin(), keyfrms.end(),
+               [](const auto& a, const auto& b) { return a->timestamp_ < b->timestamp_; });
+            return first_keyframe->timestamp_;
+        }
+    }
+    return -1.0;
+}
+
+bool system::relocalize_by_first_map_keyframe_pose() {
+    if (map_db_) {
+        auto keyfrms = map_db_->get_all_keyframes();
+        if (!keyfrms.empty()) {
+            std::shared_ptr<stella_vslam::data::keyframe> first_keyframe = *std::min_element(keyfrms.begin(), keyfrms.end(),
+                                                                                             [](const auto& a, const auto& b) { return a->timestamp_ < b->timestamp_; });
+            relocalize_by_pose(first_keyframe->get_pose_wc());
+            return true;
+        }
+    }
+    return false;
+}
+
+double system::focal_length_x_pixels() const {
+    if (map_db_) {
+        auto keyfrms = map_db_->get_all_keyframes();
+        stella_vslam::camera::base* camera = stella_vslam_bfx::camera_from_keyframes(keyfrms);
+        if (camera)
+            return stella_vslam_bfx::focal_length_x_pixels_from_camera(camera);
+    }
+    return -1.0;
 }
 
 void system::enable_mapping_module() {
@@ -248,6 +376,16 @@ bool system::mapping_module_is_enabled() const {
     return !mapper_->is_paused();
 }
 
+void system::enable_map_reinitialisation(std::optional<bool> always_enabled)
+{
+    if (always_enabled.has_value()) {
+        tracker_->map_selector_.enabled = true;
+        tracker_->map_selector_.allow_reset = always_enabled.value();
+    }
+    else
+        tracker_->map_selector_.enabled = false;
+}
+
 void system::enable_loop_detector() {
     std::lock_guard<std::mutex> lock(mtx_loop_detector_);
     global_optimizer_->enable_loop_detector();
@@ -270,6 +408,12 @@ bool system::loop_BA_is_running() const {
     return global_optimizer_->loop_BA_is_running();
 }
 
+void system::run_loop_BA() {
+    spdlog::info("### system[{}] 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+    global_optimizer_->run_loop_BA();
+    spdlog::info("### system[{}] 1", stella_vslam_bfx::thread_dubugging::get_instance()->thread_name());
+}
+
 void system::abort_loop_BA() {
     global_optimizer_->abort_loop_BA();
 }
@@ -278,7 +422,44 @@ void system::enable_temporal_mapping() {
     map_db_->set_fixed_keyframe_id_threshold();
 }
 
-data::frame system::create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask) {
+void system::store_prematched_points(const stella_vslam_bfx::prematched_points* extra_keypoints,
+                        std::vector<cv::KeyPoint>& keypts, data::frame_observation& frm_obs) const {
+    if (extra_keypoints && !extra_keypoints->first.empty() && extra_keypoints->first.size() == extra_keypoints->second.size()) {
+        unsigned num_prematched = extra_keypoints->first.size();
+        frm_obs.prematched_keypts_.first = keypts.size();
+        keypts.insert(keypts.end(), extra_keypoints->first.begin(), extra_keypoints->first.end());
+        frm_obs.prematched_keypts_.second = keypts.size();
+        assert(frm_obs.prematched_keypts_.second == frm_obs.prematched_keypts_.first + (int)num_prematched);
+
+        // Create dummy ORB descriptors - these aren't used but need to be created to
+        // keep data structures in sync
+        if (frm_obs.descriptors_.empty())
+            frm_obs.descriptors_.create(num_prematched, 32, CV_8U);
+        else if (use_orb_features_)
+            frm_obs.descriptors_.resize(keypts.size());
+        
+        if (!frm_obs.descriptors_.empty()) {
+            cv::Mat extra_descriptors = frm_obs.descriptors_.rowRange(frm_obs.prematched_keypts_.first, frm_obs.prematched_keypts_.second);
+            for (unsigned i = 0; i < num_prematched; ++i) {
+                for (unsigned j = 0; j < 32; ++j)
+                    extra_descriptors.ptr(i)[j] = static_cast<uchar>(0);
+            }
+        }
+
+        // Save prematched point IDs against indices in keypts for matching (both ways)
+        frm_obs.prematched_idx_to_id_.clear();
+        frm_obs.prematched_id_to_idx_.clear();
+
+        for (unsigned i = 0; i < num_prematched; ++i) {
+            unsigned keypt_idx = i + frm_obs.prematched_keypts_.first, id = extra_keypoints->second[i];
+            frm_obs.prematched_idx_to_id_[keypt_idx] = id;
+            frm_obs.prematched_id_to_idx_[id] = keypt_idx;
+        }
+    }
+}
+
+data::frame system::create_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask,
+                                            const stella_vslam_bfx::prematched_points* extra_keypoints) {
     // color conversion
     if (!camera_->is_valid_shape(img)) {
         spdlog::warn("preprocess: Input image size is invalid");
@@ -288,9 +469,32 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
 
     data::frame_observation frm_obs;
 
-    // Extract ORB feature
     keypts_.clear();
-    extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+    if (use_orb_features_) {
+        // Extract ORB feature
+        extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+
+        //bool boost_applied = extractor_boost_check(keypts_);
+        //if (boost_applied) // re-extract with the boosting
+         //   extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
+
+
+        //spdlog::info("feature extract: {} colour order {} {} {} {}", keypts_.size(), 
+        //    static_cast<unsigned int>(camera_->color_order_), 
+        //    stella_vslam::camera::color_order_to_string[static_cast<unsigned int>(camera_->color_order_)],
+        //    mask.rows, mask.cols);
+
+        //static int c = 0;
+        //++c;
+        //std::string im_filename = "im_test_" + std::to_string(c) + ".bmp";
+        //
+        ////if (c==0)
+        //    cv::imwrite(im_filename, img_gray);
+        
+    }
+    // Add the prematched points to the input vector for undistorting
+    if (undistort_prematches_)
+        store_prematched_points(extra_keypoints, keypts_, frm_obs);
     frm_obs.num_keypts_ = keypts_.size();
     if (keypts_.empty()) {
         spdlog::warn("preprocess: cannot extract any keypoints");
@@ -298,6 +502,32 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
 
     // Undistort keypoints
     camera_->undistort_keypoints(keypts_, frm_obs.undist_keypts_);
+
+    // Add already-undistorted prematched points directly
+    if (!undistort_prematches_) {
+        store_prematched_points(extra_keypoints, frm_obs.undist_keypts_, frm_obs);
+
+        // keypts_ is not used for the solve but is used for viewing (points should
+        // technically be re-distorted, but we will be using a different viewer anyway)
+        if ( 0 <= frm_obs.prematched_keypts_.first &&
+                0 <= frm_obs.prematched_keypts_.second ) {
+            if ( keypts_.empty() ) {
+                keypts_ = frm_obs.undist_keypts_;
+            }
+            else {
+                keypts_.insert(keypts_.end(),
+                    frm_obs.undist_keypts_.begin() + frm_obs.prematched_keypts_.first,
+                    frm_obs.undist_keypts_.begin() + frm_obs.prematched_keypts_.second);
+            }
+        }
+    }
+
+    if (keypts_.empty()) {
+        if (!use_orb_features_)
+            frm_obs.descriptors_.release();
+        spdlog::warn("preprocesss: cannot extract any keypoints");
+    }
+    frm_obs.num_keypts_ = keypts_.size();
 
     // Convert to bearing vector
     camera_->convert_keypoints_to_bearings(frm_obs.undist_keypts_, frm_obs.bearings_);
@@ -436,13 +666,14 @@ data::frame system::create_RGBD_frame(const cv::Mat& rgb_img, const cv::Mat& dep
     return data::frame(timestamp, camera_, orb_params_, frm_obs, std::move(markers_2d));
 }
 
-std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask) {
+std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const double timestamp, const cv::Mat& mask,
+                                                        const stella_vslam_bfx::prematched_points* extra_keypoints) {
     assert(camera_->setup_type_ == camera::setup_type_t::Monocular);
     if (img.empty()) {
         spdlog::warn("preprocess: empty image");
         return nullptr;
     }
-    return feed_frame(create_monocular_frame(img, timestamp, mask), img);
+    return feed_frame(create_monocular_frame(img, timestamp, mask, extra_keypoints), img);
 }
 
 std::shared_ptr<Mat44_t> system::feed_stereo_frame(const cv::Mat& left_img, const cv::Mat& right_img, const double timestamp, const cv::Mat& mask) {
@@ -584,5 +815,43 @@ void system::resume_other_threads() const {
         mapper_->resume();
     }
 }
+
+bool system::extractor_boost_check(std::vector<cv::KeyPoint> const& keypts) {
+    if (extractor_boost_checked_)
+        return false;
+    extractor_boost_checked_ = true;
+
+    // Count keypoints for which matching will be attempted in match::area::match_in_consistent_area(), i.e. those at the 0-th scale
+    int matchable_count = std::count_if(keypts.begin(), keypts.end(), [](cv::KeyPoint const& keypt) { return keypt.octave == 0; });
+    bool boost(matchable_count < 500);
+
+    float min_size_boost(1);
+    if (boost) {
+        min_size_boost = 0.5f;
+        spdlog::info("system - applying min size boost of {}", min_size_boost);
+        if (extractor_left_)
+            extractor_left_->min_size_boost_ = min_size_boost;
+        if (extractor_right_)
+            extractor_right_->min_size_boost_ = min_size_boost;
+    }
+
+    stella_vslam_bfx::metrics::get_instance()->feature_min_size_scale = min_size_boost;
+
+    return boost;
+}
+
+void system::boost_extractors(float boost) {
+
+    spdlog::info("system - applying min size boost of {}", boost);
+    stella_vslam_bfx::metrics::get_instance()->feature_min_size_scale = boost;
+
+    if (extractor_left_)
+        extractor_left_->min_size_boost_ = boost;
+    if (extractor_right_)
+        extractor_right_->min_size_boost_ = boost;
+}
+
+
+
 
 } // namespace stella_vslam

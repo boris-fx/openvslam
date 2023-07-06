@@ -45,6 +45,25 @@ public:
               data::map_database* map_db,
               data::bow_database* bow_db,
               data::bow_vocabulary* bow_vocab) override;
+
+    /**
+    * Save the map database to memory
+    */
+    virtual bool save_to_mem(std::vector<unsigned char>& mem,
+        const data::camera_database* const cam_db,
+        const data::orb_params_database* const orb_params_db,
+        const data::map_database* const map_db) override;
+
+    /**
+    * Load the map database from memory
+    */
+    virtual bool load_from_mem(std::vector<unsigned char> const& mem,
+        data::camera_database* cam_db,
+        data::orb_params_database* orb_params_db,
+        data::map_database* map_db,
+        data::bow_database* bow_db,
+        data::bow_vocabulary* bow_vocab) override;
+
 };
 
 } // namespace io

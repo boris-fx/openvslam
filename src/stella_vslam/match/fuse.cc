@@ -33,6 +33,9 @@ unsigned int fuse::detect_duplication(const std::shared_ptr<data::keyframe>& key
         if (lm->is_observed_in_keyframe(keyfrm)) {
             continue;
         }
+        if (lm->prematched_id_ >= 0) {
+            continue;
+        }
 
         // 3D point coordinates with the global reference
         const Vec3_t pos_w = lm->get_pos_in_world();
@@ -85,6 +88,13 @@ unsigned int fuse::detect_duplication(const std::shared_ptr<data::keyframe>& key
             if (already_matched_idx_in_keyfrm.count(idx)) {
                 continue;
             }
+
+            // Landmark belongs to an externally-matched keypoint
+            if ( keyfrm->frm_obs_.idx_is_prematched(idx) ) {
+                continue;
+            }
+            assert(!keyfrm->get_landmark(idx) || keyfrm->get_landmark(idx)->prematched_id_ < 0);
+
             const auto& undist_keypt = keyfrm->frm_obs_.undist_keypts_.at(idx);
 
             const auto scale_level = static_cast<unsigned int>(undist_keypt.octave);

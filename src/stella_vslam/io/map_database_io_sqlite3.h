@@ -1,6 +1,8 @@
 #ifndef STELLA_VSLAM_IO_MAP_DATABASE_IO_SQLITE3_H
 #define STELLA_VSLAM_IO_MAP_DATABASE_IO_SQLITE3_H
 
+#ifdef USE_SQLITE
+
 #include "stella_vslam/io/map_database_io_base.h"
 #include "stella_vslam/data/bow_vocabulary.h"
 
@@ -55,5 +57,7 @@ private:
 
 } // namespace io
 } // namespace stella_vslam
+
+#endif  // USE_SQLITE
 
 #endif // STELLA_VSLAM_IO_MAP_DATABASE_IO_SQLITE3_H

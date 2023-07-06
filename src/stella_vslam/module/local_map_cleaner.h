@@ -1,6 +1,8 @@
 #ifndef STELLA_VSLAM_MODULE_LOCAL_MAP_CLEANER_H
 #define STELLA_VSLAM_MODULE_LOCAL_MAP_CLEANER_H
 
+#include "stella_vslam/config_settings.h"
+
 #include <list>
 #include <memory>
 
@@ -20,7 +22,8 @@ public:
     /**
      * Constructor
      */
-    explicit local_map_cleaner(const YAML::Node& yaml_node, data::map_database* map_db, data::bow_database* bow_db);
+    explicit local_map_cleaner(const stella_vslam_bfx::config_settings& settings,
+                                data::map_database* map_db, data::bow_database* bow_db);
 
     /**
      * Destructor

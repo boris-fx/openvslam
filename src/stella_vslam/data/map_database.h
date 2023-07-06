@@ -1,6 +1,7 @@
 #ifndef STELLA_VSLAM_DATA_MAP_DATABASE_H
 #define STELLA_VSLAM_DATA_MAP_DATABASE_H
 
+#include "stella_vslam/exports.h"
 #include "stella_vslam/data/bow_vocabulary_fwd.h"
 #include "stella_vslam/data/frame_statistics.h"
 
@@ -11,7 +12,9 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#ifdef USE_SQLITE
 typedef struct sqlite3 sqlite3;
+#endif
 
 namespace stella_vslam {
 
@@ -29,7 +32,7 @@ class camera_database;
 class orb_params_database;
 class bow_database;
 
-class map_database {
+class STELLA_VSLAM_API map_database {
 public:
     /**
      * Constructor
@@ -40,6 +43,9 @@ public:
      * Destructor
      */
     ~map_database();
+
+    map_database(const map_database&);// = default;
+    map_database& operator=(const map_database&);// = default;
 
     /**
      * Set fixed_keyframe_id_threshold
@@ -252,6 +258,7 @@ public:
      */
     void to_json(nlohmann::json& json_keyfrms, nlohmann::json& json_landmarks) const;
 
+#ifdef USE_SQLITE
     /**
      * Load keyframes and landmarks from database
      */
@@ -264,6 +271,7 @@ public:
      * Dump keyframes and landmarks to database
      */
     bool to_db(sqlite3* db) const;
+#endif
 
     //! mutex for locking ALL access to the database
     //! (NOTE: cannot used in map_database class)
@@ -310,6 +318,7 @@ private:
      */
     void register_association(const unsigned int keyfrm_id, const nlohmann::json& json_keyfrm);
 
+#ifdef USE_SQLITE
     bool load_keyframes_from_db(sqlite3* db,
                                 const std::string& table_name,
                                 camera_database* cam_db,
@@ -332,6 +341,7 @@ private:
     bool bind_association_to_stmt(sqlite3_stmt* stmt,
                                   const std::shared_ptr<keyframe>& keyfrm) const;
     bool save_associations_to_db(sqlite3* db, const std::string& table_name) const;
+#endif
 
     //! mutex for mutual exclusion controll between class methods
     mutable std::mutex mtx_map_access_;

@@ -33,7 +33,10 @@ struct loop_closure_request {
 class global_optimization_module {
 public:
     //! Constructor
-    global_optimization_module(data::map_database* map_db, data::bow_database* bow_db, data::bow_vocabulary* bow_vocab, const YAML::Node& yaml_node, const bool fix_scale);
+    global_optimization_module(data::map_database* map_db, data::bow_database* bow_db,
+                                data::bow_vocabulary* bow_vocab,
+                                const stella_vslam_bfx::config_settings& settings,
+                                const bool fix_scale);
 
     //! Destructor
     ~global_optimization_module();
@@ -101,6 +104,9 @@ public:
     //! Check if loop BA is running or not
     bool loop_BA_is_running() const;
 
+    //! Force a global bundle adjustment if one is not already running
+    void run_loop_BA();
+
     //! Abort the loop BA externally
     //! (NOTE: this function does not wait for abort)
     void abort_loop_BA();
@@ -116,6 +122,9 @@ private:
 
     //! Perform loop closing
     void correct_loop();
+
+    //! Perform the loop BA from 'correct_loop()' without the loop closing parts
+    void run_forced_loop_bundle();
 
     //! Compute Sim3s (world to covisibility) which are prior to loop correction
     module::keyframe_Sim3_pairs_t get_Sim3s_before_loop_correction(const std::vector<std::shared_ptr<data::keyframe>>& neighbors) const;
@@ -240,7 +249,7 @@ private:
     //-----------------------------------------
     // keyframe queue
 
-    //! mutex for access to keyframe queue
+    //! mutex for access to keyframe queue and force_loop_bundle_
     mutable std::mutex mtx_keyfrm_queue_;
 
     //! Check if keyframe is queued
@@ -250,6 +259,11 @@ private:
     std::list<std::shared_ptr<data::keyframe>> keyfrms_queue_;
 
     std::shared_ptr<data::keyframe> cur_keyfrm_ = nullptr;
+
+    bool force_loop_bundle_ = false;
+
+    //! Check if a loop bundle was requested
+    bool force_loop_bundle_requested() const;
 
     //-----------------------------------------
     // optimizer

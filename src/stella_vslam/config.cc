@@ -1,7 +1,6 @@
 #include "stella_vslam/config.h"
 #include "stella_vslam/marker_model/aruco.h"
 #include "stella_vslam/util/string.h"
-#include "stella_vslam/util/yaml.h"
 
 #include <iostream>
 #include <memory>
@@ -10,31 +9,25 @@
 
 namespace stella_vslam {
 
-config::config(const std::string& config_file_path)
-    : config(YAML::LoadFile(config_file_path), config_file_path) {}
-
-config::config(const YAML::Node& yaml_node, const std::string& config_file_path)
-    : config_file_path_(config_file_path), yaml_node_(yaml_node) {
+config::config(const stella_vslam_bfx::config_settings& settings)
+    : settings_(settings) {
     spdlog::debug("CONSTRUCT: config");
-
-    spdlog::info("config file loaded: {}", config_file_path_);
 
     //========================//
     // Load Marker Parameters //
     //========================//
 
-    auto marker_model_yaml_node = yaml_node_["MarkerModel"];
-    if (marker_model_yaml_node) {
+    if (settings.marker_model_is_enabled_) {
         spdlog::debug("load marker model parameters");
-        auto marker_model_type = marker_model_yaml_node["type"].as<std::string>();
-        if (marker_model_type == "aruco") {
+        if (settings.marker_model_ == stella_vslam::marker_model::model_type_t::Aruco) {
             marker_model_ = std::make_shared<marker_model::aruco>(
-                marker_model_yaml_node["width"].as<double>(),
-                marker_model_yaml_node["marker_size"].as<double>(),
-                marker_model_yaml_node["max_markers"].as<double>());
+                settings_.marker_width_,
+                settings_.marker_size_,
+                settings_.max_markers_);
         }
         else {
-            throw std::runtime_error("Invalid marker model type :" + marker_model_type);
+            throw std::runtime_error("Invalid marker model type :" + 
+                stella_vslam::marker_model::model_type_to_string[static_cast<unsigned>(settings_.marker_model_)]);
         }
     }
 }
@@ -44,7 +37,7 @@ config::~config() {
 }
 
 std::ostream& operator<<(std::ostream& os, const config& cfg) {
-    os << cfg.yaml_node_;
+    os << cfg.settings_;
     return os;
 }
 

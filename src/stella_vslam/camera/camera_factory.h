@@ -15,26 +15,26 @@ namespace camera {
 
 class camera_factory {
 public:
-    static camera::base* create(const YAML::Node& node) {
-        const auto camera_model_type = camera::base::load_model_type(node);
+    static camera::base* create(const stella_vslam_bfx::config_settings& settings) {
+        const auto camera_model_type = camera::base::load_model_type(settings);
 
         camera::base* camera = nullptr;
         try {
             switch (camera_model_type) {
                 case camera::model_type_t::Perspective: {
-                    camera = new camera::perspective(node);
+                    camera = new camera::perspective(settings);
                     break;
                 }
                 case camera::model_type_t::Fisheye: {
-                    camera = new camera::fisheye(node);
+                    camera = new camera::fisheye(settings);
                     break;
                 }
                 case camera::model_type_t::Equirectangular: {
-                    camera = new camera::equirectangular(node);
+                    camera = new camera::equirectangular(settings);
                     break;
                 }
                 case camera::model_type_t::RadialDivision: {
-                    camera = new camera::radial_division(node);
+                    camera = new camera::radial_division(settings);
                     break;
                 }
             }

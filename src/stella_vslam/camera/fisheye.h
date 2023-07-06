@@ -13,12 +13,13 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     fisheye(const std::string& name, const setup_type_t& setup_type, const color_order_t& color_order,
+            const autocalibration_parameters& autocalibration,
             const unsigned int cols, const unsigned int rows, const double fps,
             const double fx, const double fy, const double cx, const double cy,
             const double k1, const double k2, const double k3, const double k4,
             const double focal_x_baseline = 0.0, const double depth_thr = 0.0);
 
-    fisheye(const YAML::Node& yaml_node);
+    fisheye(const stella_vslam_bfx::config_settings& settings);
 
     ~fisheye() override;
 
@@ -46,8 +47,8 @@ public:
     // Parameters specific to this model
 
     //! pinhole params
-    const double fx_;
-    const double fy_;
+          double fx_;
+          double fy_;
     const double cx_;
     const double cy_;
     const double fx_inv_;

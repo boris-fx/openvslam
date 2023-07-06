@@ -266,7 +266,7 @@ std::vector<cv::KeyPoint> orb_extractor::distribute_keypoints_via_tree(const std
 
         // Fork node and remove the old one from nodes
         while (iter != nodes.end()) {
-            if (iter->keypts_.size() == 1 || iter->size() * scale_factor * scale_factor <= min_size_) {
+            if (iter->keypts_.size() == 1 || iter->size() * scale_factor * scale_factor <= (unsigned int)(float(min_size_) * min_size_boost_)) {
                 iter++;
                 continue;
             }
