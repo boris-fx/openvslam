@@ -38,6 +38,9 @@ def fileDiff(file1, file2, printDiff):
         'global_optimization_module::run', \
         'Stage "Analysing video" progress', \
         'relocalization succeeded', \
+        'map_selector::should_reset_map_for_tracking_failure', \
+        'start loop bundle adjustment', \
+        'optimizer.optimize iterations', \
         '###'
         )
     
