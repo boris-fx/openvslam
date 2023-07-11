@@ -161,6 +161,8 @@ std::vector<std::shared_ptr<keyframe>> map_database::get_all_keyframes() const {
     for (const auto& id_keyframe : keyframes_) {
         keyframes.push_back(id_keyframe.second);
     }
+
+    nondeterministic::sort_by_id(keyframes);
     return keyframes;
 }
 
@@ -193,6 +195,7 @@ std::vector<std::shared_ptr<keyframe>> map_database::get_close_keyframes_2d(cons
         }
     }
 
+    nondeterministic::sort_by_id(filtered_keyframes);
     return filtered_keyframes;
 }
 
@@ -222,6 +225,7 @@ std::vector<std::shared_ptr<keyframe>> map_database::get_close_keyframes(const M
         }
     }
 
+    nondeterministic::sort_by_id(filtered_keyframes);
     return filtered_keyframes;
 }
 

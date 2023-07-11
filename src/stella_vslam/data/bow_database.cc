@@ -86,7 +86,7 @@ std::vector<std::shared_ptr<keyframe>> bow_database::acquire_keyframes(const bow
         return std::vector<std::shared_ptr<keyframe>>();
     }
 
-    std::unordered_set<std::shared_ptr<keyframe>> final_candidates;
+    nondeterministic::unordered_set<std::shared_ptr<keyframe>> final_candidates;
     for (const auto& keyfrm_score : scores) {
         const auto keyfrm = keyfrm_score.first;
         final_candidates.insert(keyfrm);

@@ -146,11 +146,17 @@ template<class T>
 using unordered_set = std::set<T, id_less<T>>;
 template<class T, class U>
 using unordered_map = std::map<T, U, id_less<T>>;
+template<class T>
+inline void sort_by_id(std::vector<T>& vec) {
+    std::sort(vec.begin(), vec.end(), id_less<T>());
+}
 #else
 template<class T>
 using unordered_set = std::unordered_set<T>;
 template<class T, class U>
 using unordered_map = std::unordered_map<T, U>;
+template<class T>
+inline void sort_by_id(std::vector<T>& vec) {}
 #endif
 } // namespace nondeterministic
 
