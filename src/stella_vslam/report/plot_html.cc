@@ -8,6 +8,7 @@
 #include <list>
 
 #include <stella_vslam/solve/fundamental_consistency.h> // just for the median function, which should be somewhere else
+#include <stella_vslam/data/frame.h>
 
 Graph::Graph(std::string x_label, std::string y_label, std::set<Curve> curves,
              axis_scaling x_axis_scaling, axis_scaling y_axis_scaling,

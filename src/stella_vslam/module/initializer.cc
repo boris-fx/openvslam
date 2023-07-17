@@ -266,8 +266,7 @@ bool initializer::try_initialize_for_monocular(data::frame& curr_frm, double par
 
     spdlog::debug("try_initialize_for_monocular, start impl {:p}", (void*)initializer_.get());
 
-    // store the timestamps of the two frames - perhaps combine these
-    stella_vslam_bfx::focal_length_estimator::get_instance()->current_frame_pair = { init_frm_.timestamp_, curr_frm.timestamp_ };
+    // store the timestamps of the two frames
     stella_vslam_bfx::metrics::initialisation_debug().current_init_frame_timestamps = { init_frm_.timestamp_, curr_frm.timestamp_ };
 
     unsigned int num_matches = 0;

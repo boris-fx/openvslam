@@ -24,11 +24,14 @@
 
 #include <stella_vslam/camera/perspective.h>
 #include <stella_vslam/data/map_camera_helpers.h>
+#include <stella_vslam/data/frame.h>
 #include "stella_vslam/solve/essential_solver.h"
 #include "stella_vslam/util/converter.h"
 #include "stella_vslam/report/metrics.h"
 #include "stella_vslam/optimize/internal/camera_intrinsics_vertex.h"
 #include "stella_vslam/optimize/internal/se3/shot_vertex.h"
+#include "stella_vslam/match/area.h"
+#include "stella_vslam/solve/fundamental_solver.h"
 
 #include "fundamental_to_focal_length.h"
 
@@ -43,8 +46,11 @@ namespace g2o {
 
 namespace stella_vslam_bfx {
 
-void run_epipolar_optimisation(input_matches const& matches, stella_vslam::camera::base const* camera,
-                                unsigned int num_iter, bool* const force_stop_flag);
+bool run_epipolar_optimisation(//input_matches const& matches,
+    std::map<frame_pair_matches::frame_id, std::vector<cv::KeyPoint> const*> const& undist_keypts, // frame_id to keypoints
+    std::list<frame_pair_matches> const& frame_matches, stella_vslam::camera::base const* camera,
+                                unsigned int num_iter, bool* const force_stop_flag, double& focal_length_estimate,
+    std::map<std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, Eigen::Matrix3d>& f_matrix_estimates);
 
 // == Notes on the orthonormal representation of F ==
 //
@@ -352,11 +358,67 @@ public:
         return false;
     }
 
+    template <typename T>
+    void compose_f_matrix(const T* p_intrinsics, const T* p_transform, g2o::MatrixN<3, T> &F_21) const {
+        //typename g2o::VectorN<6, T>::ConstMapType v(p_transform);
+        //typename g2o::VectorN<3, T>::ConstMapType intrinsics(p_intrinsics);
+
+       // g2o::SE3Quat quat(transform);
+
+        //g2o::VectorN<3, T> q = transform.template head<3>();
+
+        Eigen::Quaternion<T> _r;
+
+        g2o::VectorN<3, T> _t;
+#if USE_TRANSLATION_DIRECTION
+        _t[0] = T(1.);
+        _t[1] = p_transform[0] / translation_conditioner;
+        _t[2] = p_transform[1] / translation_conditioner;
+        _t = toCartesian(_t);
+#else
+        for (int i = 0; i < 3; i++)
+            _t[i] = p_transform[i] / translation_conditioner;
+#endif
+
+        // Based on g2o::SE3Quat constructor from a 6-vector
+        for (int i = 0; i < 3; i++)
+            _r.coeffs()(i) = p_transform[i + 3] / rotation_conditioner;
+
+        _r.w() = T(0.);  // recover the positive w
+        if (_r.norm() > 1.) {
+            _r.normalize();
+        }
+        else {
+            T w2 = T(1.) - _r.squaredNorm();
+            _r.w() = (w2 < T(0.)) ? T(0.) : sqrt(w2);
+        }
+
+        // Convert to a rotation matrix
+        auto R = _r.toRotationMatrix();
+
+        //spdlogPrintMatrix("epipolar_sampson_error_edge::() R", R);
+        //spdlogPrintVector("epipolar_sampson_error_edge::() t", _t);
+
+        // Create fundamental matrix (Copy of fundamental_solver::create_F_21)
+        T const& candidate_focal_length(p_intrinsics[0] / focal_length_conditioner); // Use a better focal_length from intrinsics function
+        g2o::MatrixN<3, T> cam_matrix = camera_intrinsics_matrix(candidate_focal_length, (T)par, (T)cx, (T)cy);
+        g2o::MatrixN<3, T> const& rot_21(R);
+        g2o::VectorN<3, T> const& trans_21(_t);
+        const g2o::MatrixN<3, T> trans_21_x = to_skew_symmetric_mat(trans_21);
+        const g2o::MatrixN<3, T> E_21 = trans_21_x * rot_21;
+        F_21 = cam_matrix.transpose().inverse() * E_21 * cam_matrix.inverse();
+    }
+
     /**
      * templatized function to compute the error as described in the comment above
      */
     template <typename T>
     bool operator()(const T* p_intrinsics, const T* p_transform, T* p_error) const {
+
+#if 1
+        g2o::MatrixN<3, T> F_21;
+        compose_f_matrix(p_intrinsics, p_transform, F_21);
+#else
         //typename g2o::VectorN<6, T>::ConstMapType v(p_transform);
         //typename g2o::VectorN<3, T>::ConstMapType intrinsics(p_intrinsics);
 
@@ -404,6 +466,7 @@ public:
         const g2o::MatrixN<3, T> trans_21_x = to_skew_symmetric_mat(trans_21);
         const g2o::MatrixN<3, T> E_21 = trans_21_x * rot_21;
         const g2o::MatrixN<3, T> F_21 = cam_matrix.transpose().inverse() * E_21 * cam_matrix.inverse();
+#endif
 
         //spdlogPrintMatrix("epipolar_sampson_error_edge::() F-matrix", F_21);
 
@@ -424,7 +487,7 @@ template<> std::vector<Eigen::Matrix<double, 3, 1>> const& epipolar_sampson_erro
 template<> std::vector<Eigen::Matrix<ceres::Jet<double, 9>, 3, 1>> const& epipolar_sampson_error_edge::pts_1<ceres::Jet<double, 9>>() const { return pts_1_jet9; }
 template<> std::vector<Eigen::Matrix<ceres::Jet<double, 9>, 3, 1>> const& epipolar_sampson_error_edge::pts_2<ceres::Jet<double, 9>>() const { return pts_2_jet9; }
 
-double const epipolar_sampson_error_edge::focal_length_conditioner = 0.000002;
+double const epipolar_sampson_error_edge::focal_length_conditioner = 0.000200; // 0.000002;
 double const epipolar_sampson_error_edge::rotation_conditioner = 1000.0;
 #if USE_TRANSLATION_DIRECTION
 double const epipolar_sampson_error_edge::translation_conditioner = 1.0;
@@ -830,7 +893,13 @@ bool focal_length_estimator::test(input_matches const& matches,
     unsigned int num_iter(50);
     bool force_stop_flag(false);
 
-    run_epipolar_optimisation(matches, camera, num_iter, &force_stop_flag);
+    std::map<frame_pair_matches::frame_id, std::vector<cv::KeyPoint> const*> keypts_by_frame;
+    for (auto const& keypts : matches.undist_keypts)
+        keypts_by_frame[keypts.first] = &keypts.second;
+
+    double focal_length_estimate;
+    std::map<std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, Eigen::Matrix3d> f_matrix_estimates;
+    bool calc_ok = run_epipolar_optimisation(keypts_by_frame, matches.frame_matches, camera, num_iter, &force_stop_flag, focal_length_estimate, f_matrix_estimates);
 
 
     return true;
@@ -1208,10 +1277,14 @@ std::vector<double> feature_motions(std::vector<cv::KeyPoint> const& undist_keyp
     return result;
 }
 
-void run_epipolar_optimisation(input_matches const& matches,
+bool run_epipolar_optimisation(//input_matches const& matches,
+                               std::map<frame_pair_matches::frame_id, std::vector<cv::KeyPoint> const*> const& undist_keypts, // frame_id to keypoints
+                               std::list<frame_pair_matches> const& frame_matches,
                                stella_vslam::camera::base const* camera,
                                unsigned int num_iter,
-                               bool* const force_stop_flag)
+                               bool* const force_stop_flag,
+                               double &focal_length_estimate,
+    std::map<std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, Eigen::Matrix3d> &f_matrix_estimates)
 {
     //double deliberate_error_500(500.0); // to be removed
     //double deliberate_true(true);
@@ -1227,7 +1300,7 @@ void run_epipolar_optimisation(input_matches const& matches,
     double focal_length_from_inputCamera_discarded, par, cx, cy;
     bool ok_intrincics = intrinsics_from_camera(camera, focal_length_from_inputCamera_discarded, par, cx, cy);
     if (!ok_intrincics)
-        return;
+        return false;
 
     // 1. Construct and setup an optimizer
     using BlockSolverEpipolar = g2o::BlockSolverPL<6, 3>; // g2o::BlockSolverPL<6, 3>
@@ -1260,13 +1333,15 @@ void run_epipolar_optimisation(input_matches const& matches,
 
     // 2. Calculate an initial estimate of the focal length from the frame match pair fundamental matrices
     std::vector<double> focal_length_estimates_from_f_only;
-    for (auto const& frame_pair_match : matches.frame_matches) {
+    for (auto const& frame_pair_match : frame_matches) {
         bool focal_length_from_f_only_is_stable;
         double focal_length_from_f_only = min_geometric_error_focal_length(frame_pair_match.F_21, camera, &focal_length_from_f_only_is_stable);
-        // NB: focal_length_from_f_only_is_stable is ignored
-        focal_length_estimates_from_f_only.push_back(focal_length_from_f_only);
+        if (focal_length_from_f_only_is_stable)
+            focal_length_estimates_from_f_only.push_back(focal_length_from_f_only);
 
     }
+    if (focal_length_estimates_from_f_only.empty())
+        return false;
     double median_focal_length_from_f_only = median(focal_length_estimates_from_f_only.begin(), focal_length_estimates_from_f_only.end());
 
 //    median_focal_length_from_f_only = deliberate_1500; // remove
@@ -1293,7 +1368,7 @@ void run_epipolar_optimisation(input_matches const& matches,
     camera_intrinsics_vtx->setMarginalized(false); // "this node is marginalized out during the optimization"
     bool ok_add_camera_intrinsics_vtx = optimizer.addVertex(camera_intrinsics_vtx);
     if (!ok_add_camera_intrinsics_vtx)
-        return;
+        return false;
 
    // int remove_me = optimizer.activeVertices().size();
 
@@ -1304,8 +1379,9 @@ void run_epipolar_optimisation(input_matches const& matches,
     std::map<int, std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>> rt_vertex_id_to_frame_pair;
     std::map<int, euclidean_transform_vertex*> rt_vertex;
     std::map< std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, epipolar_sampson_error_edge*> epipolar_edge_map; // map from frame pair to edge
-    for (auto const& frame_pair_match : matches.frame_matches) {
+    for (auto const& frame_pair_match : frame_matches) {
 
+        
         // 4. Create Rt vertices for each frame pair match
         // 
         // Decompose the f-matrix using the initial focal length estimate to get initial R t estimates for this match
@@ -1362,6 +1438,7 @@ void run_epipolar_optimisation(input_matches const& matches,
         spdlog::info("run_epipolar_optimisation initial R_check {}", R_check);
 #endif
 
+        
         int rt_vertex_id = vtx_id++;
         rt_vertex_id_to_frame_pair[rt_vertex_id] = { frame_pair_match.frame_id_1, frame_pair_match.frame_id_2 };
 
@@ -1387,14 +1464,15 @@ void run_epipolar_optimisation(input_matches const& matches,
         new_edge->cy = cy;
 
         // Fill in the point matches
-        auto f_undist_keypts_1 = matches.undist_keypts.find(frame_pair_match.frame_id_1);
-        if (f_undist_keypts_1 == matches.undist_keypts.end())
+        auto f_undist_keypts_1 = undist_keypts.find(frame_pair_match.frame_id_1);
+        if (f_undist_keypts_1 == undist_keypts.end())
             continue;
-        auto f_undist_keypts_2 = matches.undist_keypts.find(frame_pair_match.frame_id_2);
-        if (f_undist_keypts_2 == matches.undist_keypts.end())
+        auto f_undist_keypts_2 = undist_keypts.find(frame_pair_match.frame_id_2);
+        if (f_undist_keypts_2 == undist_keypts.end())
             continue;
-        std::vector<cv::KeyPoint> const& undist_keypts_1(f_undist_keypts_1->second);
-        std::vector<cv::KeyPoint> const& undist_keypts_2(f_undist_keypts_2->second);
+        std::vector<cv::KeyPoint> const& undist_keypts_1(*f_undist_keypts_1->second);
+        std::vector<cv::KeyPoint> const& undist_keypts_2(*f_undist_keypts_2->second);
+
         for (int i = 0; i < frame_pair_match.unguided_matches_12.size(); ++i) {
             if (frame_pair_match.guided_inlier_matches[i]) {
                 new_edge->pts_1_double.push_back(stella_vslam::util::converter::to_homogeneous(undist_keypts_1[frame_pair_match.unguided_matches_12[i].first].pt));
@@ -1402,8 +1480,6 @@ void run_epipolar_optimisation(input_matches const& matches,
             }
         }
         new_edge->create_jet_pts_from_double();
-
-
         new_edge->setVertex(0, camera_intrinsics_vtx);
         new_edge->setVertex(1, pair_rt_vertex);
         new_edge->setInformation(g2o::MatrixN<1>::Identity());
@@ -1412,11 +1488,11 @@ void run_epipolar_optimisation(input_matches const& matches,
         bool ok_add_edge = optimizer.addEdge(new_edge);
         if (!ok_add_edge)
             continue;
+
     }
 
 
     // 6. Perform optimization
-
     optimizer.setComputeBatchStatistics(true);
     optimizer.initializeOptimization();
 
@@ -1464,10 +1540,23 @@ void run_epipolar_optimisation(input_matches const& matches,
 
     bool ok = optimizer.optimize(num_iter);
     if (!ok)
-        return; // error
+        return false; // error
+
+    // Store the calculated focal length and F matrices
+    double focal_length_after = camera_intrinsics_vtx->estimate()[0] / focal_length_conditioner;
+    for (auto const& edge : epipolar_edge_map) {
+        stella_vslam::optimize::internal::camera_intrinsics_vertex* edge_camera_intrinsics_vtx = static_cast<stella_vslam::optimize::internal::camera_intrinsics_vertex*>(edge.second->vertices()[0]);
+        euclidean_transform_vertex* edge_pair_rt_vertex = static_cast<euclidean_transform_vertex*>(edge.second->vertices()[1]);
+
+        //const double* p_intrinsics = edge_camera_intrinsics_vtx->estimate().data();
+        //const double* p_transform = edge_pair_rt_vertex->estimate().data();
+        //g2o::MatrixN<3, double>& F_21 = f_matrix_estimates[edge.first];
+
+        edge.second->compose_f_matrix(edge_camera_intrinsics_vtx->estimate().data(), edge_pair_rt_vertex->estimate().data(), f_matrix_estimates[edge.first]);
+        //edge.second->compose_f_matrix(p_intrinsics, p_transform, F_21);
+    }
 
     double rms = sqrt(optimizer.activeChi2() / (double)optimizer.activeEdges().size());
-
 
     //double standard_deviation(std::vector<double> const& vec)
 
@@ -1508,7 +1597,7 @@ void run_epipolar_optimisation(input_matches const& matches,
     double std_dev_dedry = standard_deviation(m_ep_dedry);
     double std_dev_dedrz = standard_deviation(m_ep_dedrz);
 
-    metrics::initialisation_debug().submit_epipolar_estimator_debugging(rms, focal_length_before, camera_intrinsics_vtx->estimate()[0] / focal_length_conditioner,
+    metrics::initialisation_debug().submit_epipolar_estimator_debugging(rms, focal_length_before, focal_length_after,
         dedf, dedtu, dedtv, dedrx, dedry, dedrz,
         std_dev_dedf, std_dev_dedtu, std_dev_dedtv, std_dev_dedrx, std_dev_dedry, std_dev_dedrz);
 
@@ -1519,7 +1608,7 @@ void run_epipolar_optimisation(input_matches const& matches,
     spdlog::info("focal_length_conditioner {}", focal_length_conditioner);
     spdlog::info("average pixel error {} -> {}", pre_rms, rms);
     spdlog::info("chi squared {} -> {}", pre_chi2, optimizer.activeChi2());
-    spdlog::info("focal length {} -> {}", focal_length_before, camera_intrinsics_vtx->estimate()[0]/ focal_length_conditioner);
+    spdlog::info("focal length {} -> {}", focal_length_before, focal_length_after);
     if (first_rt_vertex_initial_params && !rt_vertex.empty()) {
         spdlog::info("rt   {}", first_rt_vertex_initial_params.value().transpose());
         spdlog::info("  -> {}", rt_vertex.begin()->second->estimate().transpose());
@@ -1535,9 +1624,12 @@ void run_epipolar_optimisation(input_matches const& matches,
     //    spdlog::info("-> iter {} #vertices {} #edges {} chi2 {} gain {} {}", stat.iteration, stat.numVertices, stat.numEdges, stat.chi2, gain, gain2);
     //}
 
-    if (force_stop_flag && *force_stop_flag) {
-        return;
-    }
+    if (force_stop_flag && *force_stop_flag)
+        return false;
+
+    focal_length_estimate = focal_length_after;
+
+    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1561,6 +1653,8 @@ bool focal_length_estimator::add_frame_pair(const std::vector<cv::KeyPoint>& und
                                             std::vector<bool> const& input_inlier_matches,
                                             const Eigen::Matrix3d F_21)
 {
+    std::array<double, 2> const& current_frame_pair = metrics::initialisation_debug().current_init_frame_timestamps;
+
     frame_pair_matches::frame_id frame_id_1(current_frame_pair[0]);
     frame_pair_matches::frame_id frame_id_2(current_frame_pair[1]);
 
@@ -1618,6 +1712,8 @@ bool focal_length_estimator::run_optimisation(stella_vslam::camera::base* camera
                                               bool& focal_length_estimate_is_stable,
                                               bool& focal_length_changed)
 {
+    std::array<double, 2> const& current_frame_pair = metrics::initialisation_debug().current_init_frame_timestamps;
+
     bool const current_frame_pair_only(true); // a test!!
 
     unsigned int num_iter(50);
@@ -1629,10 +1725,24 @@ bool focal_length_estimator::run_optimisation(stella_vslam::camera::base* camera
             [&to_find = current_frame_pair](const frame_pair_matches& x) { return to_find == std::array<double, 2>({x.frame_id_1, x.frame_id_2}); });
         if (f != m_matches. frame_matches.end())
             latest_matches.frame_matches.push_back(*f);
-        run_epipolar_optimisation(latest_matches, camera, num_iter, &force_stop_flag);
+
+        std::map<frame_pair_matches::frame_id, std::vector<cv::KeyPoint> const*> keypts_by_frame;
+        for (auto const& keypts : latest_matches.undist_keypts)
+            keypts_by_frame[keypts.first] = &keypts.second;
+
+        double focal_length_estimate;
+        std::map<std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, Eigen::Matrix3d> f_matrix_estimates;
+        run_epipolar_optimisation(keypts_by_frame, latest_matches.frame_matches, camera, num_iter, &force_stop_flag, focal_length_estimate, f_matrix_estimates);
     }
-    else
-        run_epipolar_optimisation(m_matches, camera, num_iter, &force_stop_flag);
+    else {
+        std::map<frame_pair_matches::frame_id, std::vector<cv::KeyPoint> const*> keypts_by_frame;
+        for (auto const& keypts : m_matches.undist_keypts)
+            keypts_by_frame[keypts.first] = &keypts.second;
+
+        double focal_length_estimate;
+        std::map<std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, Eigen::Matrix3d> f_matrix_estimates;
+        run_epipolar_optimisation(keypts_by_frame, m_matches.frame_matches, camera, num_iter, &force_stop_flag, focal_length_estimate, f_matrix_estimates);
+    }
 
     // For now...
     focal_length_estimate_is_stable = false;
@@ -1670,5 +1780,306 @@ bool focal_length_estimator::run_optimisation(stella_vslam::camera::base* camera
 //#endif
     return false;
 }
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+focal_length_estimator_three_view* focal_length_estimator_three_view::get_instance() {
+    if (!instance)
+        instance = new focal_length_estimator_three_view();
+    return instance;
+}
+
+void focal_length_estimator_three_view::clear() {
+    if (instance) {
+        delete instance;
+        instance = nullptr;
+    }
+}
+
+// Find an entry in the map between the two end frames
+template<typename data_type>
+std::optional<int> intermediate_frame(std::map<int, data_type> const& frame_map, int frame_1, int frame_2)
+{
+    std::map<int, int> score; // <frame, score> higher score is better
+    for (auto const& candidate : frame_map) {
+        int const& f(candidate.first);
+        if (f <= frame_1 || f >= frame_2)
+            continue;
+        score[f] = std::min(f-frame_1, frame_2-f); // Score is the distance to the nearest end frame
+    }
+    if (score.empty())
+        return std::nullopt;
+    auto best = std::max_element(score.begin(), score.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b)->bool { return a.second < b.second; });
+
+    return best->first;
+}
+
+bool focal_length_estimator_three_view::add_frame_pair(const stella_vslam::data::frame& frm_1,
+                                                                const stella_vslam::data::frame& frm_2,
+                                                                const std::vector<std::pair<int, int>>& input_matches_12,
+                                                                std::vector<bool> const& input_inlier_matches,
+                                                                const Eigen::Matrix3d F_21,
+                                                                camera::base* camera, Eigen::Matrix3d& new_F_21, bool* focal_length_estimate_is_stable) {
+
+    // Bypass the three-view algorithm and revert to the simpler two-view version
+    if (use_two_view_algorithm) {
+        bool focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_21, camera, focal_length_estimate_is_stable); // May update the camera if auto focal length is active
+        new_F_21 = F_21; // Output fundamental matrix is the same as the input
+        if (*focal_length_estimate_is_stable) {
+            double focal_length_2_view = focal_length_x_pixels_from_camera(camera);
+            metrics::get_instance()->submit_2_3_view_focal_length(focal_length_2_view, std::nullopt);
+        }
+        return focal_length_changed;
+    }
+
+
+    // Return early if auto focal length is turned off
+    if (camera->autocalibration_parameters_.optimise_focal_length == false) {
+        *focal_length_estimate_is_stable = true;
+        return false;
+    }
+
+    // == Calculate a quick 2 view estimate - should go
+    bool focal_length_from_f_only_is_stable;
+    double focal_length_from_f_only = min_geometric_error_focal_length(F_21, camera, &focal_length_from_f_only_is_stable);
+
+    // Store the frame pair feature matching information
+    bool ok_add = add_frame_pair_match_data(frm_1, frm_2, input_matches_12, input_inlier_matches, F_21);
+
+    std::optional<double> focal_length_estimate; // The focal length estimate will go here if we manage to make one
+    std::map<std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, Eigen::Matrix3d> f_matrix_estimates;
+
+    // Choose an intermediate frame to use to form a frame triple
+    const stella_vslam::data::frame& frm_A(frm_1);
+    const stella_vslam::data::frame& frm_C(frm_2);
+    std::optional<stage_and_frame> frame_A = metrics::get_instance()->timestamp_to_frame(frm_A.timestamp_);
+    std::optional<stage_and_frame> frame_C = metrics::get_instance()->timestamp_to_frame(frm_C.timestamp_);
+    if (frame_A && frame_C) {
+        std::optional<int> frame_B = intermediate_frame(frames, frame_A.value().frame, frame_C.value().frame);
+
+        if (!frame_B) {
+            *focal_length_estimate_is_stable = false;
+            metrics::get_instance()->submit_2_3_view_focal_length(focal_length_from_f_only, std::nullopt);
+            return false;
+        }
+
+        const stella_vslam::data::frame& frm_B(frames[frame_B.value()]);
+
+        // Calculate unguided matches BC using the same code as in initializer::try_initialize_for_monocular
+        stella_vslam::match::area matcher(0.9, true);
+        std::vector<cv::Point2f> prev_matched_coords_B_C;
+        std::vector<int> init_matches_B_C;
+
+        // Initialize the previously matched coordinates
+        prev_matched_coords_B_C.resize(frm_B.frm_obs_.undist_keypts_.size());
+        for (unsigned int i = 0; i < frm_B.frm_obs_.undist_keypts_.size(); ++i) {
+            prev_matched_coords_B_C.at(i) = frm_B.frm_obs_.undist_keypts_.at(i).pt;
+        }
+
+        // NB: area::match_in_consistent_area() takes the frames as non-const ref, although changing this to const ref also compiles as the frames are never edited
+        //     So it should be safe to cast our const frames to non-const
+        unsigned int num_matches = matcher.match_in_consistent_area(const_cast<stella_vslam::data::frame&>(frm_B),
+                                                                    const_cast<stella_vslam::data::frame&>(frm_C),
+                                                                    prev_matched_coords_B_C, init_matches_B_C, 100);
+
+        // Guided matching BC (same code as perspective::initialize()) - todo support H
+        const float sigma = 1.0f;
+        bool use_fixed_seed = metrics::get_instance()->settings.use_fixed_seed_;
+        int num_ransac_iters = metrics::get_instance()->settings.num_ransac_iterations_;
+        std::vector<std::pair<int, int>> ref_cur_matches;
+        ref_cur_matches.reserve(frm_C.frm_obs_.undist_keypts_.size());
+        for (unsigned int ref_idx = 0; ref_idx < init_matches_B_C.size(); ++ref_idx) {
+            const auto cur_idx = init_matches_B_C.at(ref_idx);
+            if (0 <= cur_idx) {
+                ref_cur_matches.emplace_back(std::make_pair(ref_idx, cur_idx));
+            }
+        }
+        auto fundamental_solver = solve::fundamental_solver(frm_B.frm_obs_.undist_keypts_, frm_C.frm_obs_.undist_keypts_, ref_cur_matches, sigma, use_fixed_seed);
+        fundamental_solver.find_via_ransac(num_ransac_iters, false);
+
+        // Collect the optimisation match information
+        std::list<frame_pair_matches> optimisation_frame_matches;
+        std::array<double, 2> frame_pair_AB({ frm_A.timestamp_, frm_B.timestamp_ });
+        auto f_AB = std::find_if(frame_matches.begin(), frame_matches.end(),
+            [&to_find = frame_pair_AB](const frame_pair_matches& x) { return to_find == std::array<double, 2>({ x.frame_id_1, x.frame_id_2 }); });
+        if (f_AB != frame_matches.end())
+            optimisation_frame_matches.push_back(*f_AB);
+        frame_pair_matches matches_BC;
+        matches_BC.frame_id_1 = frm_B.timestamp_; // timestamp
+        matches_BC.frame_id_2 = frm_C.timestamp_;
+        matches_BC.unguided_matches_12 = ref_cur_matches; // All unguided matches
+        matches_BC.guided_inlier_matches = fundamental_solver.get_inlier_matches(); // Input inliers to the f-matrix
+        matches_BC.F_21 = fundamental_solver.get_best_F_21(); // fundamental matrix calculated during guided matching
+        if (matches_BC.unguided_matches_12.size()==matches_BC.guided_inlier_matches.size() && !matches_BC.unguided_matches_12.empty())
+            optimisation_frame_matches.push_back(matches_BC);
+        std::array<double, 2> frame_pair_AC({ frm_A.timestamp_, frm_C.timestamp_ });
+        auto f_AC = std::find_if(frame_matches.begin(), frame_matches.end(),
+            [&to_find = frame_pair_AC](const frame_pair_matches& x) { return to_find == std::array<double, 2>({ x.frame_id_1, x.frame_id_2 }); });
+        if (f_AC != frame_matches.end())
+            optimisation_frame_matches.push_back(*f_AC);
+
+        // Collect the optimisation feature point info
+        std::map<frame_pair_matches::frame_id, std::vector<cv::KeyPoint> const*> keypts_by_frame;
+        for (auto const& keypts : frames)
+            keypts_by_frame[keypts.first] = &keypts.second.frm_obs_.undist_keypts_;
+
+#if 0
+        // Test!!
+        std::array<std::list<frame_pair_matches>, 3> test_frame_matches;
+        std::array<bool, 3> test_opt_ok;
+        std::array<double, 3> test_opt_focal;
+        std::array<double, 3> test_opt_focal_from_f;
+        std::array<bool, 3> test_opt_focal_from_f_stable;
+        std::array<std::pair<int, int>, 3> test_frames;
+
+        if (optimisation_frame_matches.size() == 3) {
+            int i(0);
+            for (auto const& m : optimisation_frame_matches) {
+                test_frame_matches[i] = { m };
+                test_frames[i] = { m.frame_id_1, m.frame_id_2 };
+
+                unsigned int num_iter(50);
+                bool force_stop_flag(false);
+                double focal_length;
+                bool calc_ok = run_epipolar_optimisation(keypts_by_frame, test_frame_matches[i], camera, num_iter, &force_stop_flag, focal_length);
+
+                test_opt_focal[i] = calc_ok ? focal_length : -1;
+
+
+                focal_length = min_geometric_error_focal_length(test_frame_matches[i].begin()->F_21, camera, &test_opt_focal_from_f_stable[i]);
+
+                test_opt_focal_from_f[i] = focal_length;
+
+                ++i;
+            }
+
+        }
+#endif
+
+        // Run the optimisation
+        if (optimisation_frame_matches.size() == 3) {
+
+            unsigned int num_iter(50);
+            bool force_stop_flag(false);
+            double focal_length;
+            std::map<std::pair<frame_pair_matches::frame_id, frame_pair_matches::frame_id>, Eigen::Matrix3d> f_matrices;
+            bool calc_ok = run_epipolar_optimisation(keypts_by_frame, optimisation_frame_matches, camera, num_iter, &force_stop_flag, focal_length, f_matrices);
+
+            if (calc_ok) {
+                focal_length_estimate = focal_length;
+                f_matrix_estimates = f_matrices;
+
+                //std::vector<double> focal_length_checks;
+                //for (auto const& f_matrix_estimate : f_matrices) {
+                //    bool stable;
+                //    focal_length_checks.push_back(min_geometric_error_focal_length(f_matrix_estimate.second, camera, &stable)); // focal length inside the camera not used in min_geometric_error_focal_length()
+                //}
+
+                int yy = 0;
+
+            }
+            metrics::get_instance()->submit_2_3_view_focal_length(focal_length_from_f_only, focal_length_estimate);
+        }
+
+    }
+
+    // Optionally create a focal length estimate
+    //std::optional<double> focal_length_estimate = calculate_focal_length(camera);
+    *focal_length_estimate_is_stable = focal_length_estimate.has_value();
+
+    if (focal_length_estimate) {
+        // Edit the focal length in the camera
+        bool set_f_ok = stella_vslam_bfx::set_camera_focal_length_x_pixels(camera, focal_length_estimate.value());
+        auto stage = stella_vslam_bfx::focal_estimation_type::initialisation_before_ba;
+        stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, focal_length_estimate.value());
+
+        // Edit the fundamental matrix to the one which is consistent with the new focal length
+        bool set_f_matrix_ok(false);
+        auto f = f_matrix_estimates.find({ frm_1.timestamp_, frm_2.timestamp_ });
+        if (f != f_matrix_estimates.end()) {
+            new_F_21 = f->second;
+            set_f_matrix_ok = true;
+        }
+
+        return set_f_ok && set_f_matrix_ok;
+    }
+
+    return false;
+}
+
+bool focal_length_estimator_three_view::add_frame_pair_match_data(const stella_vslam::data::frame& frm_1,
+    const stella_vslam::data::frame& frm_2,
+    const std::vector<std::pair<int, int>>& input_matches_12,
+    std::vector<bool> const& input_inlier_matches,
+    const Eigen::Matrix3d F_21)
+{
+    std::array<double, 2> const& current_frame_pair = metrics::initialisation_debug().current_init_frame_timestamps;
+
+    //frame_pair_matches::frame_id frame_id_1(current_frame_pair[0]);
+    //frame_pair_matches::frame_id frame_id_2(current_frame_pair[1]);
+
+
+
+
+    // Store the frames, if they're not already there
+    std::optional<stage_and_frame> frame_1 = metrics::get_instance()->timestamp_to_frame(current_frame_pair[0]);
+    if (frame_1) {
+        auto f_undist_keypts_1 = frames.find(frame_1.value().frame);
+        if (f_undist_keypts_1 == frames.end())
+            frames[frame_1.value().frame] = frm_1;
+    }
+
+    std::optional<stage_and_frame> frame_2 = metrics::get_instance()->timestamp_to_frame(current_frame_pair[1]);
+    if (frame_2) {
+    auto f_undist_keypts_2 = frames.find(frame_2.value().frame);
+    if (f_undist_keypts_2 == frames.end())
+        frames[frame_2.value().frame] = frm_2;
+    }
+
+#if 0
+    // sanity check
+    int count_pts_1(frm_1.frm_obs_.undist_keypts_.size());
+    int count_pts_2(frm_2.frm_obs_.undist_keypts_.size());
+
+    int max_match_pts_1 = std::max_element(input_matches_12.begin(), input_matches_12.end(),
+        [](std::pair<int, int> const& lhs, std::pair<int, int> const& rhs) { return lhs.first < rhs.first; })->first;
+    int max_match_pts_2 = std::max_element(input_matches_12.begin(), input_matches_12.end(),
+        [](std::pair<int, int> const& lhs, std::pair<int, int> const& rhs) { return lhs.second < rhs.second; })->second;
+
+    int count_pts_1b(frames[frame_id_1].frm_obs_.undist_keypts_.size());
+    int count_pts_2b(frames[frame_id_2].frm_obs_.undist_keypts_.size());
+
+    spdlog::info("-->frames {}-{} points {}-{} {}-{} matches {}-{}", current_frame_pair[0], current_frame_pair[1], count_pts_1, count_pts_2, count_pts_1b, count_pts_2b, max_match_pts_1, max_match_pts_2);
+    if (max_match_pts_1 >= count_pts_1 || max_match_pts_2 >= count_pts_2)
+        int yy = 0;
+    if (count_pts_1 != count_pts_1b || count_pts_2 != count_pts_2b)
+        int yyy = 0;
+#endif
+
+
+    // Create a new frame_pair_matches entry in m_matches
+    frame_pair_matches matches;
+    matches.frame_id_1 = current_frame_pair[0];
+    matches.frame_id_2 = current_frame_pair[1];
+    matches.unguided_matches_12 = input_matches_12; // All unguided matches
+    matches.guided_inlier_matches = input_inlier_matches; // Input inliers to the f-matrix
+    matches.F_21 = F_21; // fundamental matrix calculated during guided matching
+    if (matches.unguided_matches_12.size() == matches.guided_inlier_matches.size() && !matches.unguided_matches_12.empty())
+        frame_matches.push_back(matches);
+
+    // Optionally calculate the feature motion metric
+    if (stella_vslam_bfx::metrics::initialisation_debug().active()) {
+        std::vector<double> motions = feature_motions(frm_1.frm_obs_.undist_keypts_, frm_2.frm_obs_.undist_keypts_, input_matches_12, &input_inlier_matches);
+        std::vector<double> feature_motion_quantiles = quantile(motions, { 0.25, 0.5, 0.75 });
+        stella_vslam_bfx::metrics::initialisation_debug().submit_feature_motions(feature_motion_quantiles[0],
+            feature_motion_quantiles[1],
+            feature_motion_quantiles[2]);
+    }
+
+    return true;
+}
+
+
 
 } // namespace stella_vslam_bfx

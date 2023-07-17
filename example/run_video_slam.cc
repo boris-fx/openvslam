@@ -1064,6 +1064,7 @@ void mono_tracking_2(
 
         int first_frame = 0;
         int last_frame = images.video.get(cv::CAP_PROP_FRAME_COUNT) - 1;
+
         stella_vslam_bfx::metrics::get_instance()->input_video_metadata.start_frame = first_frame;
         stella_vslam_bfx::metrics::get_instance()->input_video_metadata.end_frame = last_frame;
 

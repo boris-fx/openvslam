@@ -10,7 +10,7 @@
 #include "plot_html.h"
 
 #include "stella_vslam/solve/fundamental_consistency.h"
-
+#include <stella_vslam/data/frame.h>
 namespace nlohmann {
 
 template<class T>
@@ -210,7 +210,7 @@ namespace stella_vslam_bfx {
         for (int stage = 0; stage < max_stage; ++stage) {
             std::map<double, double> g;
             for (auto const& i : by_stage_and_frame[stage])
-                g[i.first.first] = i.second;
+                g[i.first.second] = i.second;
             if (!g.empty())
                 gg.push_back({ g, stage });
         }
@@ -433,6 +433,26 @@ namespace stella_vslam_bfx {
         initialisation_focal_length_stability.by_stage_and_frame[stage][frames] = stability;
     }
 
+    void metrics::submit_2_3_view_focal_length(std::optional<double> focal_length_2_view,
+                                               std::optional<double> focal_length_3_view)
+    {
+        std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0]);
+        if (!stage_with_frame_0)
+            return;
+        std::optional<stage_and_frame> stage_with_frame_1 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[1]);
+        if (!stage_with_frame_1)
+            return;
+
+        int stage = stage_with_frame_0.value().stage;
+        std::pair<int, int> frames = { stage_with_frame_0.value().frame, stage_with_frame_1.value().frame };
+        if (focal_length_2_view)
+            initialisation_focal_length_estimate_2_view.by_stage_and_frame[stage][frames] = focal_length_2_view.value();
+        if (focal_length_3_view)
+            initialisation_focal_length_estimate_3_view.by_stage_and_frame[stage][frames] = focal_length_3_view.value();
+
+        auto a = initialisation_focal_length_estimate_2_view.graph();
+        int yy = 0;
+    }
     /*template<typename T>
     void transform_metrics_frame_data(metrics::stage_and_frame_param<T> &data,
                                       std::map<double, stage_and_frame> const& index_transform)
@@ -690,23 +710,30 @@ std::string noncritical_style_if_less(std::optional<T_V> value, T_T threshold)
 }
 
 template<typename T_V, typename T_T>
-std::string style_if_less(std::optional<T_V> value, T_T threshold)
+std::string style_if_less(std::optional<T_V> value, std::optional<T_T> threshold)
 {
-    if (!value || (value.value() >= threshold))
+    if (!value || !threshold || (value.value() >= threshold.value()))
         return "";
     return " class = \"outside_threshold\"";
 }
 
 template<typename T_V, typename T_T>
-std::string style_if_less(T_V value, T_T threshold)
+std::string style_if_less(std::optional<T_V> value, T_T threshold)
 {
-    return style_if_less(std::optional<T_V>(value), threshold);
+    return style_if_less(value, std::optional<T_T>(threshold));
 }
 
 template<typename T_V, typename T_T>
-std::string style_if_greater(std::optional<T_V> value, T_T threshold)
+std::string style_if_less(T_V value, T_T threshold)
 {
-    if (!value || value.value() <= threshold)
+    return style_if_less(std::optional<T_V>(value), std::optional<T_T>(threshold));
+}
+
+
+template<typename T_V, typename T_T>
+std::string style_if_greater(std::optional<T_V> value, std::optional<T_T> threshold)
+{
+    if (!value || !threshold || value.value() <= threshold)
         return "";
     return " class = \"outside_threshold\"";
 }
@@ -864,7 +891,7 @@ void add_graph_style(std::stringstream& html)
     html << "} /* grid only */\n";
 }
 
-void add_table(std::stringstream& html, std::list<std::pair<std::string, int>> data, std::string html_class)
+void add_init_failure_mode_table(std::stringstream& html, std::list<std::pair<std::string, int>> data, std::string html_class)
 {
     int max_data(1);
     for (auto const& val : data)
@@ -875,7 +902,9 @@ void add_table(std::stringstream& html, std::list<std::pair<std::string, int>> d
         html << "<table class=\"" << html_class << "\">\n";
     else
         html << "<table>\n";
-    html << "<caption>Initialisation Failure Reasons</caption>\n";
+    //html << "<caption>Initialisation Failure Modes</caption>\n";
+    for (int i = 0; i < 5; ++i)
+        html << "<br>\n";
     html << "<thead>\n";
     html << "	<tr>\n";
     html << "		<th scope=\"col\">Stage</th>\n";
@@ -900,6 +929,24 @@ void add_table(std::stringstream& html, std::list<std::pair<std::string, int>> d
 
 }
 
+// NB: a is not less than b if either is unkmown
+template<typename TA, typename TB>
+bool optional_less(std::optional<TA> const& a, std::optional<TB> const& b)
+{
+    if (!a || !b)
+        return false;
+    return a.value() < b.value();
+}
+
+// NB: a is not greater than b if either is unkmown
+template<typename TA, typename TB>
+bool optional_greater(std::optional<TA> const& a, std::optional<TB> const& b)
+{
+    if (!a || !b)
+        return false;
+    return a.value() > b.value();
+}
+
 void metrics::add_matching_details(std::stringstream& html, curve_section const& graph_feature_count, curve_section const& graph_num_matches) const
 {
     struct initialisation_attempt {
@@ -919,6 +966,8 @@ void metrics::add_matching_details(std::stringstream& html, curve_section const&
         // Focal length estimation
         std::optional<double> focal_length_estimate;
         std::optional<double> focal_length_stability;
+        std::optional<double> focal_length_estimate_2_view;
+        std::optional<double> focal_length_estimate_3_view;
 
         // Reconstruction
         std::optional<int>    num_valid_triangulated_points;
@@ -964,6 +1013,14 @@ void metrics::add_matching_details(std::stringstream& html, curve_section const&
         if (f_focal_length_stability != initialisation_focal_length_stability.by_stage_and_frame[0].end())
             attempt.focal_length_stability = f_focal_length_stability->second;
 
+        auto f_focal_length_estimate_2_view = initialisation_focal_length_estimate_2_view.by_stage_and_frame[0].find({ attempt.frame_0 , attempt.frame_1 });
+        if (f_focal_length_estimate_2_view != initialisation_focal_length_estimate_2_view.by_stage_and_frame[0].end())
+            attempt.focal_length_estimate_2_view = f_focal_length_estimate_2_view->second;
+
+        auto f_focal_length_estimate_3_view = initialisation_focal_length_estimate_3_view.by_stage_and_frame[0].find({ attempt.frame_0 , attempt.frame_1 });
+        if (f_focal_length_estimate_3_view != initialisation_focal_length_estimate_3_view.by_stage_and_frame[0].end())
+            attempt.focal_length_estimate_3_view = f_focal_length_estimate_3_view->second;
+
         // Reconstruction
         auto f_num_valid_triangulated_points = num_valid_triangulated_points.by_stage_and_frame[0].find({ attempt.frame_0 , attempt.frame_1 });
         if (f_num_valid_triangulated_points != num_valid_triangulated_points.by_stage_and_frame[0].end())
@@ -1001,20 +1058,34 @@ void metrics::add_matching_details(std::stringstream& html, curve_section const&
     int fail_num_triangulated_points(0);
     for (auto const& attempt_iter : initialisation_attempts) {
         initialisation_attempt const& attempt(attempt_iter.second);
-        if (attempt.num_unguided_matches < (int)settings.min_num_valid_pts_)
+        if (attempt.num_unguided_matches < (int)settings.min_num_valid_pts_) {
             ++fail_num_unguided_matches;
-        if ((attempt.fundamental_inliers < 8) && (attempt.homography_inliers < 8))
+            continue;
+        }
+        if ((attempt.fundamental_inliers < 8) && (attempt.homography_inliers < 8)) {
             ++fail_fundamental_homography_inliers;
-        if (attempt.focal_length_stability < 2)
+            continue;
+        }
+        if (attempt.focal_length_stability < 2) {
             ++fail_focal_length_stability;
-        if (attempt.num_valid_triangulated_points < min_num_valid_triangulated_points.value())
+            continue;
+        }
+        if (optional_less(attempt.num_valid_triangulated_points, min_num_valid_triangulated_points)) {
             ++fail_num_valid_triangulated_points;
-        if (attempt.triangulation_ambiguity > max_triangulation_ambiguity.value())
+            continue;
+        }
+        if (optional_greater(attempt.triangulation_ambiguity, max_triangulation_ambiguity)) {
             ++fail_triangulation_ambiguity;
-        if (attempt.triangulation_parallax < max_triangulation_parallax.value())
+            continue;
+        }
+        if (optional_less(attempt.triangulation_parallax, max_triangulation_parallax)) {
             ++fail_triangulation_parallax;
-        if (attempt.num_triangulated_points < min_num_triangulated_points.value())
+            continue;
+        }
+        if (optional_less(attempt.num_triangulated_points, min_num_triangulated_points)) {
             ++fail_num_triangulated_points;
+            continue;
+        }
     }
 
     //html << "<p>Fails unguided matching: " << fail_num_unguided_matches << "</p>\n";
@@ -1025,13 +1096,13 @@ void metrics::add_matching_details(std::stringstream& html, curve_section const&
     //html << "<p>Fails        parallax A: " << fail_triangulation_parallax << "</p>\n";
     //html << "<p>Fails        parallax B: " << fail_num_triangulated_points << "</p>\n";
 
-    add_table(html, { { "Unguided Matching", fail_num_unguided_matches },
-        { "Guided Matching" , fail_fundamental_homography_inliers },
-        { "Focal Length" , fail_focal_length_stability },
-        { "Triangulation" , fail_num_valid_triangulated_points },
-        { "Ambiguity" , fail_triangulation_ambiguity },
-        { "Parallax A" , fail_triangulation_parallax },
-        { "Parallax B" , fail_num_triangulated_points } }, "graph");
+    add_init_failure_mode_table(html, { { "Unguided Matching", fail_num_unguided_matches },
+                                        { "Uncalibrated Guided Matching" , fail_fundamental_homography_inliers },
+                                        { "Focal Length" , fail_focal_length_stability },
+                                        { "Calibrated Guided Matching" , fail_num_valid_triangulated_points },
+                                        { "Ambiguity" , fail_triangulation_ambiguity },
+                                        { "Parallax A" , fail_triangulation_parallax },
+                                        { "Parallax B" , fail_num_triangulated_points } }, "graph");
 
     //html << "<p>Guided matches (uncalibrated) per frame - average: " << stats_num_matches.mean << ", min/max: " << stats_num_matches.min << "/" << stats_num_matches.max << ", threshold (min): " << settings.min_num_valid_pts_ << "</p>\n";
     //html << "<p>Guided matches (calibrated) per frame - average: " << stats_num_matches.mean << ", min/max: " << stats_num_matches.min << "/" << stats_num_matches.max << ", threshold (min): " << settings.min_num_valid_pts_ << "</p>\n";
@@ -1052,6 +1123,8 @@ void metrics::add_matching_details(std::stringstream& html, curve_section const&
 
     html << "    <th>Focal length (pix)</th>\n";
     html << "    <th>Focal stability (min " << 2 << ")</th>\n"; // 2 is set in min_geometric_error_focal_length()
+    html << "    <th>Focal length 2-view (pix)</th>\n";
+    html << "    <th>Focal length 3-view (pix)</th>\n";
 
     html << "    <th>Triangulated Points (min " << min_num_valid_triangulated_points.value_or(-1) << ")</th>\n"; // 0 
     html << "    <th>Triangulation Ambiguity (max " << max_triangulation_ambiguity.value_or(-1) << ")</th>\n"; // 1
@@ -1077,10 +1150,13 @@ void metrics::add_matching_details(std::stringstream& html, curve_section const&
         html << "   <td>" << table_value(attempt.focal_length_estimate) << "</td>\n";
         html << "   <td" << style_if_less(attempt.focal_length_stability, 2) << ">" << table_value(attempt.focal_length_stability) << "</td>\n";
 
-        html << "   <td" << style_if_less(attempt.num_valid_triangulated_points, min_num_valid_triangulated_points.value()) << ">" << table_value(attempt.num_valid_triangulated_points) << "</td>\n"; // 0
-        html << "   <td" << style_if_greater(attempt.triangulation_ambiguity, max_triangulation_ambiguity.value()) << ">" << table_value(attempt.triangulation_ambiguity) << "</td>\n"; // 1
-        html << "   <td" << style_if_less(attempt.triangulation_parallax, max_triangulation_parallax.value()) << ">" << table_value(attempt.triangulation_parallax) << "</td>\n"; // 2
-        html << "   <td" << style_if_less(attempt.num_triangulated_points, min_num_triangulated_points.value()) << ">" << table_value(attempt.num_triangulated_points) << "</td>\n"; // 3
+        html << "   <td>" << table_value(attempt.focal_length_estimate_2_view) << "</td>\n";
+        html << "   <td>" << table_value(attempt.focal_length_estimate_3_view) << "</td>\n";
+
+        html << "   <td" << style_if_less(attempt.num_valid_triangulated_points, min_num_valid_triangulated_points) << ">" << table_value(attempt.num_valid_triangulated_points) << "</td>\n"; // 0
+        html << "   <td" << style_if_greater(attempt.triangulation_ambiguity, max_triangulation_ambiguity) << ">" << table_value(attempt.triangulation_ambiguity) << "</td>\n"; // 1
+        html << "   <td" << style_if_less(attempt.triangulation_parallax, max_triangulation_parallax) << ">" << table_value(attempt.triangulation_parallax) << "</td>\n"; // 2
+        html << "   <td" << style_if_less(attempt.num_triangulated_points, min_num_triangulated_points) << ">" << table_value(attempt.num_triangulated_points) << "</td>\n"; // 3
 
         html << "   </tr>\n";
 
@@ -1256,12 +1332,20 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "<p>Second pass added " << pass_2_end_keyframes - pass_1_end_keyframes << " keyframes from " << pass_2_frames << " frames</p>\n";
     html << "<p>Final pass created " << solved_frame_count << " camera positions from " << video_frame_count << " frames</p>\n";
 
+    {
+        std::optional<double> focal_gt(input_video_metadata.ground_truth_focal_length_x_pixels());
+        axis_scaling y_axis_scaling = focal_gt ? axis_scaling(1.2 * focal_gt.value()) : range_behaviour::no_max;
+        write_graph_as_svg(html, Graph("Second Frame", "Focal length", std::set<SplitCurve>({ {"2-view estimate", initialisation_focal_length_estimate_2_view.graph()},
+                                                                                          {"3-view estimate", initialisation_focal_length_estimate_3_view.graph()} }), range_behaviour::split_by_stage, y_axis_scaling, focal_gt));
+    }
+
     curve_section graph_num_matches = select_second_frame_data(initialisation_debug_object.p_num_matches.by_frame);
     curve_section graph_feature_count;
     for (auto const& i : initialisation_debug_object.feature_count_by_frame)
         graph_feature_count[i.first] = i.second;
     graph_num_matches.stage = graph_feature_count.stage = 0;
     add_matching_details(html, graph_feature_count, graph_num_matches);
+
 
     // Timing
     html << "<h2> Timing</h2>\n";

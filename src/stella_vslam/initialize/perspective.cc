@@ -25,7 +25,7 @@ perspective::perspective(const data::frame& ref_frm,
                          const float reproj_err_thr,
                          bool use_fixed_seed)
     : base(ref_frm, num_ransac_iters, min_num_triangulated, min_num_valid_pts, parallax_deg_thr, reproj_err_thr),
-      ref_cam_matrix_(get_camera_matrix(ref_frm.camera_)), use_fixed_seed_(use_fixed_seed) {
+    ref_frm_(ref_frm), ref_cam_matrix_(get_camera_matrix(ref_frm.camera_)), use_fixed_seed_(use_fixed_seed) {
     spdlog::debug("CONSTRUCT: initialize::perspective");
 }
 
@@ -79,32 +79,21 @@ bool perspective::initialize(const data::frame& cur_frm, const std::vector<int>&
     }
     else if (fundamental_solver.solution_is_valid()) {
         spdlog::debug("reconstruct_with_F");
-        const Mat33_t F_ref_to_cur = fundamental_solver.get_best_F_21();
+              Mat33_t F_ref_to_cur = fundamental_solver.get_best_F_21();
         const auto is_inlier_match = fundamental_solver.get_inlier_matches();
         *focal_length_was_modified = false;
         if (true && initialize_focal_length) {
 
-
-           bool focal_length_estimate_is_stable(true);
-            bool focal_length_changed(false);
-
-            bool const focal_length_via_points_test(false);
-            if (focal_length_via_points_test) {
-                stella_vslam_bfx::focal_length_estimator::test_v2(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_,
-                                                                  focal_length_estimate_is_stable, focal_length_changed);
-
-                stella_vslam_bfx::focal_length_estimator::get_instance()->add_frame_pair(ref_undist_keypts_, cur_undist_keypts_, ref_cur_matches_, is_inlier_match, F_ref_to_cur);
-                stella_vslam_bfx::focal_length_estimator::get_instance()->run_optimisation(ref_camera_, focal_length_estimate_is_stable, focal_length_changed);
-            }
-            else
-                focal_length_changed = stella_vslam_bfx::initialize_focal_length(F_ref_to_cur, ref_camera_, &focal_length_estimate_is_stable); // May update the camera if auto focal length is active
+            bool focal_length_estimate_is_stable(true); // Is the focal length ok? If not  initialisation should fail. Always true if auto-focal is turned off
+            bool focal_length_changed(false); // Was the focal length of the cameram edited? Always false if auto-focal is turned off
+            Eigen::Matrix3d new_F_21; // The focal length estimator may edit the fundamental matrix to a more consistent one
+            focal_length_changed = stella_vslam_bfx::focal_length_estimator_three_view::get_instance()->add_frame_pair(ref_frm_, cur_frm, ref_cur_matches_, is_inlier_match, F_ref_to_cur, ref_camera_, new_F_21, &focal_length_estimate_is_stable);
+            if (focal_length_estimate_is_stable)
+                F_ref_to_cur = new_F_21;
 
             // If the focal length was changed we also need to update the bearing vectors,
             //   and indicate to our calling function that it should do the same
             if (focal_length_changed) {
-                //auto stage = stella_vslam_bfx::focal_estimation_stage::initialisation_before_ba;
-                //stella_vslam_bfx::metrics::get_instance()->submit_intermediate_focal_estimate(stage, stella_vslam_bfx::focal_length_x_pixels_from_camera(ref_camera_));
-
                 const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_).clear();
                 ref_camera_->convert_keypoints_to_bearings(ref_undist_keypts_, const_cast<eigen_alloc_vector<Vec3_t>&>(ref_bearings_));
                 cur_bearings_.clear();

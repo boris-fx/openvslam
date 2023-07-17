@@ -8,6 +8,7 @@
 
 #include "plot_html.h"
 #include <stella_vslam/solve/fundamental_consistency.h>
+#include <stella_vslam/data/frame.h>
 
 namespace stella_vslam_bfx {
 

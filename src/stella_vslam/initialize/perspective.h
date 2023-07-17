@@ -51,6 +51,9 @@ private:
     //! camera matrix of the current frame
     Mat33_t cur_cam_matrix_;
 
+    //! full reference frame (used by focal_length_estimator_three_view)
+    const data::frame& ref_frm_;
+
     //! Use fixed random seed for RANSAC if true
     const bool use_fixed_seed_;
 };

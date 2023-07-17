@@ -28,6 +28,8 @@ std::set<double> candidateFocalLengthsOverFOVRange(double startDegrees, double e
 double error_for_focal_length(stella_vslam::Mat33_t const& F_21, stella_vslam::camera::base const* camera, double focal_length_x_pixels);
 double error_for_focal_length(stella_vslam::Mat33_t const& F_21, double focal_length_x_pixels, double par, double cx, double cy);
 
+std::shared_ptr<stella_vslam::camera::base> modified_focal_length_camera_copy(stella_vslam::camera::base const* camera, double focal_length_x_pixels);
+
 STELLA_VSLAM_API bool fundamental_to_focal_length_optimisation_test();
 
 } // namespace stella_vslam_bfx

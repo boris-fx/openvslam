@@ -134,6 +134,9 @@ public:
 
     void submit_focal_length_estimate(double focal_length, double stability);
 
+    void submit_2_3_view_focal_length(std::optional<double> focal_length_2_view,
+                                      std::optional<double> focal_length_3_view);
+
     double current_frame_timestamp;
 
     // Convert the timestamped metrics to frame numbers
@@ -198,8 +201,8 @@ public:
     template<typename T>
     struct stage_and_frame_pair_param {
         std::array<std::map<std::pair<int, int>, T>, max_stage> by_stage_and_frame;
-        std::list<curve_section> graph() const;
-        std::list<curve_section> frame_separation_graph() const;
+        std::list<curve_section> graph() const; // Graph of frame 2 against value
+        std::list<curve_section> frame_separation_graph() const;  // Graph of frame 2 against 'frame 2' - 'frame 1'
     };
 
 protected:
@@ -239,6 +242,9 @@ protected:
 
     stage_and_frame_pair_param<double>  initialisation_focal_length_estimate;
     stage_and_frame_pair_param<double>  initialisation_focal_length_stability;
+
+    stage_and_frame_pair_param<double>  initialisation_focal_length_estimate_2_view;
+    stage_and_frame_pair_param<double>  initialisation_focal_length_estimate_3_view;
 
     std::list<double> mapping_reset_timestamps;
     std::list<int> mapping_reset_frames;

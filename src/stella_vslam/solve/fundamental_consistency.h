@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 #include <list>
+#include <optional>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -21,7 +22,7 @@
 #include "stella_vslam/exports.h"
 
 namespace stella_vslam::camera { class base; }
-
+namespace stella_vslam::data { class frame; }
 namespace stella_vslam_bfx {
 
 struct frame_pair_matches
@@ -50,7 +51,7 @@ public:
 
     static void clear(); // clear for a new camera track
 
-    std::array<double, 2> current_frame_pair; // Set the current frame identifiers - typically timestamps which aren't known when add_frame_pair() is called
+    //std::array<double, 2> current_frame_pair; // Set the current frame identifiers - typically timestamps which aren't known when add_frame_pair() is called
 
     // Always set current_frame_pair before calling this
     bool add_frame_pair(const std::vector<cv::KeyPoint>& undist_keypts_1,
@@ -106,6 +107,48 @@ public:
 
 };
 
+class STELLA_VSLAM_API focal_length_estimator_three_view
+{
+public:
+
+    focal_length_estimator_three_view& operator=(const focal_length_estimator_three_view&) = delete;
+
+    static focal_length_estimator_three_view* get_instance();
+
+    static void clear(); // clear for a new camera track
+
+    //std::array<double, 2> current_frame_pair; // Set the current frame identifiers - typically timestamps which aren't known when add_frame_pair() is called
+
+    bool add_frame_pair(const stella_vslam::data::frame& frm_1,
+                        const stella_vslam::data::frame& frm_2,
+                        const std::vector<std::pair<int, int>>& input_matches_12,
+                        std::vector<bool> const& input_inlier_matches,
+                        const Eigen::Matrix3d F_21,
+                        stella_vslam::camera::base* camera, 
+        Eigen::Matrix3d &new_F_21, bool* focal_length_estimate_is_stable);
+
+protected:
+    //! full reference frame (used by focal_length_estimator_three_view)
+    bool add_frame_pair_match_data(const stella_vslam::data::frame& frm_1,
+                        const stella_vslam::data::frame& frm_2,
+                        const std::vector<std::pair<int, int>>& input_matches_12,
+                        std::vector<bool> const& input_inlier_matches,
+                        const Eigen::Matrix3d F_21);
+
+    //std::optional<double> calculate_focal_length(stella_vslam::camera::base const* camera);
+
+    inline static focal_length_estimator_three_view* instance{ nullptr };
+    focal_length_estimator_three_view() = default;
+    ~focal_length_estimator_three_view() = default;
+    focal_length_estimator_three_view(const focal_length_estimator_three_view&) = default;
+
+
+    std::map<int, stella_vslam::data::frame> frames; // frame to frame data
+    std::list<frame_pair_matches> frame_matches;
+
+    const bool use_two_view_algorithm = true; /// Only use two views for the estimate, not 3
+
+};
 
 /**
 * \brief Orthonormal representation of the fundamental matrix
