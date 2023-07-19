@@ -137,6 +137,15 @@ public:
     void submit_2_3_view_focal_length(std::optional<double> focal_length_2_view,
                                       std::optional<double> focal_length_3_view);
 
+    // Tracking stats
+    //void submit_tracking_by_motion_matches_1(int num_matches, int min_num_matches_threshold); // Initial motion matches
+    //void submit_tracking_by_motion_matches_2(int num_matches, int min_num_matches_threshold); // Motion matches further out if first matching fails
+    //void submit_tracking_by_motion_matches_optimised(int num_matches, int min_num_matches_threshold); // Motion matches after pose optimisation
+    //void submit_tracking_by_bow_matches(int num_matches, int min_num_matches_threshold); // Initial bow matches
+    //void submit_tracking_by_bow_matches_optimised(int num_matches, int min_num_matches_threshold); // BOW matches after pose optimisation
+    //void submit_tracking_by_robust_matches(int num_matches, int min_num_matches_threshold); // Initial robust matches
+    //void submit_tracking_by_robust_matches_optimised(int num_matches, int min_num_matches_threshold); // Robust matches after pose optimisation
+
     double current_frame_timestamp;
 
     // Convert the timestamped metrics to frame numbers
@@ -165,6 +174,7 @@ public:
     metrics& operator=(const metrics&) = delete;
 
     static metrics* get_instance();
+    static metrics* instance();
     static void clear(); // clear for a new camera track
 
     static initialisation_debugging& initialisation_debug();
@@ -199,15 +209,46 @@ public:
     };
 
     template<typename T>
+    struct stage_and_frame_param_with_threshold : public stage_and_frame_param<T> {
+        T threshold = T(0);
+    };
+
+    template<typename T>
     struct stage_and_frame_pair_param {
         std::array<std::map<std::pair<int, int>, T>, max_stage> by_stage_and_frame;
         std::list<curve_section> graph() const; // Graph of frame 2 against value
         std::list<curve_section> frame_separation_graph() const;  // Graph of frame 2 against 'frame 2' - 'frame 1'
     };
 
+
+
+public:
+
+    template<typename Tp, typename T> static void submit_frame_param(stage_and_frame_param_with_threshold<Tp>& param, T value, T threshold);
+    template<typename Tp, typename T> static void submit_frame_param(stage_and_frame_param<Tp>& param, T value);
+
+    // Motion-based track, then bow match based track, then robust_match (tracking_module::track_current_frame)
+    stage_and_frame_param<unsigned int> tracking_motion_inputs_A; // Number of points in the map being matched to the new frame
+    stage_and_frame_param<unsigned int> tracking_motion_inputs_B; // Number of features in the new frame being matched
+    stage_and_frame_param_with_threshold<unsigned int> tracking_motion_matches_1; // Matches
+    stage_and_frame_param_with_threshold<unsigned int> tracking_motion_matches_2; // Matches further out if first matching fails
+    stage_and_frame_param_with_threshold<unsigned int> tracking_motion_matches_optimised; // Matches after pose optimisation
+
+    stage_and_frame_param<unsigned int> tracking_bow_inputs_A; // Number of points in the map being matched to the new frame
+    stage_and_frame_param<unsigned int> tracking_bow_inputs_B; // Number of features in the new frame being matched
+    stage_and_frame_param_with_threshold<unsigned int> tracking_bow_matches; // Matches
+    stage_and_frame_param_with_threshold<unsigned int> tracking_bow_matches_optimised; // Matches after pose optimisation
+
+    stage_and_frame_param<unsigned int> tracking_robust_inputs_A; // Number of points in the map being matched to the new frame
+    stage_and_frame_param<unsigned int> tracking_robust_inputs_B; // Number of features in the new frame being matched
+    stage_and_frame_param_with_threshold<unsigned int> tracking_robust_matches; // Matches
+    stage_and_frame_param_with_threshold<unsigned int> tracking_robust_matches_optimised; // Matches after pose optimisation
+
 protected:
 
     void add_matching_details(std::stringstream& html, curve_section const& graph_feature_count, curve_section const& graph_num_matches) const;
+
+    
 
 protected:
 
@@ -246,6 +287,8 @@ protected:
     stage_and_frame_pair_param<double>  initialisation_focal_length_estimate_2_view;
     stage_and_frame_pair_param<double>  initialisation_focal_length_estimate_3_view;
 
+
+
     std::list<double> mapping_reset_timestamps;
     std::list<int> mapping_reset_frames;
 
@@ -253,11 +296,28 @@ protected:
 
     initialisation_debugging initialisation_debug_object;
 
-    inline static metrics* instance{nullptr};
+    inline static metrics* m_instance{nullptr};
     metrics() = default;
     ~metrics() = default;
     metrics(const metrics&) = default;
 };
+
+template<typename Tp, typename T>
+void metrics::submit_frame_param(stage_and_frame_param_with_threshold<Tp>& param, T value, T threshold) {
+    std::optional<stage_and_frame> stage_with_frame = instance()->timestamp_to_frame(instance()->current_frame_timestamp);
+    if (!stage_with_frame)
+        return;
+    param.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = (Tp)value;
+    param.threshold = (Tp)threshold;
+}
+
+template<typename Tp, typename T>
+void metrics::submit_frame_param(stage_and_frame_param<Tp>& param, T value) {
+    std::optional<stage_and_frame> stage_with_frame = instance()->timestamp_to_frame(instance()->current_frame_timestamp);
+    if (!stage_with_frame)
+        return;
+    param.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = (Tp)value;
+}
 
 class STELLA_VSLAM_API metrics_copy {
 public:

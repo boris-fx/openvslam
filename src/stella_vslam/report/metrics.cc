@@ -237,15 +237,21 @@ namespace stella_vslam_bfx {
     const double metrics::focal_percent_error_trigger = 50.0;
 
     metrics* metrics::get_instance() {
-        if (!instance)
-            instance = new metrics();
-        return instance;
+        if (!m_instance)
+            m_instance = new metrics();
+        return m_instance;
+    }
+
+    metrics* metrics::instance() {
+        if (!m_instance)
+            m_instance = new metrics();
+        return m_instance;
     }
 
     void metrics::clear() {
-        if (instance) {
-            delete instance;
-            instance = nullptr;
+        if (m_instance) {
+            delete m_instance;
+            m_instance = nullptr;
         }
     }
 
@@ -453,6 +459,56 @@ namespace stella_vslam_bfx {
         auto a = initialisation_focal_length_estimate_2_view.graph();
         int yy = 0;
     }
+#if 0
+    template<typename Tp, typename T>
+    void metrics::submit_frame_param(stage_and_frame_param_with_threshold<Tp> &param, T value, T threshold) {
+        std::optional<stage_and_frame> stage_with_frame = instance()->timestamp_to_frame(instance()->current_frame_timestamp);
+        if (!stage_with_frame)
+            return;
+        param.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = (Tp)value;
+        param.threshold = (Tp)threshold;
+    }
+    template void metrics::submit_frame_param<int, int>(stage_and_frame_param_with_threshold<int> &param, int value, int threshold);
+    template void metrics::submit_frame_param<int, unsigned int>(stage_and_frame_param_with_threshold<int> &param, unsigned int value, unsigned int threshold);
+    template void metrics::submit_frame_param<unsigned int, int>(stage_and_frame_param_with_threshold<unsigned int>& param, int value, int threshold);
+    template void metrics::submit_frame_param<unsigned int, unsigned int>(stage_and_frame_param_with_threshold<unsigned int> &param, unsigned int value, unsigned int threshold);
+    template void metrics::submit_frame_param<double, double>(stage_and_frame_param_with_threshold<double> &param, double value, double threshold);
+
+    template<typename Tp, typename T>
+    void metrics::submit_frame_param(stage_and_frame_param<Tp>& param, T value) {
+        std::optional<stage_and_frame> stage_with_frame = instance()->timestamp_to_frame(instance()->current_frame_timestamp);
+        if (!stage_with_frame)
+            return;
+        param.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = (Tp)value;
+    }
+    template void metrics::submit_frame_param<int, int>(stage_and_frame_param<int>& param, int value);
+    template void metrics::submit_frame_param<int, unsigned int>(stage_and_frame_param<int>& param, unsigned int value);
+    template void metrics::submit_frame_param<unsigned int, int>(stage_and_frame_param<unsigned int>& param, int value);
+    template void metrics::submit_frame_param<unsigned int, unsigned int>(stage_and_frame_param<unsigned int>& param, unsigned int value);
+    template void metrics::submit_frame_param<double, double>(stage_and_frame_param<double>& param, double value);
+#endif
+    //void metrics::submit_tracking_by_motion_matches_1(int num_matches, int min_num_matches_threshold) {
+    //    submit_frame_param(num_matches, min_num_matches_threshold, tracking_motion_matches_1);
+    //}
+    //void metrics::submit_tracking_by_motion_matches_2(int num_matches, int min_num_matches_threshold) {
+    //    submit_frame_param(num_matches, min_num_matches_threshold, tracking_motion_matches_2);
+    //}
+    //void metrics::submit_tracking_by_motion_matches_optimised(int num_matches, int min_num_matches_threshold) {
+    //    submit_frame_param(num_matches, min_num_matches_threshold, tracking_motion_matches_optimised);
+    //}
+    //void metrics::submit_tracking_by_bow_matches(int num_matches, int min_num_matches_threshold) {
+    //    submit_frame_param(num_matches, min_num_matches_threshold, tracking_bow_matches);
+    //}
+    //void metrics::submit_tracking_by_bow_matches_optimised(int num_matches, int min_num_matches_threshold) {
+    //    submit_frame_param(num_matches, min_num_matches_threshold, tracking_bow_matches_optimised);
+    //}
+    //void metrics::submit_tracking_by_robust_matches(int num_matches, int min_num_matches_threshold) {
+    //    submit_frame_param(num_matches, min_num_matches_threshold, tracking_robust_matches);
+    //}
+    //void metrics::submit_tracking_by_robust_matches_optimised(int num_matches, int min_num_matches_threshold) {
+    //    submit_frame_param(num_matches, min_num_matches_threshold, tracking_robust_matches_optimised);
+    //}
+
     /*template<typename T>
     void transform_metrics_frame_data(metrics::stage_and_frame_param<T> &data,
                                       std::map<double, stage_and_frame> const& index_transform)
@@ -1369,6 +1425,22 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "<h2> Feature match counts</h2>\n";
     write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Feature count", graph_feature_count}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
     html << "<hr>" << std::endl;
+
+    // Tracking stats
+    html << "<p>Tracking: ";
+    write_graph_as_svg(html, Graph("Frame", "Motion Match Count", std::set<SplitCurve>({ {"tracking_motion_inputs_A", tracking_motion_inputs_A.graph()},
+                {"tracking_motion_inputs_B", tracking_motion_inputs_B.graph()},
+                {"tracking_motion_matches_1", tracking_motion_matches_1.graph()} ,
+                {"tracking_motion_matches_2", tracking_motion_matches_2.graph()} ,
+                {"tracking_motion_matches_optimised", tracking_motion_matches_optimised.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, tracking_motion_matches_1.threshold));
+    write_graph_as_svg(html, Graph("Frame", "BOW Match Count", std::set<SplitCurve>({ {"tracking_bow_inputs_A", tracking_bow_inputs_A.graph()},
+                {"tracking_bow_inputs_B", tracking_bow_inputs_B.graph()},
+                {"tracking_bow_matches", tracking_bow_matches.graph()} ,
+                {"tracking_bow_matches_optimised", tracking_bow_matches_optimised.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, tracking_bow_matches.threshold));
+    write_graph_as_svg(html, Graph("Frame", "robust Match Count", std::set<SplitCurve>({ {"tracking_robust_inputs_A", tracking_robust_inputs_A.graph()},
+                {"tracking_robust_inputs_B", tracking_robust_inputs_B.graph()},
+                {"tracking_robust_matches", tracking_robust_matches.graph()} ,
+                {"tracking_robust_matches_optimised", tracking_robust_matches_optimised.graph()} }), range_behaviour::split_by_stage, range_behaviour::no_max, tracking_robust_matches.threshold));
 
     // Structure type (planar or non-planar) costs during two-view matching 
     std::map<double, double> graph_cost_H = select_second_frame_data(initialisation_debug_object.p_cost_H.by_frame);

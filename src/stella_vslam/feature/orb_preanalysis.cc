@@ -23,6 +23,15 @@
 namespace stella_vslam_bfx{
 
 
+    // take first, last and centre frame + 1 every 10 sec (1000 frames-ish)
+    // Check for variation
+    // 
+    // Create a keyframed parameter vs
+    // 
+    // Check at start, then monitor and adjustas we go through the video, especially at each reset
+    // Num features, num scale 0 features, num matches
+    // after init num scale 0 features may be less relevant??
+
 void preanalysis(//stella_vslam::config const& cfg,
                  const cv::Mat& img_1, const cv::Mat& mask_1,
                  const cv::Mat& img_2, const cv::Mat& mask_2,

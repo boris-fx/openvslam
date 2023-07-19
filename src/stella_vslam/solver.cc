@@ -16,6 +16,7 @@
 #include <stella_vslam/config.h>
 #include <stella_vslam/feature/orb_preanalysis.h>
 #include <stella_vslam/module/frame_track_repositioning.h>
+#include <stella_vslam/solve/fundamental_consistency.h>
 
 #include "type.h"
 #include "system.h"
@@ -47,11 +48,15 @@ solver::solver(const std::shared_ptr<config>& cfg,
                std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
 : get_frame_(get_frame), cfg_(cfg), vocab_data_(nullptr), vocab_file_path_(vocab_file_path)
 {
+    // Make sure that static objects are cleared between solver instances
+    metrics::clear();
+    focal_length_estimator::clear();
+    focal_length_estimator_three_view::clear();
+
     // Set the min_pixel_size based on video size
     unsigned& min_feature_size = const_cast<unsigned&>(cfg->settings_.min_feature_size_);
     unsigned  invariant_min_feature_size = min_feature_size;
     min_feature_size = stella_vslam_bfx::min_feature_size_from_invariant_min_feature_size(invariant_min_feature_size, cfg->settings_.cols_ * cfg->settings_.rows_);
-
     spdlog::info("cols {}, rows {}, inv_min_feature_size {}, min_feature_size {}", cfg->settings_.cols_, cfg->settings_.rows_, invariant_min_feature_size, min_feature_size);
 
     // build the slam system
@@ -65,9 +70,23 @@ solver::solver(const std::shared_ptr<config>& cfg,
 solver::solver(const std::shared_ptr<config>& cfg,
                std::ifstream & vocab_data,
                std::function<bool(int, cv::Mat&, cv::Mat&, stella_vslam_bfx::prematched_points&)> get_frame)
-: get_frame_(get_frame), cfg_(cfg), vocab_data_(&vocab_data), vocab_file_path_() {
+: get_frame_(get_frame), cfg_(cfg), vocab_data_(&vocab_data), vocab_file_path_()
+{
+    // Make sure that static objects are cleared between solver instances
+    metrics::clear();
+    focal_length_estimator::clear();
+    focal_length_estimator_three_view::clear();
+
+    // Set the min_pixel_size based on video size
+    unsigned& min_feature_size = const_cast<unsigned&>(cfg->settings_.min_feature_size_);
+    unsigned  invariant_min_feature_size = min_feature_size;
+    min_feature_size = stella_vslam_bfx::min_feature_size_from_invariant_min_feature_size(invariant_min_feature_size, cfg->settings_.cols_ * cfg->settings_.rows_);
+    spdlog::info("cols {}, rows {}, inv_min_feature_size {}, min_feature_size {}", cfg->settings_.cols_, cfg->settings_.rows_, invariant_min_feature_size, min_feature_size);
+
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_data);
-    slam_->startup();
+
+    bool already_have_map(false); // see run_video_slam for the case where we already have a map
+    slam_->startup(!already_have_map);
 }
 #endif
 
