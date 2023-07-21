@@ -16,6 +16,8 @@
 
 #include <opencv2/core/mat.hpp>
 
+namespace stella_vslam_bfx { class orb_feature_monitor; }
+
 namespace stella_vslam {
 
 class config;
@@ -245,6 +247,7 @@ private:
     //! config
     const std::shared_ptr<config> cfg_;
 
+    std::shared_ptr<stella_vslam_bfx::orb_feature_monitor> feature_monitor_;
 public:
     //! camera model
     camera::base* camera_ = nullptr;

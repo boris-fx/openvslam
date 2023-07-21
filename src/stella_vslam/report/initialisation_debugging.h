@@ -16,6 +16,8 @@
 #include "stella_vslam/exports.h"
 #include "stella_vslam/config_settings.h"
 
+struct curve_section;
+
 namespace stella_vslam_bfx {
 
 struct stage_and_frame {
@@ -70,7 +72,7 @@ public:
 
     void submit_feature_motions(double quantile_25, double quantile_50, double quantile_75);
 
-    std::map<double, int> feature_count_by_timestamp;
+    //std::map<double, int> feature_count_by_timestamp;
 
     void create_frame_data(std::map<double, stage_and_frame> const& timestamp_to_stage_and_frame);
 
@@ -82,7 +84,7 @@ public:
 
 protected:
     
-    std::map<int, int> feature_count_by_frame;
+    //std::map<int, int> feature_count_by_frame;
 
     frame_param<double> p_num_matches;
 
@@ -176,6 +178,19 @@ std::map<double, T> select_second_frame_data(std::map<std::array<int, 2>, T> con
         //if (i.first[0]==first_frame)
         output[i.first[1]] = i.second;
     return output;
+}
+
+// map entry {a, b}->c becomes b->c
+template<typename T>
+std::list<curve_section> select_second_frame_data_for_curves(std::map<std::array<int, 2>, T> const& input, int stage)
+{
+    curve_section output;
+    //int first_frame = input.empty() ? 0 : input.begin()->first[0];
+    for (auto const& i : input)
+        //if (i.first[0]==first_frame)
+        output[i.first[1]] = (double)i.second;
+    output.stage = stage;
+    return { output };
 }
 
 } // namespace stella_vslam_bfx

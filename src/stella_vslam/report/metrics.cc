@@ -752,6 +752,24 @@ struct graph_stats {
             mean = sum / double(graph.size());
         }
     }
+    graph_stats(std::list<curve_section> const& curves)
+        : mean(0), min(0), max(0)
+    {
+        double sum(0);
+        int count(0);
+        for (auto const& curve : curves) {
+            for (auto const& value : curve) {
+                if (min > value.second)
+                    min = value.second;
+                if (max < value.second)
+                    max = value.second;
+                sum += value.second;
+                ++count;
+            }
+        }
+        if (count>0)
+            mean = sum / double(count);
+    }
     double mean;
     double min;
     double max;
@@ -1003,7 +1021,7 @@ bool optional_greater(std::optional<TA> const& a, std::optional<TB> const& b)
     return a.value() > b.value();
 }
 
-void metrics::add_matching_details(std::stringstream& html, curve_section const& graph_feature_count, curve_section const& graph_num_matches) const
+void metrics::add_matching_details(std::stringstream& html, std::list<curve_section> const& graph_feature_count, std::list<curve_section> const& graph_num_matches) const
 {
     struct initialisation_attempt {
         int frame_0;
@@ -1040,11 +1058,13 @@ void metrics::add_matching_details(std::stringstream& html, curve_section const&
 
         // Unguided matching
         attempt.num_unguided_matches = attempt_unguided_matches.second;
-        auto f_feature_count_0 = initialisation_debug_object.feature_count_by_frame.find(attempt.frame_0);
-        if (f_feature_count_0 != initialisation_debug_object.feature_count_by_frame.end())
+        int stage(0);
+        auto const& feature_count_map(metrics::instance()->detected_feature_count.by_stage_and_frame[stage]);
+        auto f_feature_count_0 = feature_count_map.find(attempt.frame_0);
+        if (f_feature_count_0 != feature_count_map.end())
             attempt.num_features_0 = f_feature_count_0->second;
-        auto f_feature_count_1 = initialisation_debug_object.feature_count_by_frame.find(attempt.frame_1);
-        if (f_feature_count_1 != initialisation_debug_object.feature_count_by_frame.end())
+        auto f_feature_count_1 = feature_count_map.find(attempt.frame_1);
+        if (f_feature_count_1 != feature_count_map.end())
             attempt.num_features_1 = f_feature_count_1->second;
 
         // Guided matching
@@ -1395,12 +1415,15 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
                                                                                           {"3-view estimate", initialisation_focal_length_estimate_3_view.graph()} }), range_behaviour::split_by_stage, y_axis_scaling, focal_gt));
     }
 
-    curve_section graph_num_matches = select_second_frame_data(initialisation_debug_object.p_num_matches.by_frame);
-    curve_section graph_feature_count;
-    for (auto const& i : initialisation_debug_object.feature_count_by_frame)
-        graph_feature_count[i.first] = i.second;
-    graph_num_matches.stage = graph_feature_count.stage = 0;
-    add_matching_details(html, graph_feature_count, graph_num_matches);
+    std::list<curve_section> graph_num_matches = select_second_frame_data_for_curves(initialisation_debug_object.p_num_matches.by_frame, 0);
+    int stage(0);
+    //curve_section graph_feature_count = detected_feature_count.graph();
+    //curve_section graph_feature_count;
+    //for (auto const& i : initialisation_debug_object.feature_count_by_frame)
+    //    graph_feature_count[i.first] = i.second;
+    //graph_feature_count.stage = 0;
+    //graph_num_matches.stage = 0;
+    add_matching_details(html, detected_feature_count.graph(), graph_num_matches);
 
 
     // Timing
@@ -1423,7 +1446,8 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
 
     // Number of features and matches by frame
     html << "<h2> Feature match counts</h2>\n";
-    write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<Curve>({ {"Feature count", graph_feature_count}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
+    write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<SplitCurve>({ {"Feature count", detected_feature_count.graph()}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
+    write_graph_as_svg(html, Graph("Frame", "min feature size", std::set<SplitCurve>({ {"Min feature size", min_feature_size.graph()} })));
     html << "<hr>" << std::endl;
 
     // Tracking stats
@@ -1553,7 +1577,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     write_graph_as_svg(html, Graph("Frame #2", "Count", std::set<SplitCurve>({ {"Frame 1 points", area_match_frame_1_points.graph()},
                                                                                {"Fail prematched", area_match_fail_prematched.graph()},
                                                                                {"Num attempted", area_match_num_attempted.graph()},
-                                                                                {"Feature count", { graph_feature_count } },
+                                                                                {"Feature count", { detected_feature_count.graph() } },
                                                                                 {"Matches to frame", { graph_num_matches } },
                                                                                {"Fail scale", area_match_fail_scale.graph()},
                                                                                {"Fail cell", area_match_fail_cell.graph()},

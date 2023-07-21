@@ -53,12 +53,6 @@ solver::solver(const std::shared_ptr<config>& cfg,
     focal_length_estimator::clear();
     focal_length_estimator_three_view::clear();
 
-    // Set the min_pixel_size based on video size
-    unsigned& min_feature_size = const_cast<unsigned&>(cfg->settings_.min_feature_size_);
-    unsigned  invariant_min_feature_size = min_feature_size;
-    min_feature_size = stella_vslam_bfx::min_feature_size_from_invariant_min_feature_size(invariant_min_feature_size, cfg->settings_.cols_ * cfg->settings_.rows_);
-    spdlog::info("cols {}, rows {}, inv_min_feature_size {}, min_feature_size {}", cfg->settings_.cols_, cfg->settings_.rows_, invariant_min_feature_size, min_feature_size);
-
     // build the slam system
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_file_path);
 
@@ -76,12 +70,6 @@ solver::solver(const std::shared_ptr<config>& cfg,
     metrics::clear();
     focal_length_estimator::clear();
     focal_length_estimator_three_view::clear();
-
-    // Set the min_pixel_size based on video size
-    unsigned& min_feature_size = const_cast<unsigned&>(cfg->settings_.min_feature_size_);
-    unsigned  invariant_min_feature_size = min_feature_size;
-    min_feature_size = stella_vslam_bfx::min_feature_size_from_invariant_min_feature_size(invariant_min_feature_size, cfg->settings_.cols_ * cfg->settings_.rows_);
-    spdlog::info("cols {}, rows {}, inv_min_feature_size {}, min_feature_size {}", cfg->settings_.cols_, cfg->settings_.rows_, invariant_min_feature_size, min_feature_size);
 
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_data);
 
@@ -172,7 +160,7 @@ bool solver::track_frame_range(int begin, int end, tracking_direction direction,
         return false;
 
     // Pre-analyse the video to adjust min_feature_size if it doesn't result in enough matches
-    {
+    if (!use_feature_monitor()) {
         cv::Mat frame_image_1, frame_image_2;
         cv::Mat mask_1, mask_2;
         prematched_points extra_keypoints_1, extra_keypoints_2;

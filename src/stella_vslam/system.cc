@@ -25,6 +25,7 @@
 #include "stella_vslam/util/image_converter.h"
 #include "stella_vslam/report/initialisation_debugging.h"
 #include "stella_vslam/report/metrics.h"
+#include "stella_vslam/feature/orb_preanalysis.h"
 
 #include <opencv2/imgcodecs.hpp>
 
@@ -147,7 +148,10 @@ void system::init(const config * cfg)
     // preprocessing modules
     depthmap_factor_ = get_depthmap_factor(camera_, cfg_->settings_);
     auto mask_rectangles = cfg->settings_.mask_rectangles_;
-    const auto min_size = cfg->settings_.min_feature_size_;
+    //const auto min_size = cfg->settings_.min_feature_size_;
+    const auto min_size = stella_vslam_bfx::orb_feature_monitor::default_min_feature_size_for_video_size(cfg_->settings_.cols_, cfg_->settings_.rows_);
+    const unsigned int target_feature_count = 1500; // todo: create a user parameter for this
+    feature_monitor_ = std::make_shared<stella_vslam_bfx::orb_feature_monitor>(target_feature_count);
     spdlog::info("system - min_size: {}", min_size);
     extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);
     if (camera_->setup_type_ == camera::setup_type_t::Stereo) {
@@ -468,25 +472,9 @@ data::frame system::create_monocular_frame(const cv::Mat& img, const double time
     keypts_.clear();
     if (use_orb_features_) {
         // Extract ORB feature
+        feature_monitor_->update_feature_extractor(img_gray, mask, extractor_left_);
         extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
-
-        //bool boost_applied = extractor_boost_check(keypts_);
-        //if (boost_applied) // re-extract with the boosting
-         //   extractor_left_->extract(img_gray, mask, keypts_, frm_obs.descriptors_);
-
-
-        //spdlog::info("feature extract: {} colour order {} {} {} {}", keypts_.size(), 
-        //    static_cast<unsigned int>(camera_->color_order_), 
-        //    stella_vslam::camera::color_order_to_string[static_cast<unsigned int>(camera_->color_order_)],
-        //    mask.rows, mask.cols);
-
-        //static int c = 0;
-        //++c;
-        //std::string im_filename = "im_test_" + std::to_string(c) + ".bmp";
-        //
-        ////if (c==0)
-        //    cv::imwrite(im_filename, img_gray);
-        
+        feature_monitor_->record_extraction_result(keypts_.size(), extractor_left_);
     }
     // Add the prematched points to the input vector for undistorting
     if (undistort_prematches_)
@@ -826,9 +814,9 @@ bool system::extractor_boost_check(std::vector<cv::KeyPoint> const& keypts) {
         min_size_boost = 0.5f;
         spdlog::info("system - applying min size boost of {}", min_size_boost);
         if (extractor_left_)
-            extractor_left_->min_size_boost_ = min_size_boost;
+            extractor_left_->min_size_multiplier_ = min_size_boost;
         if (extractor_right_)
-            extractor_right_->min_size_boost_ = min_size_boost;
+            extractor_right_->min_size_multiplier_ = min_size_boost;
     }
 
     stella_vslam_bfx::metrics::get_instance()->feature_min_size_scale = min_size_boost;
@@ -842,9 +830,9 @@ void system::boost_extractors(float boost) {
     stella_vslam_bfx::metrics::get_instance()->feature_min_size_scale = boost;
 
     if (extractor_left_)
-        extractor_left_->min_size_boost_ = boost;
+        extractor_left_->min_size_multiplier_ = boost;
     if (extractor_right_)
-        extractor_right_->min_size_boost_ = boost;
+        extractor_right_->min_size_multiplier_ = boost;
 }
 
 

@@ -227,6 +227,10 @@ public:
     template<typename Tp, typename T> static void submit_frame_param(stage_and_frame_param_with_threshold<Tp>& param, T value, T threshold);
     template<typename Tp, typename T> static void submit_frame_param(stage_and_frame_param<Tp>& param, T value);
 
+    // Feature detection and feature monitor
+    stage_and_frame_param<unsigned int> detected_feature_count; // Number of points found by the feature detector
+    stage_and_frame_param<double>       min_feature_size; // min_feature_size used by the detector
+
     // Motion-based track, then bow match based track, then robust_match (tracking_module::track_current_frame)
     stage_and_frame_param<unsigned int> tracking_motion_inputs_A; // Number of points in the map being matched to the new frame
     stage_and_frame_param<unsigned int> tracking_motion_inputs_B; // Number of features in the new frame being matched
@@ -246,7 +250,7 @@ public:
 
 protected:
 
-    void add_matching_details(std::stringstream& html, curve_section const& graph_feature_count, curve_section const& graph_num_matches) const;
+    void add_matching_details(std::stringstream& html, std::list<curve_section> const& graph_feature_count, std::list<curve_section> const& graph_num_matches) const;
 
     
 

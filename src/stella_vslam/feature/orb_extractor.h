@@ -38,7 +38,8 @@ public:
     std::vector<cv::Mat> image_pyramid_;
 
     //! bfx: A multiplier applied to min_size_. Dynamically set by the system class if it finds the number of features being matched is too small.
-    float min_size_boost_ = 1.0f;
+    float min_size_multiplier_ = 1.0f;
+    unsigned int min_feature_size() const;
 
 private:
     //! Calculate scale factors and sigmas

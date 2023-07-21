@@ -99,6 +99,10 @@ void orb_extractor::extract(const cv::_InputArray& in_image, const cv::_InputArr
     }
 }
 
+unsigned int orb_extractor::min_feature_size() const {
+    return min_size_;
+}
+
 void orb_extractor::create_rectangle_mask(const unsigned int cols, const unsigned int rows) {
     if (rect_mask_.empty()) {
         rect_mask_ = cv::Mat(rows, cols, CV_8UC1, cv::Scalar(255));
@@ -266,7 +270,7 @@ std::vector<cv::KeyPoint> orb_extractor::distribute_keypoints_via_tree(const std
 
         // Fork node and remove the old one from nodes
         while (iter != nodes.end()) {
-            if (iter->keypts_.size() == 1 || iter->size() * scale_factor * scale_factor <= (unsigned int)(float(min_size_) * min_size_boost_)) {
+            if (iter->keypts_.size() == 1 || iter->size() * scale_factor * scale_factor <= (unsigned int)(float(min_size_) * min_size_multiplier_)) {
                 iter++;
                 continue;
             }

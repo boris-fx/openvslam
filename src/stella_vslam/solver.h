@@ -12,6 +12,7 @@
 
 #include "stella_vslam/exports.h"
 #include <stella_vslam/camera/perspective.h>
+#include <stella_vslam/feature/orb_preanalysis.h>
 
 namespace cv {
     class Mat;
@@ -114,6 +115,7 @@ protected:
     std::shared_ptr<stella_vslam::config>  cfg_;
     std::ifstream                         *vocab_data_;
     std::string                            vocab_file_path_;
+
 };
 
 } // namespace stella_vslam_bfx

@@ -9,6 +9,7 @@
 #include "plot_html.h"
 #include <stella_vslam/solve/fundamental_consistency.h>
 #include <stella_vslam/data/frame.h>
+#include <stella_vslam/report/metrics.h>
 
 namespace stella_vslam_bfx {
 
@@ -218,7 +219,7 @@ void initialisation_debugging::create_frame_data(std::map<double, stage_and_fram
     for (auto& param : p_map_double_double)
         transform_frame_data(param->by_timestamp, param->by_frame, timestamp_to_stage_and_frame);
 
-    transform_frame_data(feature_count_by_timestamp, feature_count_by_frame, timestamp_to_stage_and_frame);
+    //transform_frame_data(feature_count_by_timestamp, feature_count_by_frame, timestamp_to_stage_and_frame);
 }
 
 std::list<frame_param<double>*> initialisation_debugging::frame_params_double()
@@ -417,8 +418,10 @@ void initialisation_debugging::add_to_html(std::stringstream& html, std::optiona
 
     std::map<double, double> graph_percent_matches;
     if (!p_num_matches.by_frame.empty()) {
-        auto f = feature_count_by_frame.find(p_num_matches.by_frame.begin()->first[0]);
-        if (f != feature_count_by_frame.end()) {
+        int stage(0);
+        auto const& feature_count_map(metrics::instance()->detected_feature_count.by_stage_and_frame[stage]);
+        auto f = feature_count_map.find(p_num_matches.by_frame.begin()->first[0]);
+        if (f != feature_count_map.end()) {
             double scale = 100.0 / double(f->second);
             graph_percent_matches = select_scaled_second_frame_data(p_num_matches.by_frame, scale);
 
@@ -573,11 +576,13 @@ void initialisation_debugging::save_html_report(std::string_view const& filename
 
 std::optional<int> initialisation_debugging::average_init_frame_feature_count() const
 {
-    if (feature_count_by_frame.empty())
+    int stage(0);
+    auto const& feature_count_map(metrics::instance()->detected_feature_count.by_stage_and_frame[stage]);
+    if (feature_count_map.empty())
         return std::nullopt;
-    int sum = std::accumulate(std::begin(feature_count_by_frame), std::end(feature_count_by_frame), 0,
+    int sum = std::accumulate(std::begin(feature_count_map), std::end(feature_count_map), 0,
                               [](int value, const std::map<int, int>::value_type& p){ return value + p.second; } );
-    return int(0.5 + double(sum) / double(feature_count_by_frame.size()));
+    return int(0.5 + double(sum) / double(feature_count_map.size()));
 }
 
 std::optional<int> initialisation_debugging::average_init_frame_unguided_match_count() const
