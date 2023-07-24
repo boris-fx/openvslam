@@ -10,6 +10,7 @@
 #include <memory>
 #include <map>
 #include <utility>
+#include <optional>
 
 namespace stella_vslam { class system; class config; }
 namespace stella_vslam::feature { class orb_extractor; }
@@ -43,16 +44,21 @@ namespace stella_vslam_bfx {
     protected:
 
 
-        bool initial_min_feature_size_multiplier_set_;
+       //bool initial_min_feature_size_multiplier_set_;
 
         unsigned int base_min_feature_size_;
 
         unsigned int target_feature_count_;
 
-        std::map<int, std::pair<float, int>> multiplier_and_count_by_frame_;
+        struct frame_data {
+            int frame;
+            float multiplier;
+            int feature_count;
+        };
+        std::map<int, frame_data> data_by_frame_;
+        std::optional<frame_data> last_frame_data_;
 
-        int   latest_recorded_frame_;
-        float multiplier_for_latest_recorded_frame_;
+
     };
 
 } // namespace stella_vslam_bfx

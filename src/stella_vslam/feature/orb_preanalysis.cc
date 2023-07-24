@@ -110,7 +110,7 @@ void preanalysis(//stella_vslam::config const& cfg,
 #endif
 
 orb_feature_monitor::orb_feature_monitor(unsigned int target_feature_count)
-: target_feature_count_(target_feature_count), initial_min_feature_size_multiplier_set_(false)
+: target_feature_count_(target_feature_count)
 {
 }
 
@@ -120,7 +120,7 @@ double bisection(double a, double b, std::function<int(double)> const& func, dou
     int fb = func(b);
     int fc;
     if (fa * fb >= 0)
-        return std::abs(fa) < std::abs(fb) ? a : b; // a and b both give too few (or too many) features, return the closest to the target
+        return std::abs(fa) < std::abs(fb) ? a : b; // a and b both give too few (or too many) features, return the nearest to the target
 
     double c = a;
 
@@ -142,7 +142,7 @@ double bisection(double a, double b, std::function<int(double)> const& func, dou
             fa = fc;
         }
     }
-    return std::abs(fa) < std::abs(fb) ? a : b; // return the closest to the target
+    return std::abs(fa) < std::abs(fb) ? a : b; // return the nearest to the target
 }
 
 void save_graph_min_feature_size_vs_feature_count(const cv::Mat& img, const cv::Mat& mask, stella_vslam::feature::orb_extractor* extractor, std::optional<double> target_feature_count)
@@ -177,18 +177,92 @@ void save_graph_min_feature_size_vs_feature_count(const cv::Mat& img, const cv::
     write_graph_as_svg(html.html, vs_min_feature_size);
 }
 
+
+template <typename T1, typename T2>
+std::optional<T2> nearest_data_in_map(const std::map<T1, T2>& data, T1 key)
+{
+    if (data.size() == 0)
+        return std::nullopt;
+
+    auto lower = data.lower_bound(key);
+
+    if (lower == data.end()) // If none found, return the last one.
+        return std::prev(lower)->second;
+
+    if (lower == data.begin())
+        return lower->second;
+
+    // Check which one is nearest.
+    auto previous = std::prev(lower);
+    if ((key - previous->first) < (lower->first - key))
+        return previous->second;
+
+    return lower->second;
+}
+
 void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv::Mat& mask, stella_vslam::feature::orb_extractor* extractor)
 {
     if (!use_feature_monitor())
         return;
-    if (initial_min_feature_size_multiplier_set_)
+    if (!extractor)
         return;
+    
+    int const low_min_feature_size(9); // lowest acceptable feature area in pixels
+    int const high_min_feature_size(80000); // highest acceptable feature area in pixels
+
+    // Get the frame number (currently from the metrics)
+    std::optional<stage_and_frame> stage_with_frame = metrics::instance()->timestamp_to_frame(metrics::instance()->current_frame_timestamp);
+    if (!stage_with_frame)
+        return;
+    int frame = stage_with_frame->frame;
+
+    // First check for a historic frame match, use the multiplier if one is found
+    auto frame_match = data_by_frame_.find(frame);
+    if (frame_match != data_by_frame_.end()) {
+        extractor->min_size_multiplier_ = frame_match->second.multiplier;
+        return;
+    }
+
+    // Use a nearly frame, modifying the multiplier if necessary
+    std::optional<frame_data> nearby_frame_data = last_frame_data_;
+    if (!nearby_frame_data || std::abs(nearby_frame_data->frame - frame)>1)
+        nearby_frame_data = nearest_data_in_map(data_by_frame_, frame);
+    if (nearby_frame_data) {
+
+        
+        float min_size_multiplier = nearby_frame_data->multiplier;
+
+        // Decrease the multiplier if too few features were detected last time
+        int nearby_feature_count = nearby_frame_data->feature_count;
+        if (float(nearby_feature_count) < 0.95f * float(target_feature_count_)) {
+            float current_min_feature_size = extractor->min_size_multiplier_ * extractor->min_feature_size();
+            float current_min_feature_diameter = sqrt(current_min_feature_size);
+            float new_min_feature_diameter = current_min_feature_diameter - 10.0f;
+            float new_min_feature_size = new_min_feature_diameter * new_min_feature_diameter;
+            if (new_min_feature_size < low_min_feature_size)
+                new_min_feature_size = low_min_feature_size;
+            min_size_multiplier = new_min_feature_size / extractor->min_feature_size();
+        }
+
+        // Increase the multiplier if too many features were detected last time
+        if (float(nearby_feature_count) > 1.05f * float(target_feature_count_)) {
+            float current_min_feature_size = extractor->min_size_multiplier_ * extractor->min_feature_size();
+            float current_min_feature_diameter = sqrt(current_min_feature_size);
+            float new_min_feature_diameter = current_min_feature_diameter + 10.0f;
+            float new_min_feature_size = new_min_feature_diameter * new_min_feature_diameter;
+            if (new_min_feature_size < low_min_feature_size)
+                new_min_feature_size = low_min_feature_size;
+            min_size_multiplier = new_min_feature_size / extractor->min_feature_size();
+        }
+
+        extractor->min_size_multiplier_ = min_size_multiplier;
+
+    }
+
+    // If there's no other frame data initialise the multiplier
 
     //Should be commented
     //save_graph_min_feature_size_vs_feature_count(img, mask, extractor, target_feature_count_);
-
-    int const low_min_feature_size(9); // lowest acceptable feature area in pixels
-    int const high_min_feature_size(80000); // highest acceptable feature area in pixels
 
     double low_min_feature_width(sqrt(double(low_min_feature_size)));
     double high_min_feature_width(sqrt(double(high_min_feature_size)));
@@ -210,61 +284,39 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
     float min_feature_size_multiplier = best_min_feature_size / extractor->min_feature_size();
     extractor->min_size_multiplier_ = min_feature_size_multiplier;
 
-    initial_min_feature_size_multiplier_set_ = true;
 }
 
 void orb_feature_monitor::record_extraction_result(unsigned int feature_count, stella_vslam::feature::orb_extractor* extractor)
 {    
     if (!use_feature_monitor())
         return;
+    if (!extractor)
+        return;
 
+    // Store in the general metrics
     metrics::submit_frame_param(metrics::instance()->detected_feature_count, feature_count);
     if (extractor)
         metrics::submit_frame_param(metrics::instance()->min_feature_size, extractor->min_feature_size() * extractor->min_size_multiplier_);
 
-    //stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[init_frm_.timestamp_] = init_frm_.frm_obs_.num_keypts_;
-//stella_vslam_bfx::metrics::initialisation_debug().feature_count_by_timestamp[curr_frm.timestamp_] = curr_frm.frm_obs_.num_keypts_;
+    // Store the result here
+    //int   latest_recorded_frame_;
+  //  float multiplier_for_latest_recorded_frame_ = extractor->
 
     // Get the current frame and stage from the metrics object
     std::optional<stage_and_frame> stage_with_frame = metrics::instance()->timestamp_to_frame(metrics::instance()->current_frame_timestamp);
-    //if (!stage_with_frame)
-   //     return;
 
+    // Store the result
     if (stage_with_frame) {
-        // Has the frame been seen before?
-        auto f_previous_data = multiplier_and_count_by_frame_.find(stage_with_frame.value().frame);
+        frame_data data;
+        data.frame = stage_with_frame->frame;
+        data.multiplier = extractor ? extractor->min_size_multiplier_ : -1.0f;
+        data.feature_count = feature_count;
 
-       
-
-        // 
-        // 
-        // Store the result
-        //multiplier_and_count_by_frame_[stage_with_frame.value().frame]
-
-        // If we saw the frame before, set the value we used before
-
+        data_by_frame_[data.frame] = data;
+        last_frame_data_ = data;
     }
-
-
-    //last 3 with velocity
-
-
-
-
-
-    // Adjust the extractor multiplier value if necessary
-    std::optional<float> new_multiplier;
-
-    // Set the multiplier value in extractor
-    if (new_multiplier) {
-        if (extractor)
-            extractor->min_size_multiplier_ = new_multiplier.value();
-    }
-
-    // Store the frame data for posible frame repositioning
-        
-
-
+    else
+        last_frame_data_ = std::nullopt;
 
 }
 

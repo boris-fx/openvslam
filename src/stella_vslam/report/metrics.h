@@ -227,9 +227,9 @@ public:
     template<typename Tp, typename T> static void submit_frame_param(stage_and_frame_param_with_threshold<Tp>& param, T value, T threshold);
     template<typename Tp, typename T> static void submit_frame_param(stage_and_frame_param<Tp>& param, T value);
 
-    // Feature detection and feature monitor
-    stage_and_frame_param<unsigned int> detected_feature_count; // Number of points found by the feature detector
-    stage_and_frame_param<double>       min_feature_size; // min_feature_size used by the detector
+    // Feature detection and monitoring
+    stage_and_frame_param<unsigned int> detected_feature_count;
+    stage_and_frame_param<unsigned int> min_feature_size;
 
     // Motion-based track, then bow match based track, then robust_match (tracking_module::track_current_frame)
     stage_and_frame_param<unsigned int> tracking_motion_inputs_A; // Number of points in the map being matched to the new frame
