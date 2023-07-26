@@ -31,14 +31,13 @@ namespace stella_vslam_bfx {
 
         orb_feature_monitor(unsigned int target_feature_count = 2000);
 
-
         /// Get an initial min_feature_size based only on video dimensions
         static unsigned int default_min_feature_size_for_video_size(int width, int height);
 
-        /// 
+        /// Update the feature detection parameters (min_feature_size) before detection on the latest frame
         void update_feature_extractor(const cv::Mat& img, const cv::Mat& mask, stella_vslam::feature::orb_extractor* extractor);
 
-        /// 
+        /// Record the result of feature detection with the current detection parameters (min_feature_size) on the latest frame
         void record_extraction_result(unsigned int feature_count, stella_vslam::feature::orb_extractor* extractor);
 
     protected:

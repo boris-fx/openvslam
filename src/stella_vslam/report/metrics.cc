@@ -1249,6 +1249,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     myfile.open(filename.data());
 
     std::stringstream html;
+
     html << "<!DOCTYPE html><html>\n";
     html << "<head>\n";
     html << "  <meta charset = 'utf-8' />\n";
@@ -1304,24 +1305,28 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     html << "</head>\n";
 
     html << "<body>\n";
+//
+    spdlog::info("***** html this={}", fmt::ptr(this));
+    spdlog::info("***** html input_video_metadata={}", fmt::ptr(&input_video_metadata));
+    spdlog::info("***** html input_video_metadata.name={}", input_video_metadata.name);
+    //spdlog::info("***** html video path relative ptr={}", fmt::ptr(&video_path_relative)); /// UUU
+    //spdlog::info("***** html video path relative={}", video_path_relative); /// UUU
 
     html << "<h1>" << input_video_metadata.name << "</h1>\n";
 
     if (!thumbnail_path_relative.empty())// && video_path_relative.empty())
         html << "<img src=\"" << thumbnail_path_relative << "\" alt=\"Preview\" width=\"800\">\n ";
-
+#if 1 // good, badd with UUU
     if (!video_path_relative.empty()) {
         html << "<video width = \"1280\" controls>\n";
         html << "<source src = \"" << video_path_relative << "\" type = \"video/mp4\">\n";
         html << "Your browser does not support HTML video.\n";
         html << "</video>\n";
     }
-
+/// bad
     html << "<p>Video file: " << input_video_metadata.filename << "</p>\n";
     html << "<p>Video size: " << input_video_metadata.video_width << " x " << input_video_metadata.video_height << " pixels.</p>\n";
     html << "<p>Feature detector adaptive min size scale: " << feature_min_size_scale << ".</p>\n";
-    
-
 
     html << "<h2>Parameters</h2>\n";
     if (known_focal_length_x_pixels)
@@ -1604,7 +1609,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
             html << "<p  style=\"margin-left: 40px\">" << settings_line << "</p>";
         else
             html << "<h3  style=\"margin-left: 20px\">" << settings_line << "</h3>";
-
+#endif // poop
     html << "</body></html>";
 
     myfile << html.str();

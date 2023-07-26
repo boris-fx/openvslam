@@ -28,7 +28,7 @@ namespace stella_vslam_bfx{
 
     bool use_feature_monitor() {
 
-        return true;
+        return false;
 
     }
 
@@ -209,6 +209,8 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
     
     int const low_min_feature_size(9); // lowest acceptable feature area in pixels
     int const high_min_feature_size(80000); // highest acceptable feature area in pixels
+    float const min_feature_diameter_step(5.0f);
+    float const trigger_scale(1.03f); // Lower min_feature_size if feature count > trigger_scale * target feature count
 
     // Get the frame number (currently from the metrics)
     std::optional<stage_and_frame> stage_with_frame = metrics::instance()->timestamp_to_frame(metrics::instance()->current_frame_timestamp);
@@ -216,28 +218,27 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
         return;
     int frame = stage_with_frame->frame;
 
-    // First check for a historic frame match, use the multiplier if one is found
+    // (i) First check for a historic frame match, use the multiplier if one is found
     auto frame_match = data_by_frame_.find(frame);
     if (frame_match != data_by_frame_.end()) {
         extractor->min_size_multiplier_ = frame_match->second.multiplier;
         return;
     }
 
-    // Use a nearly frame, modifying the multiplier if necessary
+    // (ii) Use a nearly frame, modifying the multiplier if necessary
     std::optional<frame_data> nearby_frame_data = last_frame_data_;
     if (!nearby_frame_data || std::abs(nearby_frame_data->frame - frame)>1)
         nearby_frame_data = nearest_data_in_map(data_by_frame_, frame);
     if (nearby_frame_data) {
 
-        
         float min_size_multiplier = nearby_frame_data->multiplier;
 
         // Decrease the multiplier if too few features were detected last time
         int nearby_feature_count = nearby_frame_data->feature_count;
-        if (float(nearby_feature_count) < 0.95f * float(target_feature_count_)) {
+        if (float(nearby_feature_count) < (1.0f/trigger_scale) * float(target_feature_count_)) {
             float current_min_feature_size = extractor->min_size_multiplier_ * extractor->min_feature_size();
             float current_min_feature_diameter = sqrt(current_min_feature_size);
-            float new_min_feature_diameter = current_min_feature_diameter - 10.0f;
+            float new_min_feature_diameter = current_min_feature_diameter - min_feature_diameter_step;
             float new_min_feature_size = new_min_feature_diameter * new_min_feature_diameter;
             if (new_min_feature_size < low_min_feature_size)
                 new_min_feature_size = low_min_feature_size;
@@ -245,10 +246,10 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
         }
 
         // Increase the multiplier if too many features were detected last time
-        if (float(nearby_feature_count) > 1.05f * float(target_feature_count_)) {
+        if (float(nearby_feature_count) > trigger_scale * float(target_feature_count_)) {
             float current_min_feature_size = extractor->min_size_multiplier_ * extractor->min_feature_size();
             float current_min_feature_diameter = sqrt(current_min_feature_size);
-            float new_min_feature_diameter = current_min_feature_diameter + 10.0f;
+            float new_min_feature_diameter = current_min_feature_diameter + min_feature_diameter_step;
             float new_min_feature_size = new_min_feature_diameter * new_min_feature_diameter;
             if (new_min_feature_size < low_min_feature_size)
                 new_min_feature_size = low_min_feature_size;
@@ -259,11 +260,7 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
 
     }
 
-    // If there's no other frame data initialise the multiplier
-
-    //Should be commented
-    //save_graph_min_feature_size_vs_feature_count(img, mask, extractor, target_feature_count_);
-
+    // (iii) If there's no other frame data initialise the multiplier
     double low_min_feature_width(sqrt(double(low_min_feature_size)));
     double high_min_feature_width(sqrt(double(high_min_feature_size)));
 
@@ -284,23 +281,21 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
     float min_feature_size_multiplier = best_min_feature_size / extractor->min_feature_size();
     extractor->min_size_multiplier_ = min_feature_size_multiplier;
 
+    //Test: calculate min_feature_size vs feature count for the frame and record in an html graph - should be commented!!
+    //save_graph_min_feature_size_vs_feature_count(img, mask, extractor, target_feature_count_);
 }
 
 void orb_feature_monitor::record_extraction_result(unsigned int feature_count, stella_vslam::feature::orb_extractor* extractor)
 {    
-    if (!use_feature_monitor())
-        return;
     if (!extractor)
         return;
 
     // Store in the general metrics
     metrics::submit_frame_param(metrics::instance()->detected_feature_count, feature_count);
-    if (extractor)
-        metrics::submit_frame_param(metrics::instance()->min_feature_size, extractor->min_feature_size() * extractor->min_size_multiplier_);
+    metrics::submit_frame_param(metrics::instance()->min_feature_size, extractor->min_feature_size() * extractor->min_size_multiplier_);
 
-    // Store the result here
-    //int   latest_recorded_frame_;
-  //  float multiplier_for_latest_recorded_frame_ = extractor->
+    if (!use_feature_monitor())
+        return;
 
     // Get the current frame and stage from the metrics object
     std::optional<stage_and_frame> stage_with_frame = metrics::instance()->timestamp_to_frame(metrics::instance()->current_frame_timestamp);
@@ -309,7 +304,7 @@ void orb_feature_monitor::record_extraction_result(unsigned int feature_count, s
     if (stage_with_frame) {
         frame_data data;
         data.frame = stage_with_frame->frame;
-        data.multiplier = extractor ? extractor->min_size_multiplier_ : -1.0f;
+        data.multiplier = extractor->min_size_multiplier_;
         data.feature_count = feature_count;
 
         data_by_frame_[data.frame] = data;

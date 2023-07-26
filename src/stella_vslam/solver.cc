@@ -49,9 +49,9 @@ solver::solver(const std::shared_ptr<config>& cfg,
 : get_frame_(get_frame), cfg_(cfg), vocab_data_(nullptr), vocab_file_path_(vocab_file_path)
 {
     // Make sure that static objects are cleared between solver instances
-    metrics::clear();
-    focal_length_estimator::clear();
-    focal_length_estimator_three_view::clear();
+    //metrics::clear();
+    //focal_length_estimator::clear();
+    //focal_length_estimator_three_view::clear();
 
     // build the slam system
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_file_path);
@@ -67,9 +67,9 @@ solver::solver(const std::shared_ptr<config>& cfg,
 : get_frame_(get_frame), cfg_(cfg), vocab_data_(&vocab_data), vocab_file_path_()
 {
     // Make sure that static objects are cleared between solver instances
-    metrics::clear();
-    focal_length_estimator::clear();
-    focal_length_estimator_three_view::clear();
+    //metrics::clear();
+    //focal_length_estimator::clear();
+    //focal_length_estimator_three_view::clear();
 
     slam_ = std::make_shared<stella_vslam::system>(cfg, vocab_data);
 
