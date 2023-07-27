@@ -209,8 +209,8 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
     
     int const low_min_feature_size(9); // lowest acceptable feature area in pixels
     int const high_min_feature_size(80000); // highest acceptable feature area in pixels
-    float const min_feature_diameter_step(5.0f);
-    float const trigger_scale(1.03f); // Lower min_feature_size if feature count > trigger_scale * target feature count
+    float const min_feature_diameter_step(2.0f);
+    float const trigger_scale(1.15f); // Lower min_feature_size if feature count > trigger_scale * target feature count
 
     // Get the frame number (currently from the metrics)
     std::optional<stage_and_frame> stage_with_frame = metrics::instance()->timestamp_to_frame(metrics::instance()->current_frame_timestamp);
@@ -257,7 +257,7 @@ void orb_feature_monitor::update_feature_extractor(const cv::Mat& img, const cv:
         }
 
         extractor->min_size_multiplier_ = min_size_multiplier;
-
+        return;
     }
 
     // (iii) If there's no other frame data initialise the multiplier

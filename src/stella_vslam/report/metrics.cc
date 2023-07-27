@@ -145,9 +145,11 @@ namespace stella_vslam_bfx {
 
     //////////////////////////////////////////////////////////////
 
+    // NB: This is the preferred method of adding nlohmann::json support for user-defined types,
+    //      as nlohmann::json can then automatically serialise containers of them etc.
     void to_json(nlohmann::json& j, const stage_and_frame& e)
     {
-        j = { {"stage", e.stage}, {"frame", e.frame} };
+        j = { {"stage", e.stage}, {"frame", e.frame} }; 
     }
 
     void from_json(const nlohmann::json& j, stage_and_frame& e) {
@@ -262,7 +264,7 @@ namespace stella_vslam_bfx {
     }
 
     nlohmann::json metrics::to_json() const {
-        return {
+        nlohmann::json j_obj {
             {"debugging", debugging.to_json()},
             {"input_video_metadata", input_video_metadata.to_json()},
             {"track_timings", track_timings.to_json()},
@@ -278,6 +280,12 @@ namespace stella_vslam_bfx {
             {"mapping_reset_frames", mapping_reset_frames}
 
         };
+
+        //std::list<std::pair<std::string, metrics::stage_and_frame_param_base*>> s = const_cast<metrics*>(this)->stage_and_frame_param_base_list();
+        //for (auto const& si : s)
+        //    j_obj[si.first] 
+
+        return j_obj;
     }
 
     bool metrics::from_json(const nlohmann::json& json) {
@@ -323,7 +331,7 @@ namespace stella_vslam_bfx {
         std::optional<stage_and_frame> stage_with_frame = timestamp_to_frame(timestamp);
         if (!stage_with_frame)
             return;
-        
+
         map_size.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = map_keyframe_count;
         tracking_fail_count.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = tracking_fails;
 
@@ -332,7 +340,7 @@ namespace stella_vslam_bfx {
     }
 
     void metrics::submit_area_matching(int frame_1_points, int fail_prematched, int fail_scale, int fail_cell, int fail_hamming, int fail_ratio,
-                                       int count_indices_exist, int count_num_indices, int num_matches)
+        int count_indices_exist, int count_num_indices, int num_matches)
     {
         if (!capture_area_matching)
             return;
@@ -353,14 +361,14 @@ namespace stella_vslam_bfx {
         this->area_match_fail_hamming.by_stage_and_frame[stage][frames] = fail_hamming;
         this->area_match_fail_ratio.by_stage_and_frame[stage][frames] = fail_ratio;
         this->area_match_num_matches.by_stage_and_frame[stage][frames] = num_matches;
-        this->area_match_ave_candidates.by_stage_and_frame[stage][frames] = count_indices_exist>0 ? double(count_num_indices)/double(count_indices_exist) : 0.0;
+        this->area_match_ave_candidates.by_stage_and_frame[stage][frames] = count_indices_exist > 0 ? double(count_num_indices) / double(count_indices_exist) : 0.0;
         this->area_match_num_attempted.by_stage_and_frame[stage][frames] = frame_1_points - fail_prematched - fail_scale;
     }
 
-    void metrics::submit_triangulation_debugging( std::optional<std::pair<double, double>> in_num_triangulated_points,
-                                                  std::optional<std::pair<double, double>> in_num_valid_triangulated_points,
-                                                  std::optional<std::pair<double, double>> in_triangulation_parallax,
-                                                  std::optional<std::pair<double, double>> in_triangulation_ambiguity )
+    void metrics::submit_triangulation_debugging(std::optional<std::pair<double, double>> in_num_triangulated_points,
+        std::optional<std::pair<double, double>> in_num_valid_triangulated_points,
+        std::optional<std::pair<double, double>> in_triangulation_parallax,
+        std::optional<std::pair<double, double>> in_triangulation_ambiguity)
     {
         std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0]);
         if (!stage_with_frame_0)
@@ -418,10 +426,10 @@ namespace stella_vslam_bfx {
             initialisation_homography_fundamental_candidates.by_stage_and_frame[stage][frames] = homography_inliers.size();
         initialisation_homography_inliers.by_stage_and_frame[stage][frames] = std::count(homography_inliers.begin(), homography_inliers.end(), true);
         initialisation_fundamental_inliers.by_stage_and_frame[stage][frames] = std::count(fundamental_inliers.begin(), fundamental_inliers.end(), true);
-    
+
         // NB: Thresholds are min_set_size=8, in fundamental_solver::find_via_ransac()
         //                and min_set_size=8, in homography_solver::find_via_ransac()
-    
+
     }
 
     void metrics::submit_focal_length_estimate(double focal_length, double stability)
@@ -440,7 +448,7 @@ namespace stella_vslam_bfx {
     }
 
     void metrics::submit_2_3_view_focal_length(std::optional<double> focal_length_2_view,
-                                               std::optional<double> focal_length_3_view)
+        std::optional<double> focal_length_3_view)
     {
         std::optional<stage_and_frame> stage_with_frame_0 = timestamp_to_frame(initialisation_debug_object.current_init_frame_timestamps[0]);
         if (!stage_with_frame_0)
@@ -461,18 +469,18 @@ namespace stella_vslam_bfx {
     }
 #if 0
     template<typename Tp, typename T>
-    void metrics::submit_frame_param(stage_and_frame_param_with_threshold<Tp> &param, T value, T threshold) {
+    void metrics::submit_frame_param(stage_and_frame_param_with_threshold<Tp>& param, T value, T threshold) {
         std::optional<stage_and_frame> stage_with_frame = instance()->timestamp_to_frame(instance()->current_frame_timestamp);
         if (!stage_with_frame)
             return;
         param.by_stage_and_frame[stage_with_frame.value().stage][stage_with_frame.value().frame] = (Tp)value;
         param.threshold = (Tp)threshold;
     }
-    template void metrics::submit_frame_param<int, int>(stage_and_frame_param_with_threshold<int> &param, int value, int threshold);
-    template void metrics::submit_frame_param<int, unsigned int>(stage_and_frame_param_with_threshold<int> &param, unsigned int value, unsigned int threshold);
+    template void metrics::submit_frame_param<int, int>(stage_and_frame_param_with_threshold<int>& param, int value, int threshold);
+    template void metrics::submit_frame_param<int, unsigned int>(stage_and_frame_param_with_threshold<int>& param, unsigned int value, unsigned int threshold);
     template void metrics::submit_frame_param<unsigned int, int>(stage_and_frame_param_with_threshold<unsigned int>& param, int value, int threshold);
-    template void metrics::submit_frame_param<unsigned int, unsigned int>(stage_and_frame_param_with_threshold<unsigned int> &param, unsigned int value, unsigned int threshold);
-    template void metrics::submit_frame_param<double, double>(stage_and_frame_param_with_threshold<double> &param, double value, double threshold);
+    template void metrics::submit_frame_param<unsigned int, unsigned int>(stage_and_frame_param_with_threshold<unsigned int>& param, unsigned int value, unsigned int threshold);
+    template void metrics::submit_frame_param<double, double>(stage_and_frame_param_with_threshold<double>& param, double value, double threshold);
 
     template<typename Tp, typename T>
     void metrics::submit_frame_param(stage_and_frame_param<Tp>& param, T value) {
@@ -603,6 +611,21 @@ namespace stella_vslam_bfx {
         return {};
     }
 
+    std::list<std::pair<std::string, metrics::stage_and_frame_param_base*>> metrics::stage_and_frame_param_base_list() {
+        std::list<std::pair<std::string, metrics::stage_and_frame_param_base*>> result;
+
+        result.push_back({ "detected_feature_count", &detected_feature_count });
+        result.push_back({ "min_feature_siz", &min_feature_size });
+        result.push_back({ "tracking_motion_inputs_A", &tracking_motion_inputs_A });
+        result.push_back({ "tracking_motion_inputs_B", &tracking_motion_inputs_B });
+        result.push_back({ "tracking_bow_inputs_A", &tracking_bow_inputs_A });
+        result.push_back({ "tracking_bow_inputs_B", &tracking_bow_inputs_B });
+        result.push_back({ "tracking_robust_inputs_A", &tracking_robust_inputs_A });
+        result.push_back({ "tracking_robust_inputs_B", &tracking_robust_inputs_B });
+
+        return result;
+    }
+    
     template<typename T>
     std::string to_string(std::set<T> const& s)
     {
@@ -622,7 +645,7 @@ namespace stella_vslam_bfx {
         if (frames.empty())
             return "";
         auto f = std::find_if(intermediate_focal_estimates.begin(), intermediate_focal_estimates.end(),
-            [&](const metrics::focal_estimate& e) { return e.type == focal_estimation_type::initialisation_before_ba && e.stage_with_frame.frame==*(frames.rbegin()); });
+            [&](const metrics::focal_estimate& e) { return e.type == focal_estimation_type::initialisation_before_ba && e.stage_with_frame.frame == *(frames.rbegin()); });
         if (f != intermediate_focal_estimates.end())
             return "{" + to_string(frames) + "} Focal length: " + std::to_string(f->estimate);
         return "{" + to_string(frames) + "}";
@@ -676,294 +699,322 @@ namespace stella_vslam_bfx {
     }
 #endif
 
-void spdlog_frame_map(std::string const& name, std::map<double, double> const& frame_map)
-{
-    std::stringstream ss;
-    ss << name << " - (" << frame_map.size() << " frames) ";
-    for (auto const& f : frame_map)
-        ss << f.first << ", ";
-    spdlog::info("{}", ss.str());
-}
-
-std::list<curve_section> split_graph_by_frames(std::string const& name, std::map<int, curve_section> const& graphs, std::list<int> const& frames)
-{
-    std::set<double> split_points;
-    for (auto const& frame : frames)
-        split_points.insert(0.5 + frame);
-
-    if (split_points.empty()) { // convert the map to a list
-        std::list<curve_section> result;
-        std::transform(graphs.begin(), graphs.end(), back_inserter(result), [](const auto& val) {return val.second; });
-        return result;
-    }
-
-    (void)name;
-    //for (auto const& split_point : split_points)
-    //    spdlog::info("split_graph_by_frames: {} split point: {}", name, split_point);
-    std::list<curve_section> split_graph;
-    for (auto const& graph : graphs) {
-            
-        std::map<double, double> remaining_graph = graph.second;
-        for (auto const& split_point : split_points) {
-            std::array<std::map<double, double>, 2> graph_pair = split_graph_by_frame(remaining_graph, split_point);
-            remaining_graph = graph_pair[1];
-            split_graph.push_back({ graph_pair[0], graph.second.stage });
-        }
-        split_graph.push_back({ remaining_graph, graph.second.stage });
-    }
-    //spdlog_frame_map("Unsplit graph", graph);
-    //for (auto const& s : split_graph)
-    //    spdlog_frame_map("Split graph", s);
-
-    return split_graph;
-}
-
-double percentile_y_value(std::array<std::map<int, curve_section>, 4> const& graphs, double percentile)
-{
-
-    std::vector<double> ys;
-    for (int i = 0; i < 4; ++i)
-        for (auto const& section : graphs[i])
-            for (auto const& xy : section.second)
-                ys.push_back(xy.second);
-    return stella_vslam_bfx::quantile(ys, {percentile})[0];
-}
-
-double percentile_y_value(curve_section const& graph, double percentile)
-{
-    std::array<std::map<int, curve_section>, 4>  graphs;
-    graphs[0][0] = graph;
-    return percentile_y_value(graphs, percentile);
-}
-
-struct graph_stats {
-    graph_stats(std::map<double, double> const& graph)
-    : mean(0), min(0), max(0)
+    void spdlog_frame_map(std::string const& name, std::map<double, double> const& frame_map)
     {
-        if (!graph.empty()) {
+        std::stringstream ss;
+        ss << name << " - (" << frame_map.size() << " frames) ";
+        for (auto const& f : frame_map)
+            ss << f.first << ", ";
+        spdlog::info("{}", ss.str());
+    }
+
+    std::list<curve_section> split_graph_by_frames(std::string const& name, std::map<int, curve_section> const& graphs, std::list<int> const& frames)
+    {
+        std::set<double> split_points;
+        for (auto const& frame : frames)
+            split_points.insert(0.5 + frame);
+
+        if (split_points.empty()) { // convert the map to a list
+            std::list<curve_section> result;
+            std::transform(graphs.begin(), graphs.end(), back_inserter(result), [](const auto& val) {return val.second; });
+            return result;
+        }
+
+        (void)name;
+        //for (auto const& split_point : split_points)
+        //    spdlog::info("split_graph_by_frames: {} split point: {}", name, split_point);
+        std::list<curve_section> split_graph;
+        for (auto const& graph : graphs) {
+
+            std::map<double, double> remaining_graph = graph.second;
+            for (auto const& split_point : split_points) {
+                std::array<std::map<double, double>, 2> graph_pair = split_graph_by_frame(remaining_graph, split_point);
+                remaining_graph = graph_pair[1];
+                split_graph.push_back({ graph_pair[0], graph.second.stage });
+            }
+            split_graph.push_back({ remaining_graph, graph.second.stage });
+        }
+        //spdlog_frame_map("Unsplit graph", graph);
+        //for (auto const& s : split_graph)
+        //    spdlog_frame_map("Split graph", s);
+
+        return split_graph;
+    }
+
+    double percentile_y_value(std::array<std::map<int, curve_section>, 4> const& graphs, double percentile)
+    {
+
+        std::vector<double> ys;
+        for (int i = 0; i < 4; ++i)
+            for (auto const& section : graphs[i])
+                for (auto const& xy : section.second)
+                    ys.push_back(xy.second);
+        return stella_vslam_bfx::quantile(ys, { percentile })[0];
+    }
+
+    double percentile_y_value(curve_section const& graph, double percentile)
+    {
+        std::array<std::map<int, curve_section>, 4>  graphs;
+        graphs[0][0] = graph;
+        return percentile_y_value(graphs, percentile);
+    }
+
+    struct graph_stats {
+        graph_stats(std::map<double, double> const& graph)
+            : mean(0), min(0), max(0)
+        {
+            if (!graph.empty()) {
+                double sum(0);
+                for (auto const& value : graph) {
+                    if (min > value.second)
+                        min = value.second;
+                    if (max < value.second)
+                        max = value.second;
+                    sum += value.second;
+                }
+                mean = sum / double(graph.size());
+            }
+        }
+        graph_stats(std::list<curve_section> const& curves)
+            : mean(0), min(0), max(0)
+        {
             double sum(0);
-            for (auto const& value : graph) {
-                if (min > value.second)
-                    min = value.second;
-                if (max < value.second)
-                    max = value.second;
-                sum += value.second;
+            int count(0);
+            for (auto const& curve : curves) {
+                for (auto const& value : curve) {
+                    if (min > value.second)
+                        min = value.second;
+                    if (max < value.second)
+                        max = value.second;
+                    sum += value.second;
+                    ++count;
+                }
             }
-            mean = sum / double(graph.size());
+            if (count > 0)
+                mean = sum / double(count);
         }
-    }
-    graph_stats(std::list<curve_section> const& curves)
-        : mean(0), min(0), max(0)
+        double mean;
+        double min;
+        double max;
+    };
+
+    template<typename T_V, typename T_T>
+    std::string noncritical_style_if_less(std::optional<T_V> value, T_T threshold)
     {
-        double sum(0);
-        int count(0);
-        for (auto const& curve : curves) {
-            for (auto const& value : curve) {
-                if (min > value.second)
-                    min = value.second;
-                if (max < value.second)
-                    max = value.second;
-                sum += value.second;
-                ++count;
-            }
-        }
-        if (count>0)
-            mean = sum / double(count);
+        if (!value || (value.value() >= threshold))
+            return "";
+        return " class = \"outside_threshold_noncritical\"";
     }
-    double mean;
-    double min;
-    double max;
-};
 
-template<typename T_V, typename T_T>
-std::string noncritical_style_if_less(std::optional<T_V> value, T_T threshold)
-{
-    if (!value || (value.value() >= threshold))
-        return "";
-    return " class = \"outside_threshold_noncritical\"";
-}
+    template<typename T_V, typename T_T>
+    std::string style_if_less(std::optional<T_V> value, std::optional<T_T> threshold)
+    {
+        if (!value || !threshold || (value.value() >= threshold.value()))
+            return "";
+        return " class = \"outside_threshold\"";
+    }
 
-template<typename T_V, typename T_T>
-std::string style_if_less(std::optional<T_V> value, std::optional<T_T> threshold)
-{
-    if (!value || !threshold || (value.value() >= threshold.value()))
-        return "";
-    return " class = \"outside_threshold\"";
-}
+    template<typename T_V, typename T_T>
+    std::string style_if_less(std::optional<T_V> value, T_T threshold)
+    {
+        return style_if_less(value, std::optional<T_T>(threshold));
+    }
 
-template<typename T_V, typename T_T>
-std::string style_if_less(std::optional<T_V> value, T_T threshold)
-{
-    return style_if_less(value, std::optional<T_T>(threshold));
-}
-
-template<typename T_V, typename T_T>
-std::string style_if_less(T_V value, T_T threshold)
-{
-    return style_if_less(std::optional<T_V>(value), std::optional<T_T>(threshold));
-}
+    template<typename T_V, typename T_T>
+    std::string style_if_less(T_V value, T_T threshold)
+    {
+        return style_if_less(std::optional<T_V>(value), std::optional<T_T>(threshold));
+    }
 
 
-template<typename T_V, typename T_T>
-std::string style_if_greater(std::optional<T_V> value, std::optional<T_T> threshold)
-{
-    if (!value || !threshold || value.value() <= threshold)
-        return "";
-    return " class = \"outside_threshold\"";
-}
+    template<typename T_V, typename T_T>
+    std::string style_if_greater(std::optional<T_V> value, std::optional<T_T> threshold)
+    {
+        if (!value || !threshold || value.value() <= threshold)
+            return "";
+        return " class = \"outside_threshold\"";
+    }
 
-template<typename T>
-std::string table_value(std::optional<T> value)
-{
-    if (!value)
-        return "";
-    return std::to_string(value.value());
-}
+    template<typename T>
+    std::string table_value(std::optional<T> value)
+    {
+        if (!value)
+            return "";
+        return std::to_string(value.value());
+    }
 
-void add_graph_style(std::stringstream& html)
-{
+    void add_graph_style(std::stringstream& html)
+    {
 
-    html << ".graph {\n";
-    html << "	margin-bottom:1em;\n";
-    html << "  font:normal 100%/150% arial,helvetica,sans-serif;\n";
-    html << "}\n";
+        html << ".graph {\n";
+        html << "	margin-bottom:1em;\n";
+        html << "  font:normal 100%/150% arial,helvetica,sans-serif;\n";
+        html << "}\n";
 
-    html << ".graph caption {\n";
-    html << "	font:bold 150%/120% arial,helvetica,sans-serif;\n";
-    html << "	padding-bottom:0.33em;\n";
-    html << "}\n";
+        html << ".graph caption {\n";
+        html << "	font:bold 150%/120% arial,helvetica,sans-serif;\n";
+        html << "	padding-bottom:0.33em;\n";
+        html << "}\n";
 
-    html << ".graph tbody th {\n";
-    html << "	text-align:right;\n";
-    html << "}\n";
+        html << ".graph tbody th {\n";
+        html << "	text-align:right;\n";
+        html << "}\n";
 
-    html << "@supports (display:grid) {\n";
+        html << "@supports (display:grid) {\n";
 
-    html << "	@media (min-width:32em) {\n";
+        html << "	@media (min-width:32em) {\n";
 
-    html << "		.graph {\n";
-    html << "			display:block;\n";
-    html << "      width:600px;\n";
-    html << "      height:300px;\n";
-    html << "		}\n";
+        html << "		.graph {\n";
+        html << "			display:block;\n";
+        html << "      width:600px;\n";
+        html << "      height:300px;\n";
+        html << "		}\n";
 
-    html << "		.graph caption {\n";
-    html << "			display:block;\n";
-    html << "		}\n";
+        html << "		.graph caption {\n";
+        html << "			display:block;\n";
+        html << "		}\n";
 
-    html << "		.graph thead {\n";
-    html << "			display:none;\n";
-    html << "		}\n";
+        html << "		.graph thead {\n";
+        html << "			display:none;\n";
+        html << "		}\n";
 
-    html << "		.graph tbody {\n";
-    html << "			position:relative;\n";
-    html << "			display:grid;\n";
-    html << "			grid-template-columns:repeat(auto-fit, minmax(2em, 1fr));\n";
-    html << "			column-gap:2.5%;\n";
-    html << "			align-items:end;\n";
-    html << "			height:100%;\n";
-    html << "			margin:3em 0 1em 2.8em;\n";
-    html << "			padding:0 1em;\n";
-    html << "			border-bottom:2px solid rgba(0,0,0,0.5);\n";
-    html << "			background:repeating-linear-gradient(\n";
-    html << "				180deg,\n";
-    html << "				rgba(170,170,170,0.7) 0,\n";
-    html << "				rgba(170,170,170,0.7) 1px,\n";
-    html << "				transparent 1px,\n";
-    html << "				transparent 20%\n";
-    html << "			);\n";
-    html << "		}\n";
+        html << "		.graph tbody {\n";
+        html << "			position:relative;\n";
+        html << "			display:grid;\n";
+        html << "			grid-template-columns:repeat(auto-fit, minmax(2em, 1fr));\n";
+        html << "			column-gap:2.5%;\n";
+        html << "			align-items:end;\n";
+        html << "			height:100%;\n";
+        html << "			margin:3em 0 1em 2.8em;\n";
+        html << "			padding:0 1em;\n";
+        html << "			border-bottom:2px solid rgba(0,0,0,0.5);\n";
+        html << "			background:repeating-linear-gradient(\n";
+        html << "				180deg,\n";
+        html << "				rgba(170,170,170,0.7) 0,\n";
+        html << "				rgba(170,170,170,0.7) 1px,\n";
+        html << "				transparent 1px,\n";
+        html << "				transparent 20%\n";
+        html << "			);\n";
+        html << "		}\n";
 
-    html << "		.graph tbody:before,\n";
-    html << "		.graph tbody:after {\n";
-    html << "			position:absolute;\n";
-    html << "			left:-3.2em;\n";
-    html << "			width:2.8em;\n";
-    html << "			text-align:right;\n";
-    html << "			font:bold 80%/120% arial,helvetica,sans-serif;\n";
-    html << "		}\n";
+        html << "		.graph tbody:before,\n";
+        html << "		.graph tbody:after {\n";
+        html << "			position:absolute;\n";
+        html << "			left:-3.2em;\n";
+        html << "			width:2.8em;\n";
+        html << "			text-align:right;\n";
+        html << "			font:bold 80%/120% arial,helvetica,sans-serif;\n";
+        html << "		}\n";
 
-    html << "		.graph tbody:before {\n";
-    html << "			content:\" \";\n"; // Axis text max
-    html << "			top:-0.6em;\n";
-    html << "		}\n";
+        html << "		.graph tbody:before {\n";
+        html << "			content:\" \";\n"; // Axis text max
+        html << "			top:-0.6em;\n";
+        html << "		}\n";
 
-    html << "		.graph tbody:after {\n";
-    html << "			content:\"0 \";\n"; // Axis text min
-    html << "			bottom:-0.6em;\n";
-    html << "		}\n";
+        html << "		.graph tbody:after {\n";
+        html << "			content:\"0 \";\n"; // Axis text min
+        html << "			bottom:-0.6em;\n";
+        html << "		}\n";
 
-    html << "		.graph tr {\n";
-    html << "			position:relative;\n";
-    html << "			display:block;\n";
-    html << "		}\n";
+        html << "		.graph tr {\n";
+        html << "			position:relative;\n";
+        html << "			display:block;\n";
+        html << "		}\n";
 
-    html << "		.graph tr:hover {\n";
-    html << "			z-index:999;\n";
-    html << "		}\n";
+        html << "		.graph tr:hover {\n";
+        html << "			z-index:999;\n";
+        html << "		}\n";
 
-    html << "		.graph th,\n";
-    html << "		.graph td {\n";
-    html << "			display:block;\n";
-    html << "			text-align:center;\n";
-    html << "		}\n";
+        html << "		.graph th,\n";
+        html << "		.graph td {\n";
+        html << "			display:block;\n";
+        html << "			text-align:center;\n";
+        html << "		}\n";
 
-    html << "		.graph tbody th {\n";
-    html << "			position:absolute;\n";
-    html << "			top:-3em;\n";
-    html << "			left:0;\n";
-    html << "			width:100%;\n";
-    html << "			font-weight:normal;\n";
-    html << "			text-align:center;\n";
-    html << "     white-space:nowrap;\n";
-    html << "			text-indent:0;\n";
-    html << "			transform:rotate(-45deg);\n";
-    html << "		}\n";
+        html << "		.graph tbody th {\n";
+        html << "			position:absolute;\n";
+        html << "			top:-3em;\n";
+        html << "			left:0;\n";
+        html << "			width:100%;\n";
+        html << "			font-weight:normal;\n";
+        html << "			text-align:center;\n";
+        html << "     white-space:nowrap;\n";
+        html << "			text-indent:0;\n";
+        html << "			transform:rotate(-45deg);\n";
+        html << "		}\n";
 
-    html << "		.graph tbody th:after {\n";
-    html << "			content:\"\";\n";
-    html << "		}\n";
+        html << "		.graph tbody th:after {\n";
+        html << "			content:\"\";\n";
+        html << "		}\n";
 
-    html << "		.graph td {\n";
-    html << "			width:100%;\n";
-    html << "			height:100%;\n";
-    html << "			background:#555;\n"; // Colour of the bars
-    html << "			border-radius:0.5em 0.5em 0 0;\n";
-    html << "			transition:background 0.5s;\n";
-    html << "		}\n";
+        html << "		.graph td {\n";
+        html << "			width:100%;\n";
+        html << "			height:100%;\n";
+        html << "			background:#555;\n"; // Colour of the bars
+        html << "			border-radius:0.5em 0.5em 0 0;\n";
+        html << "			transition:background 0.5s;\n";
+        html << "		}\n";
 
-    html << "		.graph tr:hover td {\n";
-    html << "			opacity:0.7;\n";
-    html << "		}\n";
+        html << "		.graph tr:hover td {\n";
+        html << "			opacity:0.7;\n";
+        html << "		}\n";
 
-    html << "		.graph td span {\n";
-    html << "			overflow:hidden;\n";
-    html << "			position:absolute;\n";
-    html << "			left:50%;\n";
-    html << "			top:50%;\n";
-    html << "			width:0;\n";
-    html << "			padding:0.5em 0;\n";
-    html << "			margin:-1em 0 0;\n";
-    html << "			font:normal 85%/120% arial,helvetica,sans-serif;\n";
-    html << "/* 			background:white; */\n";
-    html << "/* 			box-shadow:0 0 0.25em rgba(0,0,0,0.6); */\n";
-    html << "			font-weight:bold;\n";
-    html << "			opacity:0;\n";
-    html << "			transition:opacity 0.5s;\n";
-    html << "      color:white;\n";
-    html << "		}\n";
+        html << "		.graph td span {\n";
+        html << "			overflow:hidden;\n";
+        html << "			position:absolute;\n";
+        html << "			left:50%;\n";
+        html << "			top:50%;\n";
+        html << "			width:0;\n";
+        html << "			padding:0.5em 0;\n";
+        html << "			margin:-1em 0 0;\n";
+        html << "			font:normal 85%/120% arial,helvetica,sans-serif;\n";
+        html << "/* 			background:white; */\n";
+        html << "/* 			box-shadow:0 0 0.25em rgba(0,0,0,0.6); */\n";
+        html << "			font-weight:bold;\n";
+        html << "			opacity:0;\n";
+        html << "			transition:opacity 0.5s;\n";
+        html << "      color:white;\n";
+        html << "		}\n";
 
-    html << "		.toggleGraph:checked + table td span,\n";
-    html << "		.graph tr:hover td span {\n";
-    html << "			width:4em;\n";
-    html << "			margin-left:-2em; /* 1/2 the declared width */\n";
-    html << "			opacity:1;\n";
-    html << "		}\n";
+        html << "		.toggleGraph:checked + table td span,\n";
+        html << "		.graph tr:hover td span {\n";
+        html << "			width:4em;\n";
+        html << "			margin-left:-2em; /* 1/2 the declared width */\n";
+        html << "			opacity:1;\n";
+        html << "		}\n";
 
-    html << "	} /* min-width:32em */\n";
+        html << "	} /* min-width:32em */\n";
 
-    html << "} /* grid only */\n";
-}
+        html << "} /* grid only */\n";
+    }
+
+    void add_collapsible_style(std::stringstream& html)
+    {
+
+        html << ".collapsible{\n";
+        html << "  background-color: #777; \n";
+        html << "  color: white; \n";
+        html << "  cursor: pointer; \n";
+        html << "  padding: 18px; \n";
+        html << "  width: 100%; \n";
+        html << "  border: none; \n";
+        html << "  text-align: left; \n";
+        html << "  outline: none; \n";
+        html << "  font-size: 15px; \n";
+        html << "}\n";
+
+        html << ".active, .collapsible:hover{\n";
+        html << "  background-color: #555;\n";
+        html << "}\n";
+
+        html << ".content{\n";
+        html << "  padding: 0 18px;\n";
+        html << "  max-height: 0;\n";
+        html << "  overflow: hidden;\n";
+        html << "  transition: max-height 0.2s ease-out;\n";
+        html << "  background-color: #f1f1f1;\n";
+        html << "}\n";
+    }
 
 void add_init_failure_mode_table(std::stringstream& html, std::list<std::pair<std::string, int>> data, std::string html_class)
 {
@@ -1240,6 +1291,14 @@ void metrics::add_matching_details(std::stringstream& html, std::list<curve_sect
     html << "    </table>\n";
 }
 
+std::list<curve_section> curve_sqrt(std::list<curve_section> const& curve) {
+    std::list<curve_section> new_curve = curve;
+    for (auto & section : new_curve)
+        for (auto& datapoint : section)
+            datapoint.second = sqrt(datapoint.second);
+    return new_curve;
+}
+
 void metrics::save_html_report(std::string_view const& filename, std::string thumbnail_path_relative, std::string video_path_relative,
     std::optional<double> known_focal_length_x_pixels) const {
 
@@ -1300,6 +1359,7 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
         html << ".outside_threshold_noncritical{ background: repeating-linear-gradient( 45deg, #DD7575, #DD7575 10px, #FFFFFF 10px, #FFFFFF 20px );}\n";
 
         add_graph_style(html);
+        add_collapsible_style(html);
 
     html << "  </style>\n";
     html << "</head>\n";
@@ -1452,7 +1512,8 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     // Number of features and matches by frame
     html << "<h2> Feature match counts</h2>\n";
     write_graph_as_svg(html, Graph("Second init frame", "Num feature matches", std::set<SplitCurve>({ {"Feature count", detected_feature_count.graph()}, {"Matches to frame", graph_num_matches} }), range_behaviour::no_max, range_behaviour::no_max, settings.min_num_valid_pts_));
-    write_graph_as_svg(html, Graph("Frame", "min feature size", std::set<SplitCurve>({ {"Min feature size", min_feature_size.graph()} })));
+    write_graph_as_svg(html, Graph("Frame", "Min feature size", std::set<SplitCurve>({ {"Min feature size", min_feature_size.graph()} })));
+    write_graph_as_svg(html, Graph("Frame", "Min feature diameter", std::set<SplitCurve>({ {"Min feature diameter", curve_sqrt(min_feature_size.graph())} })));
     html << "<hr>" << std::endl;
 
     // Tracking stats
@@ -1603,12 +1664,47 @@ void metrics::save_html_report(std::string_view const& filename, std::string thu
     std::stringstream ss_settings;
     ss_settings << settings;
     std::vector<std::string> split_settings = splitString(ss_settings.str());
+#if 0
     html << "<h2> Settings</h2>\n";
     for (auto const& settings_line : split_settings)
         if (settings_line.rfind("\t", 0) == 0)
-            html << "<p  style=\"margin-left: 40px\">" << settings_line << "</p>";
+            html << "<p  style=\"margin-left: 40px\">" << settings_line << "</p>" << std::endl;
         else
-            html << "<h3  style=\"margin-left: 20px\">" << settings_line << "</h3>";
+            html << "<h3  style=\"margin-left: 20px\">" << settings_line << "</h3>" << std::endl;
+#else
+    html << "<h2></h2>\n"; // seems to be required for the colapsible to work
+    html << "<button class = \"collapsible\">Settings</button>" << std::endl;
+    html << "<div class = \"content\">" << std::endl;
+    for (auto const& settings_line : split_settings)
+        if (settings_line.rfind("\t", 0) == 0)
+            html << "<p  style=\"margin-left: 40px\">" << settings_line << "</p>" << std::endl;
+        else
+            html << "<h3  style=\"margin-left: 20px\">" << settings_line << "</h3>" << std::endl; 
+    html << "</div>" << std::endl;
+
+    //html << "<button class = \"collapsible\">Open Collapsible</button>" << std::endl;
+    //html << "    <div class = \"content\">" << std::endl;
+    //html << "<p>Lorem ipsum dolor sit amet, consecte ea commodo consequatLorem ipsum dolor sit amet, consecte ea commodo consequatLorem ipsum dolor sit amet, consecte ea commodo consequatLorem ipsum dolor sit amet, consecte ea commodo consequatLorem ipsum dolor sit amet, consecte ea commodo consequat.</p>" << std::endl;
+    //html << "</div>" << std::endl;
+#endif
+
+    html << "<script>" << std::endl;
+    html << "var coll = document.getElementsByClassName(\"collapsible\");" << std::endl;
+    html << "var i;" << std::endl;
+    html << "for (i = 0; i < coll.length; i++) {" << std::endl;
+    html << "    coll[i].addEventListener(\"click\", function() {" << std::endl;
+    html << "        this.classList.toggle(\"active\");" << std::endl;
+    html << "        var content = this.nextElementSibling;" << std::endl;
+    html << "        if (content.style.maxHeight) {" << std::endl;
+    html << "            content.style.maxHeight = null;" << std::endl;
+    html << "        }" << std::endl;
+    html << "        else {" << std::endl;
+    html << "            content.style.maxHeight = content.scrollHeight + \"px\";" << std::endl;
+    html << "        }" << std::endl;
+    html << "    });" << std::endl;
+    html << "}" << std::endl;
+    html << "</script>" << std::endl;
+
 #endif // poop
     html << "</body></html>";
 

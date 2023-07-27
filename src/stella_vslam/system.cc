@@ -150,7 +150,7 @@ void system::init(const config * cfg)
     auto mask_rectangles = cfg->settings_.mask_rectangles_;
     //const auto min_size = cfg->settings_.min_feature_size_;
     const auto min_size = stella_vslam_bfx::orb_feature_monitor::default_min_feature_size_for_video_size(cfg_->settings_.cols_, cfg_->settings_.rows_);
-    const unsigned int target_feature_count = 1500; // todo: create a user parameter for this
+    const unsigned int target_feature_count = 2000; // todo: create a user parameter for this
     feature_monitor_ = std::make_shared<stella_vslam_bfx::orb_feature_monitor>(target_feature_count);
     spdlog::info("system - min_size: {}", min_size);
     extractor_left_ = new feature::orb_extractor(orb_params_, min_size, mask_rectangles);

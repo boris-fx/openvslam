@@ -202,8 +202,10 @@ public:
         stage_and_frame stage_with_frame; // tracking stage and frame
     };
 
+    struct stage_and_frame_param_base {
+    };
     template<typename T>
-    struct stage_and_frame_param {
+    struct stage_and_frame_param : public stage_and_frame_param_base {
         std::array<std::map<int, T>, max_stage> by_stage_and_frame;
         std::list<curve_section> graph() const;
     };
@@ -220,7 +222,7 @@ public:
         std::list<curve_section> frame_separation_graph() const;  // Graph of frame 2 against 'frame 2' - 'frame 1'
     };
 
-
+    std::list<std::pair<std::string, metrics::stage_and_frame_param_base*>> stage_and_frame_param_base_list();
 
 public:
 
