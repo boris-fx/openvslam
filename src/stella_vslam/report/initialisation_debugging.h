@@ -16,7 +16,7 @@
 #include "stella_vslam/exports.h"
 #include "stella_vslam/config_settings.h"
 
-struct curve_section;
+#include "plot_html.h"  // for curve_section
 
 namespace stella_vslam_bfx {
 
